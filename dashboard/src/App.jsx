@@ -125,11 +125,26 @@ export default function App() {
         .getCurrentSession()
         .then(({ data }) => {
           if (!active) return;
-          setInsforgeSession(data?.session ?? null);
+          const session = data?.session ?? null;
+          setInsforgeSession(session);
+          
+          // Debug logging for mobile troubleshooting
+          if (process.env.NODE_ENV === "development" || window.location.search.includes("debug=1")) {
+            // eslint-disable-next-line no-console
+            console.log("[Auth] Session refreshed:", {
+              hasSession: Boolean(session?.accessToken),
+              userId: session?.user?.id ?? null,
+              timestamp: new Date().toISOString(),
+            });
+          }
         })
-        .catch(() => {
+        .catch((err) => {
           if (!active) return;
           setInsforgeSession(null);
+          if (process.env.NODE_ENV === "development" || window.location.search.includes("debug=1")) {
+            // eslint-disable-next-line no-console
+            console.warn("[Auth] Session refresh failed:", err);
+          }
         });
     };
     refreshSession();
@@ -150,11 +165,21 @@ export default function App() {
     });
   }, []);
 
+  useEffect(() => {
+    if (!insforgeLoaded) return;
+    if (insforgeSession?.accessToken) return;
+    if (!sessionSoftExpired) return;
+    // Avoid getting stuck on dashboard without a usable session token.
+    clearSessionSoftExpired();
+  }, [insforgeLoaded, insforgeSession, sessionSoftExpired]);
+
   const getInsforgeAccessToken = useCallback(async () => {
-    if (!insforgeSignedIn) return null;
+    if (!insforgeSignedIn) {
+      return insforgeSession?.accessToken ?? null;
+    }
     const { data } = await insforgeAuthClient.auth.getCurrentSession();
-    return data?.session?.accessToken ?? null;
-  }, [insforgeSignedIn]);
+    return data?.session?.accessToken ?? insforgeSession?.accessToken ?? null;
+  }, [insforgeSession, insforgeSignedIn]);
 
   useEffect(() => {
     if (!sessionSoftExpired) return () => {};
@@ -240,14 +265,15 @@ export default function App() {
   }, [insforgeSession, navigate, sessionExpired]);
 
   const hasInsforgeSession = Boolean(insforgeSession?.accessToken);
-  const hasInsforgeIdentity = Boolean(insforgeSession?.user);
   const insforgeReady = insforgeLoaded && insforgeSignedIn;
   const useInsforge = insforgeReady || (insforgeLoaded && hasInsforgeSession);
-  const signedIn = useInsforge && hasInsforgeSession && hasInsforgeIdentity;
+  // Data API calls only require access token. User profile fields can be absent on
+  // some mobile restore paths, so don't block signed-in state on `session.user`.
+  const signedIn = useInsforge && hasInsforgeSession;
   const auth = useMemo(() => {
-    if (!useInsforge || !hasInsforgeIdentity) return null;
+    if (!useInsforge || !hasInsforgeSession) return null;
     return insforgeAuth;
-  }, [hasInsforgeIdentity, insforgeAuth, useInsforge]);
+  }, [hasInsforgeSession, insforgeAuth, useInsforge]);
   const signOut = useMemo(() => {
     return async () => {
       if (useInsforge) {
