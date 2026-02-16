@@ -8,6 +8,12 @@ import {
   stripNextParam,
   stripRedirectParam,
 } from "../lib/auth-redirect";
+import {
+  clearAuthStorage,
+  clearSessionExpired,
+  clearSessionSoftExpired,
+} from "../lib/auth-storage";
+import { clearInsforgePersistentStorage } from "../lib/insforge-client";
 
 function buildCallbackUrl() {
   if (typeof window === "undefined") return "/auth/callback";
@@ -41,6 +47,14 @@ export function SignUpRedirect() {
 
     const run = async () => {
       try {
+        // Force a clean auth state so stale mobile sessions cannot short-circuit
+        // OAuth and bounce back to a useless dashboard.
+        await insforgeAuthClient.auth.signOut().catch(() => {});
+        clearInsforgePersistentStorage();
+        clearAuthStorage();
+        clearSessionExpired();
+        clearSessionSoftExpired();
+
         // Insforge OAuth sign-in also provisions new users when needed.
         const { error } = await insforgeAuthClient.auth.signInWithOAuth({
           provider: "github",
