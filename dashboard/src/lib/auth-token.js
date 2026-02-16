@@ -19,11 +19,14 @@ export async function resolveAuthAccessToken(auth) {
     if (typeof auth.getAccessToken === "function") {
       try {
         const token = await auth.getAccessToken();
-        return normalizeAccessToken(token);
+        const normalized = normalizeAccessToken(token);
+        if (normalized) return normalized;
       } catch {
-        return null;
+        // fall back to object.accessToken when available
       }
+      return normalizeAccessToken(auth.accessToken);
     }
+    return normalizeAccessToken(auth.accessToken);
   }
   return normalizeAccessToken(auth);
 }
