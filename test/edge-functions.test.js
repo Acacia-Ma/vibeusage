@@ -8434,28 +8434,6 @@ test("vibeusage-user-status returns pro.active for cutoff user", async () => {
             }
             if (table === "vibeusage_tracker_device_tokens") {
               return {
-                select: () => ({
-                  eq: () => ({
-                    is: () => ({
-                      order: async () => ({ data: [], error: null }),
-                    }),
-                  }),
-                }),
-              };
-            }
-            if (table === "vibeusage_tracker_devices") {
-              return {
-                select: () => ({
-                  eq: () => ({
-                    is: () => ({
-                      order: async () => ({ data: [], error: null }),
-                    }),
-                  }),
-                }),
-              };
-            }
-            if (table === 'vibeusage_tracker_device_tokens') {
-              return {
                 select: (columns, options) => {
                   if (columns === 'id' && options?.count === 'exact') {
                     return {
@@ -8486,7 +8464,7 @@ test("vibeusage-user-status returns pro.active for cutoff user", async () => {
                 }
               };
             }
-            if (table === 'vibeusage_tracker_devices') {
+            if (table === "vibeusage_tracker_devices") {
               return {
                 select: (columns, options) => {
                   if (columns === 'id' && options?.count === 'exact') {
@@ -8622,83 +8600,68 @@ test("vibeusage-user-status returns tracked subscriptions for identity card", as
             }
             if (table === "vibeusage_tracker_device_tokens") {
               return {
-                select: () => ({
-                  eq: () => ({
-                    is: () => ({
-                      order: async () => ({
-                        data: [
-                          {
-                            id: "tok_1",
-                            last_used_at: "2026-02-11T10:00:00.000Z",
-                          },
-                          {
-                            id: "tok_2",
-                            last_used_at: "2026-02-11T13:00:00.000Z",
-                          },
-                        ],
-                        error: null,
-                      }),
-                    }),
-                  }),
-                }),
-              };
-            }
-            if (table === "vibeusage_tracker_devices") {
-              return {
-                select: () => ({
-                  eq: () => ({
-                    is: () => ({
-                      order: async () => ({
-                        data: [
-                          {
-                            id: "dev_1",
-                            last_seen_at: "2026-02-11T09:00:00.000Z",
-                          },
-                        ],
-                        error: null,
-                      }),
-                    }),
-                  }),
-                }),
-              };
-            }
-
-            if (table === 'vibeusage_tracker_device_tokens') {
-              return {
                 select: (columns, options) => {
-                  if (columns === 'id' && options?.count === 'exact') {
+                  if (columns === "id" && options?.count === "exact") {
                     return {
                       eq: () => ({
                         is: () => ({
-                          limit: async () => ({ data: [], count: 0, error: null })
-                        })
-                      })
+                          limit: async () => ({ data: [{ id: "tok_1" }], count: 2, error: null }),
+                        }),
+                      }),
+                    };
+                  }
+
+                  if (columns === "last_used_at") {
+                    return {
+                      eq: () => ({
+                        is: () => ({
+                          order: () => ({
+                            limit: async () => ({
+                              data: [{ last_used_at: "2026-02-11T13:00:00.000Z" }],
+                              error: null,
+                            }),
+                          }),
+                        }),
+                      }),
                     };
                   }
 
                   throw new Error(`Unexpected token select: ${String(columns)}`);
-                }
+                },
               };
             }
-
-            if (table === 'vibeusage_tracker_devices') {
+            if (table === "vibeusage_tracker_devices") {
               return {
                 select: (columns, options) => {
-                  if (columns === 'id' && options?.count === 'exact') {
+                  if (columns === "id" && options?.count === "exact") {
                     return {
                       eq: () => ({
                         is: () => ({
-                          limit: async () => ({ data: [], count: 0, error: null })
-                        })
-                      })
+                          limit: async () => ({ data: [{ id: "dev_1" }], count: 1, error: null }),
+                        }),
+                      }),
+                    };
+                  }
+
+                  if (columns === "last_seen_at") {
+                    return {
+                      eq: () => ({
+                        is: () => ({
+                          order: () => ({
+                            limit: async () => ({
+                              data: [{ last_seen_at: "2026-02-11T09:00:00.000Z" }],
+                              error: null,
+                            }),
+                          }),
+                        }),
+                      }),
                     };
                   }
 
                   throw new Error(`Unexpected device select: ${String(columns)}`);
-                }
+                },
               };
             }
-
             throw new Error(`Unexpected user table: ${String(table)}`);
           },
         },
@@ -8786,70 +8749,50 @@ test("vibeusage-user-status marks install partial when device tables are missing
             }
             if (table === "vibeusage_tracker_device_tokens") {
               return {
-                select: () => ({
-                  eq: () => ({
-                    is: () => ({
-                      order: async () => ({
-                        data: null,
-                        error: {
-                          code: "42P01",
-                          message: 'relation "vibeusage_tracker_device_tokens" does not exist',
-                        },
-                      }),
-                    }),
-                  }),
-                }),
-              };
-            }
-            if (table === "vibeusage_tracker_devices") {
-              return {
-                select: () => ({
-                  eq: () => ({
-                    is: () => ({
-                      order: async () => ({
-                        data: null,
-                        error: {
-                          code: "42P01",
-                          message: 'relation "vibeusage_tracker_devices" does not exist',
-                        },
-                      }),
-                    }),
-                  }),
-                }),
-              };
-            }
-            if (table === 'vibeusage_tracker_device_tokens') {
-              return {
                 select: (columns, options) => {
-                  if (columns === 'id' && options?.count === 'exact') {
+                  if (columns === "id" && options?.count === "exact") {
                     return {
                       eq: () => ({
                         is: () => ({
-                          limit: async () => ({ data: [], count: 0, error: null })
-                        })
-                      })
+                          limit: async () => ({
+                            data: null,
+                            count: null,
+                            error: {
+                              code: "42P01",
+                              message: 'relation "vibeusage_tracker_device_tokens" does not exist',
+                            },
+                          }),
+                        }),
+                      }),
                     };
                   }
 
                   throw new Error(`Unexpected token select: ${String(columns)}`);
-                }
+                },
               };
             }
-            if (table === 'vibeusage_tracker_devices') {
+            if (table === "vibeusage_tracker_devices") {
               return {
                 select: (columns, options) => {
-                  if (columns === 'id' && options?.count === 'exact') {
+                  if (columns === "id" && options?.count === "exact") {
                     return {
                       eq: () => ({
                         is: () => ({
-                          limit: async () => ({ data: [], count: 0, error: null })
-                        })
-                      })
+                          limit: async () => ({
+                            data: null,
+                            count: null,
+                            error: {
+                              code: "42P01",
+                              message: 'relation "vibeusage_tracker_devices" does not exist',
+                            },
+                          }),
+                        }),
+                      }),
                     };
                   }
 
                   throw new Error(`Unexpected device select: ${String(columns)}`);
-                }
+                },
               };
             }
             throw new Error(`Unexpected user table: ${String(table)}`);
@@ -8932,24 +8875,36 @@ test("vibeusage-user-status falls back to users table when created_at missing", 
             }
             if (table === "vibeusage_tracker_device_tokens") {
               return {
-                select: () => ({
-                  eq: () => ({
-                    is: () => ({
-                      order: async () => ({ data: [], error: null }),
-                    }),
-                  }),
-                }),
+                select: (columns, options) => {
+                  if (columns === "id" && options?.count === "exact") {
+                    return {
+                      eq: () => ({
+                        is: () => ({
+                          limit: async () => ({ data: [], count: 0, error: null }),
+                        }),
+                      }),
+                    };
+                  }
+
+                  throw new Error(`Unexpected token select: ${String(columns)}`);
+                },
               };
             }
             if (table === "vibeusage_tracker_devices") {
               return {
-                select: () => ({
-                  eq: () => ({
-                    is: () => ({
-                      order: async () => ({ data: [], error: null }),
-                    }),
-                  }),
-                }),
+                select: (columns, options) => {
+                  if (columns === "id" && options?.count === "exact") {
+                    return {
+                      eq: () => ({
+                        is: () => ({
+                          limit: async () => ({ data: [], count: 0, error: null }),
+                        }),
+                      }),
+                    };
+                  }
+
+                  throw new Error(`Unexpected device select: ${String(columns)}`);
+                },
               };
             }
             throw new Error(`Unexpected user table: ${String(table)}`);
@@ -9042,28 +8997,6 @@ test("vibeusage-user-status degrades when created_at missing and no service role
             }
             if (table === "vibeusage_tracker_device_tokens") {
               return {
-                select: () => ({
-                  eq: () => ({
-                    is: () => ({
-                      order: async () => ({ data: [], error: null }),
-                    }),
-                  }),
-                }),
-              };
-            }
-            if (table === "vibeusage_tracker_devices") {
-              return {
-                select: () => ({
-                  eq: () => ({
-                    is: () => ({
-                      order: async () => ({ data: [], error: null }),
-                    }),
-                  }),
-                }),
-              };
-            }
-            if (table === 'vibeusage_tracker_device_tokens') {
-              return {
                 select: (columns, options) => {
                   if (columns === 'id' && options?.count === 'exact') {
                     return {
@@ -9082,7 +9015,7 @@ test("vibeusage-user-status degrades when created_at missing and no service role
                 }
               };
             }
-            if (table === 'vibeusage_tracker_devices') {
+            if (table === "vibeusage_tracker_devices") {
               return {
                 select: (columns, options) => {
                   if (columns === 'id' && options?.count === 'exact') {
