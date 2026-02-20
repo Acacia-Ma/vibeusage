@@ -7590,434 +7590,6 @@ test("vibeusage-leaderboard-refresh snapshots weekly leaderboard with token fiel
   assert.equal(inserted[1].display_name, "Beta");
 });
 
-test("vibeusage-leaderboard-settings inserts user setting row", async () => {
-  const fn = require("../insforge-functions/vibeusage-leaderboard-settings");
-
-  const userId = "99999999-9999-9999-9999-999999999999";
-  const userJwt = createUserJwt(userId);
-
-  const inserts = [];
-
-  function makeThenableResult(result) {
-    return {
-      eq: () => makeThenableResult(result),
-      then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
-    };
-  }
-
-  globalThis.createClient = (args) => {
-    if (args && args.edgeFunctionToken === userJwt) {
-      return {
-        auth: {
-          getCurrentUser: async () => ({ data: { user: { id: userId } }, error: null }),
-        },
-        database: {
-          from: (table) => {
-            assert.equal(table, "vibeusage_user_settings");
-            return {
-              select: () => ({
-                eq: () => ({
-                  maybeSingle: async () => ({ data: null, error: null }),
-                }),
-              }),
-              insert: async (rows) => {
-                inserts.push({ table, rows });
-                return { error: null };
-              },
-            };
-          },
-        },
-      };
-    }
-    if (args && args.edgeFunctionToken && args.edgeFunctionToken !== userJwt) {
-      return {
-        database: {
-          from: (table) => {
-            if (table === "users") {
-              return {
-                select: () => ({
-                  eq: () => ({
-                    maybeSingle: async () => ({
-                      data: { nickname: "Nick", avatar_url: "https://example.com/avatar.png" },
-                      error: null,
-                    }),
-                  }),
-                }),
-              };
-            }
-            if (table === "vibeusage_leaderboard_snapshots") {
-              return {
-                update: () => makeThenableResult({ error: null }),
-              };
-            }
-            throw new Error(`Unexpected service table: ${String(table)}`);
-          },
-        },
-      };
-    }
-    throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
-  };
-
-  const req = new Request("http://localhost/functions/vibeusage-leaderboard-settings", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${userJwt}` },
-    body: JSON.stringify({ leaderboard_public: true }),
-  });
-
-  const res = await fn(req);
-  assert.equal(res.status, 200);
-  const body = await res.json();
-
-  assert.equal(body.leaderboard_public, true);
-  assert.equal(typeof body.updated_at, "string");
-  assert.ok(body.updated_at.includes("T"));
-
-  assert.equal(inserts.length, 1);
-  const row = inserts[0].rows?.[0];
-  assert.equal(row.user_id, userId);
-  assert.equal(row.leaderboard_public, true);
-  assert.equal(typeof row.updated_at, "string");
-});
-
-test("vibeusage-leaderboard-settings updates existing row", async () => {
-  const fn = require("../insforge-functions/vibeusage-leaderboard-settings");
-
-  const userId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
-  const userJwt = createUserJwt(userId);
-
-  const updates = [];
-  const snapshotUpdates = [];
-
-  function makeThenableResult(result) {
-    return {
-      eq: () => makeThenableResult(result),
-      then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
-    };
-  }
-
-  globalThis.createClient = (args) => {
-    if (args && args.edgeFunctionToken === userJwt) {
-      return {
-        auth: {
-          getCurrentUser: async () => ({ data: { user: { id: userId } }, error: null }),
-        },
-        database: {
-          from: (table) => {
-            if (table === "vibeusage_user_settings") {
-              return {
-                select: () => ({
-                  eq: () => ({
-                    maybeSingle: async () => ({ data: { user_id: userId }, error: null }),
-                  }),
-                }),
-                update: (values) => ({
-                  eq: async (col, value) => {
-                    updates.push({ table, values, where: { col, value } });
-                    return { error: null };
-                  },
-                }),
-              };
-            }
-            if (table === "vibeusage_public_views") {
-              return {
-                update: () => ({
-                  eq: async () => ({ error: null }),
-                }),
-              };
-            }
-            throw new Error(`Unexpected table: ${String(table)}`);
-          },
-        },
-      };
-    }
-    if (args && args.edgeFunctionToken && args.edgeFunctionToken !== userJwt) {
-      return {
-        database: {
-          from: (table) => {
-            if (table === "users") {
-              return {
-                select: () => ({
-                  eq: () => ({
-                    maybeSingle: async () => ({
-                      data: { nickname: "Nick", avatar_url: "https://example.com/avatar.png" },
-                      error: null,
-                    }),
-                  }),
-                }),
-              };
-            }
-            if (table === "vibeusage_leaderboard_snapshots") {
-              return {
-                update: (values) => {
-                  snapshotUpdates.push(values);
-                  return makeThenableResult({ error: null });
-                },
-              };
-            }
-            throw new Error(`Unexpected service table: ${String(table)}`);
-          },
-        },
-      };
-    }
-    throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
-  };
-
-  const req = new Request("http://localhost/functions/vibeusage-leaderboard-settings", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${userJwt}` },
-    body: JSON.stringify({ leaderboard_public: false }),
-  });
-
-  const res = await fn(req);
-  assert.equal(res.status, 200);
-  const body = await res.json();
-
-  assert.equal(body.leaderboard_public, false);
-  assert.equal(typeof body.updated_at, "string");
-
-  assert.equal(updates.length, 1);
-  assert.equal(updates[0].where.col, "user_id");
-  assert.equal(updates[0].where.value, userId);
-  assert.equal(updates[0].values.leaderboard_public, false);
-  assert.equal(typeof updates[0].values.updated_at, "string");
-
-  assert.equal(snapshotUpdates.length, 3);
-  assert.equal(snapshotUpdates.every((values) => values?.is_public === false), true);
-  assert.equal(snapshotUpdates.every((values) => values?.display_name === "Anonymous"), true);
-  assert.equal(snapshotUpdates.every((values) => values?.avatar_url === null), true);
-});
-
-test("vibeusage-leaderboard-settings syncs snapshot display name from profile fallback", async () => {
-  const fn = require("../insforge-functions/vibeusage-leaderboard-settings");
-
-  const userId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
-  const userJwt = createUserJwt(userId);
-
-  const snapshotUpdates = [];
-
-  globalThis.createClient = (args) => {
-    if (args && args.edgeFunctionToken === userJwt) {
-      return {
-        auth: {
-          getCurrentUser: async () => ({ data: { user: { id: userId } }, error: null }),
-        },
-        database: {
-          from: (table) => {
-            if (table === "vibeusage_user_settings") {
-              return {
-                select: () => ({
-                  eq: () => ({
-                    maybeSingle: async () => ({ data: { user_id: userId }, error: null }),
-                  }),
-                }),
-                update: (values) => ({
-                  eq: async () => ({ error: null, values }),
-                }),
-              };
-            }
-            throw new Error(`Unexpected table: ${String(table)}`);
-          },
-        },
-      };
-    }
-
-    if (args && args.edgeFunctionToken && args.edgeFunctionToken !== userJwt) {
-      return {
-        database: {
-          from: (table) => {
-            if (table === "users") {
-              return {
-                select: () => ({
-                  eq: () => ({
-                    maybeSingle: async () => ({
-                      data: {
-                        nickname: null,
-                        avatar_url: "https://example.com/victor.png",
-                        profile: { full_name: "Victor Wu" },
-                        metadata: null,
-                      },
-                      error: null,
-                    }),
-                  }),
-                }),
-              };
-            }
-
-            if (table === "vibeusage_public_views") {
-              return {
-                select: () => ({
-                  eq: () => ({
-                    is: () => ({
-                      maybeSingle: async () => ({ data: { user_id: userId }, error: null }),
-                    }),
-                  }),
-                }),
-              };
-            }
-
-            if (table === "vibeusage_leaderboard_snapshots") {
-              return {
-                update: (values) => {
-                  const entry = { values, filters: [] };
-                  snapshotUpdates.push(entry);
-                  const query = {
-                    eq: (col, value) => {
-                      entry.filters.push({ col, value });
-                      return query;
-                    },
-                    then: (resolve, reject) =>
-                      Promise.resolve({ error: null }).then(resolve, reject),
-                  };
-                  return query;
-                },
-              };
-            }
-
-            throw new Error(`Unexpected service table: ${String(table)}`);
-          },
-        },
-      };
-    }
-
-    throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
-  };
-
-  const req = new Request("http://localhost/functions/vibeusage-leaderboard-settings", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${userJwt}` },
-    body: JSON.stringify({ leaderboard_public: true }),
-  });
-
-  const res = await fn(req);
-  assert.equal(res.status, 200);
-  const body = await res.json();
-
-  assert.equal(body.leaderboard_public, true);
-  assert.equal(snapshotUpdates.length, 3);
-  assert.equal(snapshotUpdates[0].values.display_name, "Victor Wu");
-  assert.equal(snapshotUpdates[0].values.avatar_url, "https://example.com/victor.png");
-  assert.equal(snapshotUpdates.every((entry) => entry.values?.is_public === true), true);
-});
-
-test("vibeusage-leaderboard-settings returns user setting state", async () => {
-  const fn = require("../insforge-functions/vibeusage-leaderboard-settings");
-
-  const userId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
-  const userJwt = createUserJwt(userId);
-
-  globalThis.createClient = (args) => {
-    if (args && args.edgeFunctionToken === userJwt) {
-      return {
-        auth: {
-          getCurrentUser: async () => ({ data: { user: { id: userId } }, error: null }),
-        },
-        database: {
-          from: (table) => {
-            assert.equal(table, "vibeusage_user_settings");
-            return {
-              select: () => ({
-                eq: () => ({
-                  maybeSingle: async () => ({
-                    data: { leaderboard_public: true, updated_at: "2026-02-09T00:00:00.000Z" },
-                    error: null,
-                  }),
-                }),
-              }),
-            };
-          },
-        },
-      };
-    }
-    throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
-  };
-
-  const req = new Request("http://localhost/functions/vibeusage-leaderboard-settings", {
-    method: "GET",
-    headers: { Authorization: `Bearer ${userJwt}` },
-  });
-
-  const res = await fn(req);
-  assert.equal(res.status, 200);
-  const body = await res.json();
-
-  assert.equal(body.leaderboard_public, true);
-  assert.equal(body.updated_at, "2026-02-09T00:00:00.000Z");
-});
-
-test("vibeusage-leaderboard-settings defaults to false when missing row", async () => {
-  const fn = require("../insforge-functions/vibeusage-leaderboard-settings");
-
-  const userId = "dddddddd-dddd-dddd-dddd-dddddddddddd";
-  const userJwt = createUserJwt(userId);
-
-  globalThis.createClient = (args) => {
-    if (args && args.edgeFunctionToken === userJwt) {
-      return {
-        auth: {
-          getCurrentUser: async () => ({ data: { user: { id: userId } }, error: null }),
-        },
-        database: {
-          from: (table) => {
-            assert.equal(table, "vibeusage_user_settings");
-            return {
-              select: () => ({
-                eq: () => ({
-                  maybeSingle: async () => ({ data: null, error: null }),
-                }),
-              }),
-            };
-          },
-        },
-      };
-    }
-    throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
-  };
-
-  const req = new Request("http://localhost/functions/vibeusage-leaderboard-settings", {
-    method: "GET",
-    headers: { Authorization: `Bearer ${userJwt}` },
-  });
-
-  const res = await fn(req);
-  assert.equal(res.status, 200);
-  const body = await res.json();
-
-  assert.equal(body.leaderboard_public, false);
-  assert.equal(body.updated_at, null);
-});
-
-test("vibeusage-leaderboard-settings rejects invalid body", async () => {
-  const fn = require("../insforge-functions/vibeusage-leaderboard-settings");
-
-  const userId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
-  const userJwt = createUserJwt(userId);
-
-  globalThis.createClient = (args) => {
-    if (args && args.edgeFunctionToken === userJwt) {
-      return {
-        auth: {
-          getCurrentUser: async () => ({ data: { user: { id: userId } }, error: null }),
-        },
-        database: {
-          from: () => {
-            throw new Error("Unexpected database access");
-          },
-        },
-      };
-    }
-    throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
-  };
-
-  const req = new Request("http://localhost/functions/vibeusage-leaderboard-settings", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${userJwt}` },
-    body: JSON.stringify({ leaderboard_public: "yes" }),
-  });
-
-  const res = await fn(req);
-  assert.equal(res.status, 400);
-});
-
 test("vibeusage-public-visibility returns active state for authenticated user", async () => {
   setDenoEnv({
     INSFORGE_INTERNAL_URL: BASE_URL,
@@ -8199,6 +7771,54 @@ test("vibeusage-public-visibility disables active state via POST", async () => {
   assert.equal(body.enabled, false);
   assert.equal(body.share_token, null);
   assert.equal(typeof state.row?.revoked_at, "string");
+});
+
+test("vibeusage-leaderboard-settings is retired", async () => {
+  const fn = require("../insforge-functions/vibeusage-leaderboard-settings");
+  const req = new Request("http://localhost/functions/vibeusage-leaderboard-settings", {
+    method: "GET",
+  });
+  const res = await fn(req);
+  assert.equal(res.status, 410);
+  const body = await res.json();
+  assert.equal(body.error, "Endpoint retired");
+});
+
+test("vibeusage-public-view-status is retired", async () => {
+  const fn = require("../insforge-functions/vibeusage-public-view-status");
+  const req = new Request("http://localhost/functions/vibeusage-public-view-status", {
+    method: "GET",
+  });
+  const res = await fn(req);
+  assert.equal(res.status, 410);
+  const body = await res.json();
+  assert.equal(body.error, "Endpoint retired");
+});
+
+test("vibeusage-public-view-issue is retired", async () => {
+  const fn = require("../insforge-functions/vibeusage-public-view-issue");
+  const req = new Request("http://localhost/functions/vibeusage-public-view-issue", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  const res = await fn(req);
+  assert.equal(res.status, 410);
+  const body = await res.json();
+  assert.equal(body.error, "Endpoint retired");
+});
+
+test("vibeusage-public-view-revoke is retired", async () => {
+  const fn = require("../insforge-functions/vibeusage-public-view-revoke");
+  const req = new Request("http://localhost/functions/vibeusage-public-view-revoke", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  const res = await fn(req);
+  assert.equal(res.status, 410);
+  const body = await res.json();
+  assert.equal(body.error, "Endpoint retired");
 });
 
 test("vibeusage-leaderboard-profile rejects missing user_id", async () => {
