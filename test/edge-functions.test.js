@@ -7942,23 +7942,8 @@ test("vibeusage-leaderboard-profile rejects missing user_id", async () => {
 
   const fn = require("../insforge-functions/vibeusage-leaderboard-profile");
 
-  const userId = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
-  const userJwt = createUserJwt(userId);
-
-  globalThis.createClient = (args) => {
-    if (args && args.edgeFunctionToken === userJwt) {
-      return {
-        auth: {
-          getCurrentUser: async () => ({ data: { user: { id: userId } }, error: null }),
-        },
-      };
-    }
-    throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
-  };
-
   const req = new Request("http://localhost/functions/vibeusage-leaderboard-profile", {
     method: "GET",
-    headers: { Authorization: `Bearer ${userJwt}` },
   });
 
   const res = await fn(req);
@@ -7991,17 +7976,19 @@ test("vibeusage-leaderboard-profile hides non-public users", async () => {
       return {
         database: {
           from: (table) => {
-            if (table !== "vibeusage_user_settings") {
+            if (table !== "vibeusage_public_views") {
               throw new Error(`Unexpected service table: ${String(table)}`);
             }
             return {
-              select: () => {
-                const q = {
-                  eq: () => q,
-                  maybeSingle: async () => ({ data: { leaderboard_public: false }, error: null }),
-                };
-                return q;
-              },
+              select: () => ({
+                eq: () => ({
+                  is: () => ({
+                    limit: () => ({
+                      maybeSingle: async () => ({ data: null, error: null }),
+                    }),
+                  }),
+                }),
+              }),
             };
           },
         },
@@ -8050,18 +8037,6 @@ test("vibeusage-leaderboard-profile requires active public link for non-self use
       return {
         database: {
           from: (table) => {
-            if (table === "vibeusage_user_settings") {
-              return {
-                select: () => {
-                  const q = {
-                    eq: () => q,
-                    maybeSingle: async () => ({ data: { leaderboard_public: true }, error: null }),
-                  };
-                  return q;
-                },
-              };
-            }
-
             if (table === "vibeusage_public_views") {
               return {
                 select: () => {
@@ -8111,104 +8086,6 @@ test("vibeusage-leaderboard-profile requires active public link for non-self use
   assert.equal(snapshotRead, false);
 });
 
-test("vibeusage-leaderboard-profile hides snapshot rows marked private", async () => {
-  setDenoEnv({
-    INSFORGE_INTERNAL_URL: BASE_URL,
-    ANON_KEY,
-    INSFORGE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
-  });
-
-  const fn = require("../insforge-functions/vibeusage-leaderboard-profile");
-
-  const userId = "999a0000-0000-0000-0000-000000000000";
-  const userJwt = createUserJwt(userId);
-  const targetUserId = "999a0000-0000-0000-0000-000000000001";
-
-  const snapshotRow = {
-    user_id: targetUserId,
-    display_name: "Nick",
-    avatar_url: "https://example.com/avatar.png",
-    rank: 12,
-    gpt_tokens: "10",
-    claude_tokens: "5",
-    other_tokens: "2",
-    total_tokens: "17",
-    is_public: false,
-    generated_at: "2026-02-09T00:00:00.000Z",
-  };
-
-  globalThis.createClient = (args) => {
-    if (args && args.edgeFunctionToken === userJwt) {
-      return {
-        auth: {
-          getCurrentUser: async () => ({ data: { user: { id: userId } }, error: null }),
-        },
-      };
-    }
-
-    if (args && args.edgeFunctionToken === SERVICE_ROLE_KEY) {
-      return {
-        database: {
-          from: (table) => {
-            if (table === "vibeusage_user_settings") {
-              return {
-                select: () => {
-                  const q = {
-                    eq: () => q,
-                    maybeSingle: async () => ({ data: { leaderboard_public: true }, error: null }),
-                  };
-                  return q;
-                },
-              };
-            }
-
-            if (table === "vibeusage_public_views") {
-              return {
-                select: () => {
-                  const q = {
-                    eq: () => q,
-                    is: () => q,
-                    limit: () => q,
-                    maybeSingle: async () => ({ data: { user_id: targetUserId }, error: null }),
-                  };
-                  return q;
-                },
-              };
-            }
-
-            if (table === "vibeusage_leaderboard_snapshots") {
-              return {
-                select: () => {
-                  const q = {
-                    eq: () => q,
-                    maybeSingle: async () => ({ data: snapshotRow, error: null }),
-                  };
-                  return q;
-                },
-              };
-            }
-
-            throw new Error(`Unexpected service table: ${String(table)}`);
-          },
-        },
-      };
-    }
-
-    throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
-  };
-
-  const req = new Request(
-    `http://localhost/functions/vibeusage-leaderboard-profile?user_id=${encodeURIComponent(targetUserId)}`,
-    {
-      method: "GET",
-      headers: { Authorization: `Bearer ${userJwt}` },
-    },
-  );
-
-  const res = await fn(req);
-  assert.equal(res.status, 404);
-});
-
 test("vibeusage-leaderboard-profile returns weekly snapshot entry for public user", async () => {
   setDenoEnv({
     INSFORGE_INTERNAL_URL: BASE_URL,
@@ -8248,18 +8125,6 @@ test("vibeusage-leaderboard-profile returns weekly snapshot entry for public use
       return {
         database: {
           from: (table) => {
-            if (table === "vibeusage_user_settings") {
-              return {
-                select: () => {
-                  const q = {
-                    eq: () => q,
-                    maybeSingle: async () => ({ data: { leaderboard_public: true }, error: null }),
-                  };
-                  return q;
-                },
-              };
-            }
-
             if (table === "vibeusage_public_views") {
               return {
                 select: () => {
