@@ -438,3 +438,20 @@ This project is licensed under the [MIT License](LICENSE).
   [Docs](docs/) •
   [API](BACKEND_API.md)
 </div>
+
+
+## AI Agent 快速安装
+
+复制以下内容发送给你的 AI 助手：
+
+```
+请帮我安装 VibeUsage 来追踪 AI Token 用量。
+
+执行以下命令：
+npx --yes vibeusage init
+
+安装完成后验证：
+vibeusage status
+```
+
+或者查看完整指南: https://github.com/victorGPT/vibeusage/blob/main/docs/AI_AGENT_INSTALL.md
