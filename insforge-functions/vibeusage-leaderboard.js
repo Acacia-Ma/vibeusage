@@ -104,6 +104,10 @@ var require_public_view = __commonJS({
       if (!resolvedUserId) {
         return { ok: false, edgeClient: null, userId: null };
       }
+      const { data: settings, error: settingsErr } = await dbClient.database.from("vibeusage_user_settings").select("leaderboard_public").eq("user_id", resolvedUserId).maybeSingle();
+      if (settingsErr || settings?.leaderboard_public !== true) {
+        return { ok: false, edgeClient: null, userId: null };
+      }
       return { ok: true, edgeClient: dbClient, userId: resolvedUserId };
     }
     async function resolvePublicUserId({ dbClient, token }) {
@@ -301,7 +305,11 @@ var require_auth = __commonJS({
     }
     async function getEdgeClientAndUserIdFast({ baseUrl, bearer }) {
       const anonKey = getAnonKey2();
-      const edgeClient = createClient({ baseUrl, anonKey: anonKey || void 0, edgeFunctionToken: bearer });
+      const edgeClient = createClient({
+        baseUrl,
+        anonKey: anonKey || void 0,
+        edgeFunctionToken: bearer
+      });
       const local = await verifyUserJwtHs256({ token: bearer });
       const allowRemoteOnly = !local.ok && local?.code === "missing_jwt_secret";
       if (!local.ok && !allowRemoteOnly) {
@@ -410,7 +418,14 @@ var require_auth = __commonJS({
       }
       const publicView = await resolvePublicView({ baseUrl, shareToken: bearer });
       if (!publicView.ok) {
-        return { ok: false, edgeClient: null, userId: null, accessType: null, status: 401, error: "Unauthorized" };
+        return {
+          ok: false,
+          edgeClient: null,
+          userId: null,
+          accessType: null,
+          status: 401,
+          error: "Unauthorized"
+        };
       }
       return {
         ok: true,
@@ -635,7 +650,14 @@ var require_date = __commonJS({
     }
     function getTimeZoneOffsetMinutes(date, timeZone) {
       const parts = getTimeZoneParts(date, timeZone);
-      const asUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+      const asUtc = Date.UTC(
+        parts.year,
+        parts.month - 1,
+        parts.day,
+        parts.hour,
+        parts.minute,
+        parts.second
+      );
       return Math.round((asUtc - date.getTime()) / 6e4);
     }
     function getLocalParts(date, tzContext) {
