@@ -97,6 +97,40 @@ export function LandingView({
           extrasSkeleton
         )}
 
+        {/* AI Agent 安装指南区块 */}
+        <section className="w-full max-w-3xl border border-matrix-ghost bg-matrix-panel px-6 py-6 space-y-4">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🤖</span>
+            <h3 className="text-heading font-bold text-matrix-bright tracking-tight">
+              {copy("landing.ai_agent.title")}
+            </h3>
+          </div>
+          <p className="text-body text-matrix-muted">{copy("landing.ai_agent.description")}</p>
+          <div className="border border-matrix-dim bg-black/70 px-4 py-3 flex items-center gap-3">
+            <div className="min-w-0 flex-1 overflow-x-auto">
+              <code className="font-matrix text-body text-matrix-primary whitespace-nowrap">
+                {copy("landing.ai_agent.command")}
+              </code>
+            </div>
+            <button
+              type="button"
+              aria-label={copy("landing.ai_agent.copy_label")}
+              title={copy("landing.ai_agent.copy_label")}
+              onClick={() => {
+                navigator.clipboard.writeText(copy("landing.ai_agent.guide_url"));
+                window.open(copy("landing.ai_agent.guide_url"), "_blank");
+              }}
+              className="shrink-0 inline-flex h-8 w-8 items-center justify-center border border-matrix-ghost text-matrix-primary hover:text-matrix-bright hover:border-matrix-dim transition-colors"
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <rect x="7" y="7" width="9" height="9" rx="1.5" />
+                <path d="M4 13V4h9" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
+          <p className="text-caption text-matrix-dim uppercase">{copy("landing.ai_agent.helper")}</p>
+        </section>
+
         <section className="w-full max-w-3xl border border-matrix-ghost bg-matrix-panel px-6 py-6 space-y-4">
           <p className="text-caption text-matrix-muted uppercase">{copy("landing.install.prompt")}</p>
           <div className="border border-matrix-dim bg-black/70 px-4 py-3 flex items-center gap-3">

@@ -34,6 +34,12 @@ landing.install.command,landing,LandingPage,LandingPage,install_command,"npx --y
 landing.install.helper,landing,LandingPage,LandingPage,install_helper,"Then connect your account and start syncing usage.",,active
 landing.install.action.copy,landing,LandingPage,LandingPage,install_copy,"COPY COMMAND",,active
 landing.install.action.copied,landing,LandingPage,LandingPage,install_copied,"COPIED",,active
+landing.ai_agent.title,landing,LandingPage,LandingPage,ai_agent_title,"LET AI INSTALL FOR YOU",,active
+landing.ai_agent.description,landing,LandingPage,LandingPage,ai_agent_description,"Copy this guide and paste to ChatGPT, Claude, or any AI assistant. It will install VibeUsage automatically.",,active
+landing.ai_agent.command,landing,LandingPage,LandingPage,ai_agent_command,"https://github.com/victorGPT/vibeusage/blob/main/docs/AI_AGENT_INSTALL.md",,active
+landing.ai_agent.copy_label,landing,LandingPage,LandingPage,ai_agent_copy_label,"Copy Guide Link",,active
+landing.ai_agent.helper,landing,LandingPage,LandingPage,ai_agent_helper,"Or click to open the guide and copy manually.",,active
+landing.ai_agent.guide_url,landing,LandingPage,LandingPage,ai_agent_guide_url,"https://github.com/victorGPT/vibeusage/blob/main/docs/AI_AGENT_INSTALL.md",,active
 landing.meta.title,landing,LandingPage,Meta,title,"VibeUsage",,active
 landing.meta.description,landing,LandingPage,Meta,description,"Track token usage across AI agent clients: Codex, Claude Code, OpenCode, Gemini, and OpenClaw.",,active
 landing.meta.og_site_name,landing,LandingPage,Meta,og_site_name,"VibeUsage",,active
