@@ -5,11 +5,28 @@ const http = vi.hoisted(() => ({
   post: vi.fn(),
 }));
 
+const authStorage = vi.hoisted(() => ({
+  clearSessionSoftExpired: vi.fn(),
+  markSessionSoftExpired: vi.fn(),
+}));
+
+const authClient = vi.hoisted(() => ({
+  auth: {
+    getCurrentSession: vi.fn(async () => ({ data: { session: null } })),
+  },
+}));
+
 vi.mock("../insforge-client", () => ({
   createInsforgeClient: vi.fn(() => ({
     getHttpClient: () => http,
   })),
   createInsforgeAuthClient: vi.fn(() => ({ auth: {} })),
+}));
+
+vi.mock("../auth-storage", () => authStorage);
+
+vi.mock("../insforge-auth-client", () => ({
+  insforgeAuthClient: authClient,
 }));
 
 vi.mock("../auth-token", () => ({
@@ -35,6 +52,10 @@ beforeEach(() => {
   http.get.mockReset();
   http.post.mockReset();
   http.get.mockResolvedValue({ data: {} });
+  authStorage.clearSessionSoftExpired.mockReset();
+  authStorage.markSessionSoftExpired.mockReset();
+  authClient.auth.getCurrentSession.mockReset();
+  authClient.auth.getCurrentSession.mockResolvedValue({ data: { session: null } });
 });
 
 describe("getUsageSummary", () => {
@@ -59,6 +80,16 @@ describe("getUsageSummary", () => {
 });
 
 describe("error normalization", () => {
+  const jwtToken = [
+    Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" }))
+      .toString("base64url")
+      .replace(/=/g, ""),
+    Buffer.from(JSON.stringify({ sub: "user-1", iat: 1773954516, exp: 1773955416 }))
+      .toString("base64url")
+      .replace(/=/g, ""),
+    "sig",
+  ].join(".");
+
   it("uses the InsForgeError `error` field when message is empty", async () => {
     http.get.mockRejectedValueOnce({
       name: "InsForgeError",
@@ -74,5 +105,27 @@ describe("error normalization", () => {
       status: 401,
       statusCode: 401,
     });
+  });
+
+  it("marks soft expiry with the failing access token on 401", async () => {
+    http.get.mockRejectedValueOnce({
+      name: "InsForgeError",
+      message: "",
+      error: "Missing bearer token",
+      statusCode: 401,
+    });
+
+    await expect(
+      api.getUsageSummary({
+        baseUrl: "https://example.com",
+        accessToken: jwtToken,
+        from: "2026-01-01",
+        to: "2026-01-02",
+      }),
+    ).rejects.toMatchObject({
+      status: 401,
+    });
+
+    expect(authStorage.markSessionSoftExpired).toHaveBeenCalledWith(jwtToken);
   });
 });

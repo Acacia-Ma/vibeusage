@@ -18,6 +18,7 @@ import {
   clearSessionSoftExpired,
   loadSessionExpired,
   loadSessionSoftExpired,
+  shouldClearSessionSoftExpiredForToken,
   subscribeSessionExpired,
   subscribeSessionSoftExpired,
 } from "./lib/auth-storage";
@@ -193,7 +194,7 @@ export default function App() {
       try {
         const { data } = await insforgeAuthClient.auth.getCurrentSession();
         if (!active) return;
-        if (data?.session?.accessToken) {
+        if (shouldClearSessionSoftExpiredForToken(data?.session?.accessToken)) {
           clearSessionSoftExpired();
         }
       } catch (_e) {

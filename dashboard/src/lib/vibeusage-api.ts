@@ -535,7 +535,7 @@ async function requestJson({
                 skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
               })
             ) {
-              markSessionSoftExpired();
+              markSessionSoftExpired(refreshedToken);
             }
             err = normalizeSdkError(retryErr, {
               errorPrefix,
@@ -551,7 +551,7 @@ async function requestJson({
             skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
           })
         ) {
-          markSessionSoftExpired();
+          markSessionSoftExpired(activeAccessToken);
         }
         err ??= normalizeSdkError(errInput, {
           errorPrefix,
@@ -659,7 +659,7 @@ async function requestPostJson({
                 skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
               })
             ) {
-              markSessionSoftExpired();
+              markSessionSoftExpired(refreshedToken);
             }
             err = normalizeSdkError(retryErr, {
               errorPrefix,
@@ -675,7 +675,7 @@ async function requestPostJson({
             skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
           })
         ) {
-          markSessionSoftExpired();
+          markSessionSoftExpired(activeAccessToken);
         }
         err ??= normalizeSdkError(errInput, {
           errorPrefix,
@@ -787,7 +787,7 @@ function normalizeSdkError(
       skipSessionExpiry,
     })
   ) {
-    markSessionSoftExpired();
+    markSessionSoftExpired(accessToken);
   }
   if (typeof status === "number") {
     err.status = status;

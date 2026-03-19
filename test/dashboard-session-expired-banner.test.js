@@ -298,3 +298,8 @@ test("DashboardPage disables backend status when signed out or expired", () => {
   const src = read("dashboard/src/pages/DashboardPage.jsx");
   assert.match(src, /const headerStatus\s*=\s*authTokenAllowed\s*&&\s*authTokenReady/);
 });
+
+test("App only clears soft-expired state after a different session token arrives", () => {
+  const src = read("dashboard/src/App.jsx");
+  assert.match(src, /shouldClearSessionSoftExpiredForToken\(data\?\.session\?\.accessToken\)/);
+});
