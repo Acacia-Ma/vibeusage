@@ -1,21 +1,8 @@
-// Edge function: vibeusage-usage-daily
-// Returns daily token usage aggregates for the authenticated user (timezone-aware).
-
-"use strict";
-
-const { handleOptions, json } = require("../shared/http");
-const { getBearerToken, getAccessContext } = require("../shared/auth");
-const { getBaseUrl } = require("../shared/env");
-const { getSourceParam, normalizeSource } = require("../shared/source");
-const { getModelParam, normalizeUsageModel, applyUsageModelFilter } = require("../shared/model");
-const {
-  applyModelIdentity,
-  normalizeUsageModelKey,
-  resolveModelIdentity,
-  resolveUsageModelsForCanonical,
-} = require("../shared/model-identity");
-const { applyCanaryFilter } = require("../shared/canary");
-const {
+import { getAccessContext, getBearerToken } from "./shared/auth.js";
+import { applyCanaryFilter } from "./shared/canary.js";
+import { applyDailyBucket, initDailyBuckets } from "./shared/core/usage-daily.js";
+import { shouldIncludeUsageRow } from "./shared/core/usage-filter.js";
+import {
   addDatePartsDays,
   getUsageMaxDays,
   getUsageTimeZoneContext,
@@ -24,41 +11,41 @@ const {
   localDatePartsToUtc,
   normalizeDateRangeLocal,
   parseDateParts,
-} = require("../shared/date");
-const { forEachPage } = require("../shared/pagination");
-const { initDailyBuckets, applyDailyBucket } = require("../shared/core/usage-daily");
-const { shouldIncludeUsageRow } = require("../shared/core/usage-filter");
-const {
-  buildPricingBucketKey,
-  getSourceEntry,
-  parsePricingBucketKey,
-  resolveDisplayName,
-} = require("../shared/core/usage-summary");
-const {
-  buildPricingMetadata,
-  computeUsageCost,
-  formatUsdFromMicros,
-  resolvePricingProfile,
-} = require("../shared/pricing");
-const {
+} from "./shared/date.js";
+import { isDebugEnabled, withSlowQueryDebugPayload } from "./shared/debug.js";
+import { getBaseUrl } from "./shared/env.js";
+import { handleOptions, json } from "./shared/http.js";
+import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
+import { buildPricingMetadata, computeUsageCost, formatUsdFromMicros, resolvePricingProfile } from "./shared/pricing.js";
+import { getSourceParam, normalizeSource } from "./shared/source.js";
+import {
   addRowTotals,
-  createTotals,
-  fetchRollupRows,
-  isRollupEnabled,
-} = require("../shared/usage-rollup");
-const { applyTotalsAndBillable, resolveBillableTotals } = require("../shared/usage-aggregate");
-const { logSlowQuery, withRequestLogging } = require("../shared/logging");
-const { isDebugEnabled, withSlowQueryDebugPayload } = require("../shared/debug");
-const {
+  applyTotalsAndBillable,
+  applyModelIdentity,
+  applyUsageModelFilter,
   buildAliasTimeline,
+  buildPricingBucketKey,
+  createTotals,
   extractDateKey,
   fetchAliasRows,
+  fetchRollupRows,
+  forEachPage,
+  getModelParam,
+  getSourceEntry,
+  isRollupEnabled,
+  normalizeUsageModel,
+  normalizeUsageModelKey,
+  parsePricingBucketKey,
+  resolveBillableTotals,
+  resolveDisplayName,
   resolveIdentityAtDate,
-} = require("../shared/model-alias-timeline");
+  resolveModelIdentity,
+  resolveUsageModelsForCanonical,
+} from "./shared/usage-summary-support.js";
 
 const DEFAULT_MODEL = "unknown";
 
-module.exports = withRequestLogging("vibeusage-usage-daily", async function (request, logger) {
+export default withRequestLogging("vibeusage-usage-daily", async function (request, logger) {
   const opt = handleOptions(request);
   if (opt) return opt;
 
@@ -74,10 +61,6 @@ module.exports = withRequestLogging("vibeusage-usage-daily", async function (req
 
   const bearer = getBearerToken(request.headers.get("Authorization"));
   if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
-
-  const baseUrl = getBaseUrl();
-  const auth = await getAccessContext({ baseUrl, bearer, allowPublic: true });
-  if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
 
   const tzContext = getUsageTimeZoneContext(url);
   const sourceResult = getSourceParam(url);
@@ -102,6 +85,9 @@ module.exports = withRequestLogging("vibeusage-usage-daily", async function (req
   const startParts = parseDateParts(from);
   const endParts = parseDateParts(to);
   if (!startParts || !endParts) return respond({ error: "Invalid date range" }, 400, 0);
+
+  const auth = await getAccessContext({ baseUrl: getBaseUrl(), bearer, allowPublic: true });
+  if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
 
   const startUtc = localDatePartsToUtc(startParts, tzContext);
   const endUtc = localDatePartsToUtc(addDatePartsDays(endParts, 1), tzContext);
@@ -197,8 +183,9 @@ module.exports = withRequestLogging("vibeusage-usage-daily", async function (req
           if (!ts) continue;
           const dt = new Date(ts);
           if (!Number.isFinite(dt.getTime())) continue;
-          if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to }))
+          if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) {
             continue;
+          }
           const billable = ingestRow(row);
           applyDailyBucket({ buckets, row, tzContext, billable });
         }
@@ -242,8 +229,9 @@ module.exports = withRequestLogging("vibeusage-usage-daily", async function (req
         const day = row?.day;
         const bucket = buckets.get(day);
         if (!bucket) continue;
-        if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to }))
+        if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) {
           continue;
+        }
         const dayValue = row?.day;
         const rowForBucket =
           row?.hour_start || !dayValue ? row : { ...row, hour_start: `${dayValue}T00:00:00.000Z` };

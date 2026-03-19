@@ -1,17 +1,13 @@
-// Edge function: vibeusage-link-code-init
-// Issues a short-lived, single-use link code bound to the current session.
-
-"use strict";
-
-const { handleOptions, json, requireMethod, readJson } = require("../shared/http");
-const { getBearerToken, getEdgeClientAndUserId } = require("../shared/auth");
-const { getBaseUrl, getAnonKey, getServiceRoleKey } = require("../shared/env");
-const { sha256Hex } = require("../shared/crypto");
-const { withRequestLogging } = require("../shared/logging");
+import { getBearerToken, getEdgeClientAndUserId } from "./shared/auth.js";
+import { createEdgeClient } from "./shared/insforge-client.js";
+import { getAnonKey, getBaseUrl, getServiceRoleKey } from "./shared/env.js";
+import { handleOptions, json, readJson, requireMethod } from "./shared/http.js";
+import { sha256Hex } from "./shared/crypto.js";
+import { withRequestLogging } from "./shared/logging.js";
 
 const LINK_CODE_TTL_MS = 10 * 60_000;
 
-module.exports = withRequestLogging("vibeusage-link-code-init", async function (request) {
+export default withRequestLogging("vibeusage-link-code-init", async function (request) {
   const opt = handleOptions(request);
   if (opt) return opt;
 
@@ -31,7 +27,7 @@ module.exports = withRequestLogging("vibeusage-link-code-init", async function (
   const serviceRoleKey = getServiceRoleKey();
   const anonKey = getAnonKey();
   const dbClient = serviceRoleKey
-    ? createClient({
+    ? await createEdgeClient({
         baseUrl,
         anonKey: anonKey || serviceRoleKey,
         edgeFunctionToken: serviceRoleKey,

@@ -1449,7 +1449,7 @@ test("vibeusage-ingest anonKey path errors when hourly upsert unsupported", asyn
 });
 
 test("vibeusage-usage-heatmap returns a week-aligned grid with derived fields", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-heatmap");
+  const fn = await loadEdgeFunction("vibeusage-usage-heatmap");
 
   const userId = "55555555-5555-5555-5555-555555555555";
   const userJwt = createUserJwt(userId);
@@ -1564,7 +1564,7 @@ test("vibeusage-usage-heatmap returns a week-aligned grid with derived fields", 
 });
 
 test("vibeusage-usage-heatmap canonical model filter includes alias rows", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-heatmap");
+  const fn = await loadEdgeFunction("vibeusage-usage-heatmap");
 
   const userId = "33333333-3333-3333-3333-333333333333";
   const userJwt = createUserJwt(userId);
@@ -1622,7 +1622,7 @@ test("vibeusage-usage-heatmap canonical model filter includes alias rows", async
 });
 
 test("vibeusage-usage-heatmap normalizes model for non-UTC alias filtering", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-heatmap");
+  const fn = await loadEdgeFunction("vibeusage-usage-heatmap");
 
   const userId = "33333333-3333-3333-3333-333333333333";
   const userJwt = createUserJwt(userId);
@@ -1688,7 +1688,7 @@ test("vibeusage-usage-heatmap normalizes model for non-UTC alias filtering", asy
 });
 
 test("vibeusage-usage-heatmap honors alias effective_from across range", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-heatmap");
+  const fn = await loadEdgeFunction("vibeusage-usage-heatmap");
 
   const userId = "33333333-3333-3333-3333-333333333333";
   const userJwt = createUserJwt(userId);
@@ -1760,7 +1760,7 @@ test("vibeusage-usage-heatmap honors alias effective_from across range", async (
 });
 
 test("vibeusage-usage-heatmap rejects invalid parameters", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-heatmap");
+  const fn = await loadEdgeFunction("vibeusage-usage-heatmap");
   const userId = "55555555-5555-5555-5555-555555555555";
   const userJwt = createUserJwt(userId);
 
@@ -1778,7 +1778,7 @@ test("vibeusage-usage-heatmap rejects invalid parameters", async () => {
 
 test("vibeusage-usage-daily uses hourly when rollup disabled", () =>
   withRollupDisabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-daily");
+    const fn = await loadEdgeFunction("vibeusage-usage-daily");
 
     const userId = "66666666-6666-6666-6666-666666666666";
     const userJwt = createUserJwt(userId);
@@ -1831,7 +1831,7 @@ test("vibeusage-usage-daily uses hourly when rollup disabled", () =>
 
 test("vibeusage-usage-daily ignores rollup flag", () =>
   withRollupEnabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-daily");
+    const fn = await loadEdgeFunction("vibeusage-usage-daily");
 
     const userId = "66666666-6666-6666-6666-666666666666";
     const userJwt = createUserJwt(userId);
@@ -1868,7 +1868,7 @@ test("vibeusage-usage-daily ignores rollup flag", () =>
 
 test("vibeusage-usage-daily applies optional source filter", () =>
   withRollupEnabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-daily");
+    const fn = await loadEdgeFunction("vibeusage-usage-daily");
 
     const userId = "66666666-6666-6666-6666-666666666666";
     const userJwt = createUserJwt(userId);
@@ -1931,7 +1931,7 @@ test("vibeusage-usage-daily applies optional source filter", () =>
 
 test("vibeusage-usage-daily applies optional model filter", () =>
   withRollupEnabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-daily");
+    const fn = await loadEdgeFunction("vibeusage-usage-daily");
 
     const userId = "66666666-6666-6666-6666-666666666666";
     const userJwt = createUserJwt(userId);
@@ -1998,7 +1998,7 @@ test("vibeusage-usage-daily applies optional model filter", () =>
 
 test("vibeusage-usage-daily treats empty source as missing", () =>
   withRollupEnabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-daily");
+    const fn = await loadEdgeFunction("vibeusage-usage-daily");
 
     const userId = "66666666-6666-6666-6666-666666666666";
     const userJwt = createUserJwt(userId);
@@ -2062,7 +2062,7 @@ test("vibeusage-usage-daily treats empty source as missing", () =>
 
 test("vibeusage-usage-daily excludes canary buckets by default", () =>
   withRollupEnabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-daily");
+    const fn = await loadEdgeFunction("vibeusage-usage-daily");
 
     const userId = "66666666-6666-6666-6666-666666666666";
     const userJwt = createUserJwt(userId);
@@ -2125,7 +2125,7 @@ test("vibeusage-usage-daily excludes canary buckets by default", () =>
   }));
 
 test("vibeusage-usage-daily includes billable_total_tokens in summary", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-daily");
+  const fn = await loadEdgeFunction("vibeusage-usage-daily");
 
   const userId = "66666666-6666-6666-6666-666666666666";
   const userJwt = createUserJwt(userId);
@@ -2197,7 +2197,7 @@ test("vibeusage-usage-daily includes billable_total_tokens in summary", async ()
 });
 
 test("vibeusage-usage-daily prefers stored billable_total_tokens", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-daily");
+  const fn = await loadEdgeFunction("vibeusage-usage-daily");
 
   const userId = "66666666-6666-6666-6666-666666666666";
   const userJwt = createUserJwt(userId);
@@ -5036,7 +5036,7 @@ test("fetchAliasRows includes same-day alias timestamps", { concurrency: 1 }, as
 });
 
 test("vibeusage-usage-daily rejects oversized ranges", { concurrency: 1 }, async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-daily");
+  const fn = await loadEdgeFunction("vibeusage-usage-daily");
   const prevMaxDays = process.env.VIBEUSAGE_USAGE_MAX_DAYS;
   const userId = "55555555-5555-5555-5555-555555555555";
   const userJwt = createUserJwt(userId);
@@ -5081,7 +5081,7 @@ test("vibeusage-usage-daily rejects oversized ranges", { concurrency: 1 }, async
 });
 
 test("vibeusage-usage-model-breakdown includes billable_total_tokens per source", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-model-breakdown");
+  const fn = await loadEdgeFunction("vibeusage-usage-model-breakdown");
 
   const userId = "55555555-5555-5555-5555-555555555555";
   const userJwt = createUserJwt(userId);
@@ -5159,7 +5159,7 @@ test("vibeusage-usage-model-breakdown includes billable_total_tokens per source"
 });
 
 test("vibeusage-usage-model-breakdown prefers stored billable_total_tokens", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-model-breakdown");
+  const fn = await loadEdgeFunction("vibeusage-usage-model-breakdown");
 
   const userId = "55555555-5555-5555-5555-555555555555";
   const userJwt = createUserJwt(userId);
@@ -5239,7 +5239,7 @@ test("vibeusage-usage-model-breakdown prefers stored billable_total_tokens", asy
 });
 
 test("vibeusage-usage-model-breakdown sorts models by billable_total_tokens", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-model-breakdown");
+  const fn = await loadEdgeFunction("vibeusage-usage-model-breakdown");
 
   const userId = "77777777-7777-7777-7777-777777777777";
   const userJwt = createUserJwt(userId);
@@ -5317,8 +5317,8 @@ test(
   { concurrency: 1 },
   async () => {
     const summaryFn = await loadEdgeFunction("vibeusage-usage-summary");
-    const dailyFn = require("../insforge-functions/vibeusage-usage-daily");
-    const breakdownFn = require("../insforge-functions/vibeusage-usage-model-breakdown");
+    const dailyFn = await loadEdgeFunction("vibeusage-usage-daily");
+    const breakdownFn = await loadEdgeFunction("vibeusage-usage-model-breakdown");
 
     const userId = "88888888-8888-8888-8888-888888888888";
     const userJwt = createUserJwt(userId);
@@ -5437,8 +5437,8 @@ test(
   () =>
     withRollupDisabled(async () => {
       const summaryFn = await loadEdgeFunction("vibeusage-usage-summary");
-      const dailyFn = require("../insforge-functions/vibeusage-usage-daily");
-      const breakdownFn = require("../insforge-functions/vibeusage-usage-model-breakdown");
+      const dailyFn = await loadEdgeFunction("vibeusage-usage-daily");
+      const breakdownFn = await loadEdgeFunction("vibeusage-usage-model-breakdown");
 
       const userId = "77777777-7777-7777-7777-777777777777";
       const userJwt = createUserJwt(userId);
@@ -5560,8 +5560,8 @@ test(
   () =>
     withRollupDisabled(async () => {
       const summaryFn = await loadEdgeFunction("vibeusage-usage-summary");
-      const dailyFn = require("../insforge-functions/vibeusage-usage-daily");
-      const breakdownFn = require("../insforge-functions/vibeusage-usage-model-breakdown");
+      const dailyFn = await loadEdgeFunction("vibeusage-usage-daily");
+      const breakdownFn = await loadEdgeFunction("vibeusage-usage-model-breakdown");
 
       const userId = "77777777-7777-7777-7777-777777777777";
       const userJwt = createUserJwt(userId);
@@ -5755,7 +5755,7 @@ function assertTokenTotalsEqual(expected, actual, label) {
 }
 
 test("vibeusage-usage-model-breakdown rejects oversized ranges", { concurrency: 1 }, async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-model-breakdown");
+  const fn = await loadEdgeFunction("vibeusage-usage-model-breakdown");
   const prevMaxDays = process.env.VIBEUSAGE_USAGE_MAX_DAYS;
   const userId = "55555555-5555-5555-5555-555555555555";
   const userJwt = createUserJwt(userId);
@@ -5800,7 +5800,7 @@ test("vibeusage-usage-model-breakdown rejects oversized ranges", { concurrency: 
 });
 
 test("vibeusage-usage-model-breakdown emits model_id and merges aliases", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-model-breakdown");
+  const fn = await loadEdgeFunction("vibeusage-usage-model-breakdown");
 
   const userId = "77777777-7777-7777-7777-777777777777";
   const userJwt = createUserJwt(userId);
@@ -5886,7 +5886,7 @@ test("vibeusage-usage-model-breakdown emits model_id and merges aliases", async 
 });
 
 test("vibeusage-usage-model-breakdown honors alias effective_from across range", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-model-breakdown");
+  const fn = await loadEdgeFunction("vibeusage-usage-model-breakdown");
 
   const userId = "99999999-9999-9999-9999-999999999999";
   const userJwt = createUserJwt(userId);
@@ -5981,7 +5981,7 @@ test("vibeusage-usage-model-breakdown honors alias effective_from across range",
 });
 
 test("vibeusage-usage-model-breakdown prices per-alias effective_from when unfiltered", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-model-breakdown");
+  const fn = await loadEdgeFunction("vibeusage-usage-model-breakdown");
 
   const userId = "23232323-2323-2323-2323-232323232323";
   const userJwt = createUserJwt(userId);
@@ -6115,7 +6115,7 @@ test("vibeusage-usage-model-breakdown prices per-alias effective_from when unfil
 });
 
 test("vibeusage-usage-daily canonical model filter includes alias rows", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-daily");
+  const fn = await loadEdgeFunction("vibeusage-usage-daily");
 
   const userId = "88888888-8888-8888-8888-888888888888";
   const userJwt = createUserJwt(userId);
@@ -6189,7 +6189,7 @@ test("vibeusage-usage-daily canonical model filter includes alias rows", async (
 });
 
 test("vibeusage-usage-daily prefixed model filter includes alias rows", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-daily");
+  const fn = await loadEdgeFunction("vibeusage-usage-daily");
 
   const userId = "99999999-9999-9999-9999-999999999999";
   const userJwt = createUserJwt(userId);
@@ -6262,7 +6262,7 @@ test("vibeusage-usage-daily prefixed model filter includes alias rows", async ()
 });
 
 test("vibeusage-usage-daily honors alias effective_from across range", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-daily");
+  const fn = await loadEdgeFunction("vibeusage-usage-daily");
 
   const userId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
   const userJwt = createUserJwt(userId);
@@ -6357,7 +6357,7 @@ test(
   { concurrency: 1 },
   () =>
     withRollupDisabled(async () => {
-      const fn = require("../insforge-functions/vibeusage-usage-daily");
+      const fn = await loadEdgeFunction("vibeusage-usage-daily");
 
       const userId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
       const userJwt = createUserJwt(userId);
@@ -8361,7 +8361,7 @@ test("vibeusage-leaderboard-profile returns weekly snapshot entry for public use
 });
 
 test("vibeusage-user-status returns pro.active for cutoff user", async () => {
-  const fn = require("../insforge-functions/vibeusage-user-status");
+  const fn = await loadEdgeFunction("vibeusage-user-status");
 
   const userId = "11111111-1111-1111-1111-111111111111";
   const userJwt = createUserJwt(userId);
@@ -8529,7 +8529,7 @@ test("vibeusage-user-status returns pro.active for cutoff user", async () => {
 });
 
 test("vibeusage-user-status returns tracked subscriptions for identity card", async () => {
-  const fn = require("../insforge-functions/vibeusage-user-status");
+  const fn = await loadEdgeFunction("vibeusage-user-status");
 
   const userId = "11111111-1111-1111-1111-111111111119";
   const userJwt = createUserJwt(userId);
@@ -8713,7 +8713,7 @@ test("vibeusage-user-status returns tracked subscriptions for identity card", as
 });
 
 test("vibeusage-user-status marks install partial when device tables are missing", async () => {
-  const fn = require("../insforge-functions/vibeusage-user-status");
+  const fn = await loadEdgeFunction("vibeusage-user-status");
 
   const userId = "11111111-1111-1111-1111-11111111111a";
   const userJwt = createUserJwt(userId);
@@ -8859,7 +8859,7 @@ test("vibeusage-user-status marks install partial when device tables are missing
 });
 
 test("vibeusage-user-status falls back to users table when created_at missing", async () => {
-  const fn = require("../insforge-functions/vibeusage-user-status");
+  const fn = await loadEdgeFunction("vibeusage-user-status");
 
   const userId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
   const userJwt = createUserJwt(userId);
@@ -8955,7 +8955,7 @@ test("vibeusage-user-status falls back to users table when created_at missing", 
 });
 
 test("vibeusage-user-status degrades when created_at missing and no service role", async () => {
-  const fn = require("../insforge-functions/vibeusage-user-status");
+  const fn = await loadEdgeFunction("vibeusage-user-status");
 
   setDenoEnv({
     INSFORGE_INTERNAL_URL: BASE_URL,
@@ -9099,7 +9099,7 @@ test("vibeusage-user-status degrades when created_at missing and no service role
 });
 
 test("vibeusage-user-status returns 500 for unrelated missing relation errors", async () => {
-  const fn = require("../insforge-functions/vibeusage-user-status");
+  const fn = await loadEdgeFunction("vibeusage-user-status");
 
   const userId = "dddddddd-dddd-dddd-dddd-dddddddddddd";
   const userJwt = createUserJwt(userId);
@@ -9624,7 +9624,7 @@ test("vibeusage-entitlements-revoke accepts project_admin token", async () => {
 });
 
 test("vibeusage-link-code-init issues a short-lived link code", async () => {
-  const fn = require("../insforge-functions/vibeusage-link-code-init");
+  const fn = await loadEdgeFunction("vibeusage-link-code-init");
 
   const db = createServiceDbMock();
   const userId = "66666666-6666-6666-6666-666666666666";

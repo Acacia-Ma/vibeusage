@@ -26,6 +26,15 @@ export function addUtcDays(date, days) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days));
 }
 
+export function computeHeatmapWindowUtc({ weeks, weekStartsOn, to }) {
+  const end = parseUtcDateString(to) || new Date();
+  const desired = weekStartsOn === "mon" ? 1 : 0;
+  const endDow = end.getUTCDay();
+  const endWeekStart = addUtcDays(end, -((endDow - desired + 7) % 7));
+  const gridStart = addUtcDays(endWeekStart, -7 * (weeks - 1));
+  return { from: formatDateUTC(gridStart), gridStart, end };
+}
+
 export function parseDateParts(value) {
   if (!isDate(value)) return null;
   const [year, month, day] = value.split("-").map(Number);

@@ -4,8 +4,17 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
 const MIGRATED_FUNCTION_SOURCES = new Map([
+  ["vibeusage-link-code-init", "insforge-src/functions-esm/vibeusage-link-code-init.js"],
   ["vibeusage-leaderboard", "insforge-src/functions-esm/vibeusage-leaderboard.js"],
+  ["vibeusage-public-visibility", "insforge-src/functions-esm/vibeusage-public-visibility.js"],
+  ["vibeusage-usage-daily", "insforge-src/functions-esm/vibeusage-usage-daily.js"],
+  [
+    "vibeusage-usage-model-breakdown",
+    "insforge-src/functions-esm/vibeusage-usage-model-breakdown.js",
+  ],
+  ["vibeusage-usage-heatmap", "insforge-src/functions-esm/vibeusage-usage-heatmap.js"],
   ["vibeusage-usage-summary", "insforge-src/functions-esm/vibeusage-usage-summary.js"],
+  ["vibeusage-user-status", "insforge-src/functions-esm/vibeusage-user-status.js"],
   [
     "vibeusage-project-usage-summary",
     "insforge-src/functions-esm/vibeusage-project-usage-summary.js",

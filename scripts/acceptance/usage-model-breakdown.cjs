@@ -2,6 +2,8 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { loadEdgeFunction } = require("../lib/load-edge-function.cjs");
+const { createTestUserJwt } = require("./_lib/test-user-jwt.cjs");
 
 const {
   computeUsageCost,
@@ -112,13 +114,14 @@ async function callEndpoint({ rows, query }) {
   };
 
   global.createClient = () => createClientStub(rows);
+  const userJwt = createTestUserJwt();
 
-  const breakdown = require("../../insforge-src/functions/vibeusage-usage-model-breakdown.js");
+  const breakdown = await loadEdgeFunction("vibeusage-usage-model-breakdown");
 
   const res = await breakdown(
     new Request(`http://local/functions/vibeusage-usage-model-breakdown?${query}`, {
       method: "GET",
-      headers: { Authorization: "Bearer user-jwt" },
+      headers: { Authorization: `Bearer ${userJwt}` },
     }),
   );
 

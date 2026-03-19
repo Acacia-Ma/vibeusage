@@ -1,15 +1,11 @@
-// Edge function: vibeusage-user-status
-// Returns Pro status for the authenticated user.
+import { getBearerToken, getEdgeClientAndUserId } from "./shared/auth.js";
+import { getAnonKey, getBaseUrl, getServiceRoleKey } from "./shared/env.js";
+import { json, handleOptions, requireMethod } from "./shared/http.js";
+import { computeProStatus } from "./shared/pro-status.js";
+import { createEdgeClient } from "./shared/insforge-client.js";
+import { withRequestLogging } from "./shared/logging.js";
 
-"use strict";
-
-const { handleOptions, json, requireMethod } = require("../shared/http");
-const { getBearerToken, getEdgeClientAndUserId } = require("../shared/auth");
-const { getAnonKey, getBaseUrl, getServiceRoleKey } = require("../shared/env");
-const { computeProStatus } = require("../shared/pro-status");
-const { withRequestLogging } = require("../shared/logging");
-
-module.exports = withRequestLogging("vibeusage-user-status", async function (request) {
+export default withRequestLogging("vibeusage-user-status", async function (request) {
   const opt = handleOptions(request);
   if (opt) return opt;
 
@@ -30,7 +26,7 @@ module.exports = withRequestLogging("vibeusage-user-status", async function (req
     partial = true;
   } else {
     const anonKey = getAnonKey();
-    const serviceClient = createClient({
+    const serviceClient = await createEdgeClient({
       baseUrl,
       anonKey: anonKey || serviceRoleKey,
       edgeFunctionToken: serviceRoleKey,

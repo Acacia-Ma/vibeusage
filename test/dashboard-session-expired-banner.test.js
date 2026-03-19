@@ -125,6 +125,15 @@ test("App registers visibility revalidate for soft-expired sessions", () => {
   assert.match(src, /getCurrentSession/);
 });
 
+test("App probes backend to clear same-token soft-expired sessions", () => {
+  const src = read("dashboard/src/App.jsx");
+  assert.match(src, /probeBackend/);
+  assert.match(src, /const nextToken = data\?\.session\?\.accessToken \?\? null;/);
+  assert.match(src, /if \(shouldClearSessionSoftExpiredForToken\(nextToken\)\) \{/);
+  assert.match(src, /if \(!nextToken \|\| isLikelyExpiredAccessToken\(nextToken\)\) \{/);
+  assert.match(src, /await probeBackend\(\{\s*baseUrl,\s*accessToken:\s*nextToken\s*\}\)/);
+});
+
 test("vibeusage-api resolves access token providers", () => {
   const src = read("dashboard/src/lib/vibeusage-api.ts");
   const authTokenSrc = read("dashboard/src/lib/auth-token.js");
@@ -136,6 +145,16 @@ test("vibeusage-api resolves access token providers", () => {
 test("App avoids legacy auth fallback before InsForge is ready", () => {
   const src = read("dashboard/src/App.jsx");
   assert.match(src, /insforgeLoaded\s*&&\s*insforgeSignedIn/);
+});
+
+test("App clears stale InsForge storage after hosted auth resolves signed out", () => {
+  const src = read("dashboard/src/App.jsx");
+  assert.match(src, /if \(!insforgeLoaded\) return;/);
+  assert.match(src, /if \(insforgeSignedIn \|\| hasInsforgeSession\) return;/);
+  assert.match(src, /clearInsforgePersistentStorage\(\)/);
+  assert.match(src, /clearAuthStorage\(\)/);
+  assert.match(src, /clearSessionExpired\(\)/);
+  assert.match(src, /clearSessionSoftExpired\(\)/);
 });
 
 test("DashboardPage shows session expired banner and bypasses auth gate", () => {
@@ -299,7 +318,8 @@ test("DashboardPage disables backend status when signed out or expired", () => {
   assert.match(src, /const headerStatus\s*=\s*authTokenAllowed\s*&&\s*authTokenReady/);
 });
 
-test("App only clears soft-expired state after a different session token arrives", () => {
+test("App clears soft-expired state after a different token or successful same-token probe", () => {
   const src = read("dashboard/src/App.jsx");
-  assert.match(src, /shouldClearSessionSoftExpiredForToken\(data\?\.session\?\.accessToken\)/);
+  assert.match(src, /shouldClearSessionSoftExpiredForToken\(nextToken\)/);
+  assert.match(src, /await probeBackend\(\{ baseUrl, accessToken: nextToken \}\)/);
 });

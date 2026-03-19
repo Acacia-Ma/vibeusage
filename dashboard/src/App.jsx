@@ -29,6 +29,7 @@ import { clearInsforgePersistentStorage } from "./lib/insforge-client";
 import { isMockEnabled } from "./lib/mock-data";
 import { fetchLatestTrackerVersion } from "./lib/npm-version";
 import { isScreenshotModeEnabled } from "./lib/screenshot-mode";
+import { probeBackend } from "./lib/vibeusage-api";
 import { LandingPage } from "./pages/LandingPage.jsx";
 import { UpgradeAlertModal } from "./ui/matrix-a/components/UpgradeAlertModal.jsx";
 import { VersionBadge } from "./ui/matrix-a/components/VersionBadge.jsx";
@@ -194,8 +195,20 @@ export default function App() {
       try {
         const { data } = await insforgeAuthClient.auth.getCurrentSession();
         if (!active) return;
-        if (shouldClearSessionSoftExpiredForToken(data?.session?.accessToken)) {
+        const nextToken = data?.session?.accessToken ?? null;
+        if (shouldClearSessionSoftExpiredForToken(nextToken)) {
           clearSessionSoftExpired();
+          return;
+        }
+        if (!nextToken || isLikelyExpiredAccessToken(nextToken)) {
+          return;
+        }
+        try {
+          await probeBackend({ baseUrl, accessToken: nextToken });
+          if (!active) return;
+          clearSessionSoftExpired();
+        } catch (_probeError) {
+          // Keep the soft-expired guard until the same token can pass a protected probe.
         }
       } catch (_e) {
         // ignore refresh errors
@@ -218,7 +231,7 @@ export default function App() {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("focus", onFocus);
     };
-  }, [insforgeSignedIn, sessionSoftExpired]);
+  }, [baseUrl, insforgeSignedIn, sessionSoftExpired]);
 
   const insforgeAuth = useMemo(() => {
     const sessionToken = insforgeSession?.accessToken ?? null;
@@ -280,6 +293,16 @@ export default function App() {
     if (!useInsforge || !hasInsforgeSession) return null;
     return insforgeAuth;
   }, [hasInsforgeSession, insforgeAuth, useInsforge]);
+
+  useEffect(() => {
+    if (!insforgeLoaded) return;
+    if (insforgeSignedIn || hasInsforgeSession) return;
+    clearInsforgePersistentStorage();
+    clearAuthStorage();
+    clearSessionExpired();
+    clearSessionSoftExpired();
+  }, [hasInsforgeSession, insforgeLoaded, insforgeSignedIn]);
+
   const signOut = useMemo(() => {
     return async () => {
       try {

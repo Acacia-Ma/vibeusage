@@ -66,13 +66,6 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
   const bearer = getBearerToken(request.headers.get("Authorization"));
   if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
 
-  const auth = await getAccessContext({
-    baseUrl: getBaseUrl(),
-    bearer,
-    allowPublic: true,
-  });
-  if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
-
   const tzContext = getUsageTimeZoneContext(url);
   const rollingEnabled = url.searchParams.get("rolling") === "1";
   const sourceResult = getSourceParam(url);
@@ -97,6 +90,13 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
   const startParts = parseDateParts(from);
   const endParts = parseDateParts(to);
   if (!startParts || !endParts) return respond({ error: "Invalid date range" }, 400, 0);
+
+  const auth = await getAccessContext({
+    baseUrl: getBaseUrl(),
+    bearer,
+    allowPublic: true,
+  });
+  if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
 
   const startUtc = localDatePartsToUtc(startParts, tzContext);
   const endUtc = localDatePartsToUtc(addDatePartsDays(endParts, 1), tzContext);

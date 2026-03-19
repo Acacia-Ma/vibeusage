@@ -42,7 +42,7 @@ async function setupTrackerSyncFixtures(rootDir) {
 
 async function setupLinkCodeFixtures(rootDir) {
   await writeFixture(rootDir, "src/commands/init.js", "module.exports = {};\n");
-  await writeFixture(rootDir, "insforge-src/functions/vibeusage-link-code-init.js", "export {};\n");
+  await writeFixture(rootDir, "insforge-src/functions-esm/vibeusage-link-code-init.js", "export {};\n");
   await writeFixture(
     rootDir,
     "insforge-src/functions/vibeusage-link-code-exchange.js",

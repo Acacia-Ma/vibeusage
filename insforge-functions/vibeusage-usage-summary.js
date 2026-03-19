@@ -8,7 +8,15 @@ if (typeof globalThis.createClient !== "function") globalThis.createClient = __i
 function readEnvValue(key) {
   try {
     if (typeof Deno !== "undefined" && Deno?.env?.get) {
-      return Deno.env.get(key);
+      const value = Deno.env.get(key);
+      if (value != null) return value;
+    }
+  } catch (_error) {
+  }
+  try {
+    if (typeof process !== "undefined" && process?.env) {
+      const value = process.env[key];
+      if (value != null) return value;
     }
   } catch (_error) {
   }
@@ -1223,12 +1231,6 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
   if (request.method !== "GET") return respond({ error: "Method not allowed" }, 405, 0);
   const bearer = getBearerToken(request.headers.get("Authorization"));
   if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
-  const auth = await getAccessContext({
-    baseUrl: getBaseUrl(),
-    bearer,
-    allowPublic: true
-  });
-  if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
   const tzContext = getUsageTimeZoneContext(url);
   const rollingEnabled = url.searchParams.get("rolling") === "1";
   const sourceResult = getSourceParam(url);
@@ -1251,6 +1253,12 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
   const startParts = parseDateParts(from);
   const endParts = parseDateParts(to);
   if (!startParts || !endParts) return respond({ error: "Invalid date range" }, 400, 0);
+  const auth = await getAccessContext({
+    baseUrl: getBaseUrl(),
+    bearer,
+    allowPublic: true
+  });
+  if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
   const startUtc = localDatePartsToUtc(startParts, tzContext);
   const endUtc = localDatePartsToUtc(addDatePartsDays(endParts, 1), tzContext);
   const startIso = startUtc.toISOString();

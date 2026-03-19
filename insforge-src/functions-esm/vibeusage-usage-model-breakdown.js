@@ -1,22 +1,6 @@
-// Edge function: vibeusage-usage-model-breakdown
-// Returns per-source, per-model usage aggregates for the authenticated user over a date range.
-
-"use strict";
-
-const { handleOptions, json } = require("../shared/http");
-const { getBearerToken, getAccessContext } = require("../shared/auth");
-const { getBaseUrl } = require("../shared/env");
-const { getSourceParam, normalizeSource } = require("../shared/source");
-const { normalizeUsageModel } = require("../shared/model");
-const { normalizeUsageModelKey } = require("../shared/model-identity");
-const {
-  buildAliasTimeline,
-  extractDateKey,
-  fetchAliasRows,
-  resolveIdentityAtDate,
-} = require("../shared/model-alias-timeline");
-const { applyCanaryFilter } = require("../shared/canary");
-const {
+import { getAccessContext, getBearerToken } from "./shared/auth.js";
+import { applyCanaryFilter } from "./shared/canary.js";
+import {
   addDatePartsDays,
   getUsageMaxDays,
   getUsageTimeZoneContext,
@@ -24,23 +8,31 @@ const {
   localDatePartsToUtc,
   normalizeDateRangeLocal,
   parseDateParts,
-} = require("../shared/date");
-const { toBigInt } = require("../shared/numbers");
-const { forEachPage } = require("../shared/pagination");
-const {
-  buildPricingMetadata,
-  computeUsageCost,
-  formatUsdFromMicros,
-  resolvePricingProfile,
-} = require("../shared/pricing");
-const { resolveBillableTotals } = require("../shared/usage-aggregate");
-const { logSlowQuery, withRequestLogging } = require("../shared/logging");
-const { isDebugEnabled, withSlowQueryDebugPayload } = require("../shared/debug");
+} from "./shared/date.js";
+import { isDebugEnabled, withSlowQueryDebugPayload } from "./shared/debug.js";
+import { getBaseUrl } from "./shared/env.js";
+import { handleOptions, json } from "./shared/http.js";
+import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
+import { toBigInt } from "./shared/numbers.js";
+import { buildPricingMetadata, computeUsageCost, formatUsdFromMicros, resolvePricingProfile } from "./shared/pricing.js";
+import { normalizeSource, getSourceParam } from "./shared/source.js";
+import {
+  applyUsageModelFilter,
+  buildAliasTimeline,
+  extractDateKey,
+  fetchAliasRows,
+  forEachPage,
+  getModelParam,
+  normalizeUsageModel,
+  normalizeUsageModelKey,
+  resolveBillableTotals,
+  resolveIdentityAtDate,
+} from "./shared/usage-summary-support.js";
 
 const DEFAULT_SOURCE = "codex";
 const DEFAULT_MODEL = "unknown";
 
-module.exports = withRequestLogging(
+export default withRequestLogging(
   "vibeusage-usage-model-breakdown",
   async function (request, logger) {
     const opt = handleOptions(request);
@@ -59,9 +51,6 @@ module.exports = withRequestLogging(
     const bearer = getBearerToken(request.headers.get("Authorization"));
     if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
 
-    const baseUrl = getBaseUrl();
-    const auth = await getAccessContext({ baseUrl, bearer, allowPublic: true });
-    if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
     const tzContext = getUsageTimeZoneContext(url);
     const sourceResult = getSourceParam(url);
     if (!sourceResult.ok) return respond({ error: sourceResult.error }, 400, 0);
@@ -82,6 +71,9 @@ module.exports = withRequestLogging(
     const startParts = parseDateParts(from);
     const endParts = parseDateParts(to);
     if (!startParts || !endParts) return respond({ error: "Invalid date range" }, 400, 0);
+
+    const auth = await getAccessContext({ baseUrl: getBaseUrl(), bearer, allowPublic: true });
+    if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
 
     const startUtc = localDatePartsToUtc(startParts, tzContext);
     const endUtc = localDatePartsToUtc(addDatePartsDays(endParts, 1), tzContext);
@@ -125,9 +117,7 @@ module.exports = withRequestLogging(
             usageKey,
             hour_start: row?.hour_start,
             total_tokens: row?.total_tokens,
-            billable_total_tokens: hasStoredBillable
-              ? row.billable_total_tokens
-              : billable.toString(),
+            billable_total_tokens: hasStoredBillable ? row.billable_total_tokens : billable.toString(),
             input_tokens: row?.input_tokens,
             cached_input_tokens: row?.cached_input_tokens,
             output_tokens: row?.output_tokens,

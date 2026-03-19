@@ -8,7 +8,15 @@ if (typeof globalThis.createClient !== "function") globalThis.createClient = __i
 function readEnvValue(key) {
   try {
     if (typeof Deno !== "undefined" && Deno?.env?.get) {
-      return Deno.env.get(key);
+      const value = Deno.env.get(key);
+      if (value != null) return value;
+    }
+  } catch (_error) {
+  }
+  try {
+    if (typeof process !== "undefined" && process?.env) {
+      const value = process.env[key];
+      if (value != null) return value;
     }
   } catch (_error) {
   }

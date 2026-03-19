@@ -1,16 +1,6 @@
-// Edge function: vibeusage-usage-heatmap
-// Returns a GitHub-inspired activity heatmap derived from timezone-aware daily token usage.
-
-"use strict";
-
-const { handleOptions, json } = require("../shared/http");
-const { getBearerToken, getAccessContext } = require("../shared/auth");
-const { getBaseUrl } = require("../shared/env");
-const { getSourceParam } = require("../shared/source");
-const { getModelParam, applyUsageModelFilter, normalizeUsageModel } = require("../shared/model");
-const { resolveUsageModelsForCanonical } = require("../shared/model-identity");
-const { applyCanaryFilter } = require("../shared/canary");
-const {
+import { getAccessContext, getBearerToken } from "./shared/auth.js";
+import { applyCanaryFilter } from "./shared/canary.js";
+import {
   addDatePartsDays,
   addUtcDays,
   computeHeatmapWindowUtc,
@@ -19,25 +9,31 @@ const {
   formatDateUTC,
   formatLocalDateKey,
   getLocalParts,
-  isUtcTimeZone,
   getUsageTimeZoneContext,
+  isUtcTimeZone,
   localDatePartsToUtc,
   parseDateParts,
   parseUtcDateString,
-} = require("../shared/date");
-const { toBigInt } = require("../shared/numbers");
-const { forEachPage } = require("../shared/pagination");
-const { logSlowQuery, withRequestLogging } = require("../shared/logging");
-const { isDebugEnabled, withSlowQueryDebugPayload } = require("../shared/debug");
-const {
+} from "./shared/date.js";
+import { isDebugEnabled, withSlowQueryDebugPayload } from "./shared/debug.js";
+import { getBaseUrl } from "./shared/env.js";
+import { handleOptions, json } from "./shared/http.js";
+import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
+import { getSourceParam } from "./shared/source.js";
+import {
+  applyUsageModelFilter,
   buildAliasTimeline,
   extractDateKey,
   fetchAliasRows,
+  forEachPage,
+  getModelParam,
+  normalizeUsageModel,
+  resolveBillableTotals,
   resolveIdentityAtDate,
-} = require("../shared/model-alias-timeline");
-const { resolveBillableTotals } = require("../shared/usage-aggregate");
+  resolveUsageModelsForCanonical,
+} from "./shared/usage-summary-support.js";
 
-module.exports = withRequestLogging("vibeusage-usage-heatmap", async function (request, logger) {
+export default withRequestLogging("vibeusage-usage-heatmap", async function (request, logger) {
   const opt = handleOptions(request);
   if (opt) return opt;
 
@@ -82,8 +78,7 @@ module.exports = withRequestLogging("vibeusage-usage-heatmap", async function (r
       to,
     });
 
-    const baseUrl = getBaseUrl();
-    const auth = await getAccessContext({ baseUrl, bearer, allowPublic: true });
+    const auth = await getAccessContext({ baseUrl: getBaseUrl(), bearer, allowPublic: true });
     if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
 
     const startIso = gridStart.toISOString();
@@ -116,7 +111,7 @@ module.exports = withRequestLogging("vibeusage-usage-heatmap", async function (r
         let query = auth.edgeClient.database
           .from("vibeusage_tracker_hourly")
           .select(
-            "hour_start,source,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
+            "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
           )
           .eq("user_id", auth.userId);
         if (source) query = query.eq("source", source);
@@ -264,8 +259,7 @@ module.exports = withRequestLogging("vibeusage-usage-heatmap", async function (r
   const startIso = startUtc.toISOString();
   const endIso = endUtc.toISOString();
 
-  const baseUrl = getBaseUrl();
-  const auth = await getAccessContext({ baseUrl, bearer, allowPublic: true });
+  const auth = await getAccessContext({ baseUrl: getBaseUrl(), bearer, allowPublic: true });
   if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
 
   const modelFilter = await resolveUsageModelsForCanonical({
@@ -294,7 +288,7 @@ module.exports = withRequestLogging("vibeusage-usage-heatmap", async function (r
       let query = auth.edgeClient.database
         .from("vibeusage_tracker_hourly")
         .select(
-          "hour_start,source,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
+          "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
         )
         .eq("user_id", auth.userId);
       if (source) query = query.eq("source", source);
@@ -416,24 +410,24 @@ module.exports = withRequestLogging("vibeusage-usage-heatmap", async function (r
 
 function normalizeWeeks(raw) {
   if (raw == null || raw === "") return 52;
-  const s = String(raw).trim();
-  if (!/^[0-9]+$/.test(s)) return null;
-  const v = Number(s);
-  if (!Number.isFinite(v)) return null;
-  if (v < 1 || v > 104) return null;
-  return v;
+  const value = String(raw).trim();
+  if (!/^[0-9]+$/.test(value)) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  if (parsed < 1 || parsed > 104) return null;
+  return parsed;
 }
 
 function normalizeWeekStartsOn(raw) {
-  const v = (raw == null || raw === "" ? "sun" : String(raw)).trim().toLowerCase();
-  if (v === "sun" || v === "mon") return v;
+  const value = (raw == null || raw === "" ? "sun" : String(raw)).trim().toLowerCase();
+  if (value === "sun" || value === "mon") return value;
   return null;
 }
 
 function normalizeToDate(raw) {
   if (raw == null || raw === "") return formatDateUTC(new Date());
-  const s = String(raw).trim();
-  const dt = parseUtcDateString(s);
+  const value = String(raw).trim();
+  const dt = parseUtcDateString(value);
   return dt ? formatDateUTC(dt) : null;
 }
 
@@ -447,7 +441,7 @@ function quantileNearestRank(sortedBigints, q) {
 
 function computeActiveStreakDays({ valuesByDay, to }) {
   let streak = 0;
-  for (let i = 0; i < 370; i++) {
+  for (let i = 0; i < 370; i += 1) {
     const key = formatDateUTC(addUtcDays(to, -i));
     const value = valuesByDay.get(key) || 0n;
     if (value > 0n) streak += 1;

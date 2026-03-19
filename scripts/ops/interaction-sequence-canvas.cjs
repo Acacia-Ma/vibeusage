@@ -163,7 +163,7 @@ const SCENARIO_CATALOG = [
     weight: 80,
     requiredPaths: [
       "src/commands/init.js",
-      "insforge-src/functions/vibeusage-link-code-init.js",
+      "insforge-src/functions-esm/vibeusage-link-code-init.js",
       "insforge-src/functions/vibeusage-link-code-exchange.js",
       "src/lib/vibeusage-api.js",
     ],

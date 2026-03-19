@@ -2,6 +2,8 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { loadEdgeFunction } = require("../lib/load-edge-function.cjs");
+const { createTestUserJwt } = require("./_lib/test-user-jwt.cjs");
 
 const HOURLY_ROWS = [
   {
@@ -82,12 +84,13 @@ async function main() {
   process.env.VIBESCORE_ROLLUP_ENABLED = "1";
   global.Deno = { env: { get: (k) => process.env[k] || null } };
   global.createClient = createClientStub;
+  const userJwt = createTestUserJwt();
 
-  const usageDaily = require("../../insforge-src/functions/vibeusage-usage-daily.js");
+  const usageDaily = await loadEdgeFunction("vibeusage-usage-daily");
   const res = await usageDaily(
     new Request(
       "http://local/functions/vibeusage-usage-daily?from=2025-12-01&to=2025-12-01&tz=UTC",
-      { method: "GET", headers: { Authorization: "Bearer user-jwt" } },
+      { method: "GET", headers: { Authorization: `Bearer ${userJwt}` } },
     ),
   );
   const body = await res.json();

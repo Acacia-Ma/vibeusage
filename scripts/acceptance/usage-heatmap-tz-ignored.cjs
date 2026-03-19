@@ -2,6 +2,8 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { loadEdgeFunction } = require("../lib/load-edge-function.cjs");
+const { createTestUserJwt } = require("./_lib/test-user-jwt.cjs");
 
 class DatabaseStub {
   constructor({ baseUrl, anonKey, edgeFunctionToken } = {}) {
@@ -106,11 +108,12 @@ async function main() {
   };
 
   global.createClient = createClientStub;
+  const userJwt = createTestUserJwt();
 
   const { handler, calls } = buildFetchStub();
   global.fetch = handler;
 
-  const usageHeatmap = require("../../insforge-src/functions/vibeusage-usage-heatmap.js");
+  const usageHeatmap = await loadEdgeFunction("vibeusage-usage-heatmap");
 
   const query = [
     "weeks=2",
@@ -123,7 +126,7 @@ async function main() {
   const res = await usageHeatmap(
     new Request(`http://local/functions/vibeusage-usage-heatmap?${query}`, {
       method: "GET",
-      headers: { Authorization: "Bearer user-jwt" },
+      headers: { Authorization: `Bearer ${userJwt}` },
     }),
   );
 
