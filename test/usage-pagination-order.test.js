@@ -13,7 +13,7 @@ function countOccurrences(haystack, needle) {
 }
 
 function normalize(content) {
-  return content.replace(/\s+/g, "");
+  return content.replace(/\s+/g, "").replace(/"/g, "'");
 }
 
 test("usage pagination uses deterministic ordering", () => {
@@ -24,10 +24,14 @@ test("usage pagination uses deterministic ordering", () => {
   const adminOrder =
     "order('hour_start',{ascending:true}).order('user_id',{ascending:true}).order('device_id',{ascending:true}).order('source',{ascending:true}).order('model',{ascending:true})";
 
-  assert.ok(normalize(readFile("insforge-src/shared/usage-rollup.js")).includes(rollupOrder));
+  assert.ok(
+    normalize(readFile("insforge-src/functions-esm/shared/usage-summary-support.js")).includes(
+      rollupOrder,
+    ),
+  );
   assert.equal(
     countOccurrences(
-      normalize(readFile("insforge-src/functions/vibeusage-usage-summary.js")),
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-summary.js")),
       hourlyOrder,
     ),
     1,

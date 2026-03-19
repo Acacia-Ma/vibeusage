@@ -5,8 +5,9 @@ This document describes the public Edge Function endpoints used by the VibeUsage
 ## Source of truth (important)
 
 - Author source code lives in `insforge-src/`.
-- Deployable artifacts live in `insforge-functions/` and are generated (single-file).
-- Do not hand-edit `insforge-functions/*.js`; edit `insforge-src/` and rebuild.
+- Deployable artifacts live in `insforge-functions/` and are generated as single-file outputs.
+- `vibeusage-leaderboard`, `vibeusage-usage-summary`, and `vibeusage-project-usage-summary` now use Deno/ESM author sources under `insforge-src/functions-esm/`.
+- Do not hand-edit `insforge-functions/*.js`; edit the authoritative source under `insforge-src/`.
 
 ## Build & deploy
 
@@ -25,8 +26,11 @@ npm run build:insforge:check
 Deploy (example):
 
 ```bash
-# Update code only; keep existing slugs.
-insforge2 update-function --slug vibeusage-usage-summary --codeFile insforge-functions/vibeusage-usage-summary.js
+# Deno/ESM author sources are bundled into single-file deploy artifacts first.
+insforge --json functions deploy vibeusage-usage-summary --file insforge-functions/vibeusage-usage-summary.js
+
+# Legacy CommonJS functions still deploy from generated artifacts.
+insforge2 update-function --slug vibeusage-device-token-issue --codeFile insforge-functions/vibeusage-device-token-issue.js
 ```
 
 ## Auth models

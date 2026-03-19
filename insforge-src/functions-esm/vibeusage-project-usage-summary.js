@@ -1,21 +1,16 @@
-// Edge function: vibeusage-project-usage-summary
-// Returns project-level token usage totals for the authenticated user over a timezone-aware date range.
-
-"use strict";
-
-const { handleOptions, json } = require("../shared/http");
-const { getBearerToken, getAccessContext } = require("../shared/auth");
-const { getBaseUrl } = require("../shared/env");
-const { getSourceParam } = require("../shared/source");
-const { logSlowQuery, withRequestLogging } = require("../shared/logging");
-const { isCanaryTag } = require("../shared/canary");
-const { isDebugEnabled, withSlowQueryDebugPayload } = require("../shared/debug");
-const { toBigInt } = require("../shared/numbers");
+import { getAccessContext, getBearerToken } from "./shared/auth.js";
+import { isCanaryTag } from "./shared/canary.js";
+import { isDebugEnabled, withSlowQueryDebugPayload } from "./shared/debug.js";
+import { getBaseUrl } from "./shared/env.js";
+import { handleOptions, json } from "./shared/http.js";
+import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
+import { toBigInt } from "./shared/numbers.js";
+import { getSourceParam } from "./shared/source.js";
 
 const DEFAULT_LIMIT = 3;
 const MAX_LIMIT = 10;
 
-module.exports = withRequestLogging(
+export default withRequestLogging(
   "vibeusage-project-usage-summary",
   async function (request, logger) {
     const opt = handleOptions(request);
@@ -34,8 +29,11 @@ module.exports = withRequestLogging(
     const bearer = getBearerToken(request.headers.get("Authorization"));
     if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
 
-    const baseUrl = getBaseUrl();
-    const auth = await getAccessContext({ baseUrl, bearer, allowPublic: true });
+    const auth = await getAccessContext({
+      baseUrl: getBaseUrl(),
+      bearer,
+      allowPublic: true,
+    });
     if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
 
     const sourceResult = getSourceParam(url);
@@ -43,7 +41,6 @@ module.exports = withRequestLogging(
     const source = sourceResult.source;
     const from = null;
     const to = null;
-
     const limit = normalizeLimit(url.searchParams.get("limit"));
     const queryStartMs = Date.now();
 
@@ -53,7 +50,6 @@ module.exports = withRequestLogging(
         "project_key,project_ref,sum_total_tokens:sum(total_tokens),sum_billable_total_tokens:sum(billable_total_tokens)",
       )
       .eq("user_id", auth.userId);
-
     if (source) query = query.eq("source", source);
     if (!isCanaryTag(source)) query = query.neq("source", "canary");
     query = query
@@ -86,10 +82,7 @@ module.exports = withRequestLogging(
             project_key: row?.project_key || null,
             project_ref: row?.project_ref || null,
             total_tokens: totalTokens,
-            billable_total_tokens: resolveBillableTotal(
-              totalTokens,
-              row?.sum_billable_total_tokens,
-            ),
+            billable_total_tokens: resolveBillableTotal(totalTokens, row?.sum_billable_total_tokens),
           };
         })
         .filter((row) => row.project_key && row.project_ref);
@@ -122,9 +115,8 @@ module.exports = withRequestLogging(
 
 function normalizeLimit(raw) {
   if (typeof raw !== "string" || raw.trim().length === 0) return DEFAULT_LIMIT;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return DEFAULT_LIMIT;
-  const i = Math.floor(n);
+  const i = Math.floor(Number(raw));
+  if (!Number.isFinite(i)) return DEFAULT_LIMIT;
   if (i < 1) return 1;
   if (i > MAX_LIMIT) return MAX_LIMIT;
   return i;
@@ -147,11 +139,7 @@ function shouldFallbackAggregate(message) {
   if (typeof message !== "string") return false;
   const normalized = message.toLowerCase();
   if (normalized.includes("aggregate functions is not allowed")) return true;
-  return (
-    normalized.includes("schema cache") &&
-    normalized.includes("relationship") &&
-    normalized.includes("'sum'")
-  );
+  return normalized.includes("schema cache") && normalized.includes("relationship") && normalized.includes("'sum'");
 }
 
 async function fetchProjectUsageFallback({ edgeClient, userId, source, limit }) {
@@ -160,16 +148,13 @@ async function fetchProjectUsageFallback({ edgeClient, userId, source, limit }) 
       .from("vibeusage_project_usage_hourly")
       .select("project_key,project_ref,total_tokens,billable_total_tokens")
       .eq("user_id", userId);
-
     if (source) query = query.eq("source", source);
     if (!isCanaryTag(source)) query = query.neq("source", "canary");
-
     const { data, error } = await query;
     if (error) return { ok: false, error: error.message };
-    const entries = aggregateProjectRows(data, limit);
-    return { ok: true, entries };
-  } catch (err) {
-    return { ok: false, error: err?.message || "Fallback query failed" };
+    return { ok: true, entries: aggregateProjectRows(data, limit) };
+  } catch (error) {
+    return { ok: false, error: error?.message || "Fallback query failed" };
   }
 }
 
@@ -182,12 +167,7 @@ function aggregateProjectRows(rows, limit) {
     const key = `${projectKey}::${projectRef}`;
     let entry = map.get(key);
     if (!entry) {
-      entry = {
-        project_key: projectKey,
-        project_ref: projectRef,
-        total: 0n,
-        billable: 0n,
-      };
+      entry = { project_key: projectKey, project_ref: projectRef, total: 0n, billable: 0n };
       map.set(key, entry);
     }
     entry.total += toBigInt(row?.total_tokens);
@@ -198,14 +178,12 @@ function aggregateProjectRows(rows, limit) {
     const billable = billableRaw == null ? row?.total_tokens : billableRaw;
     entry.billable += toBigInt(billable);
   }
-
   const entries = Array.from(map.values()).map((entry) => ({
     project_key: entry.project_key,
     project_ref: entry.project_ref,
     total_tokens: entry.total.toString(),
     billable_total_tokens: entry.billable.toString(),
   }));
-
   entries.sort((a, b) => {
     const aBillable = toBigInt(a.billable_total_tokens);
     const bBillable = toBigInt(b.billable_total_tokens);
@@ -217,8 +195,6 @@ function aggregateProjectRows(rows, limit) {
     }
     return aBillable > bBillable ? -1 : 1;
   });
-
   if (!Number.isFinite(limit)) return entries;
-  const safeLimit = Math.max(1, Math.floor(limit));
-  return entries.slice(0, safeLimit);
+  return entries.slice(0, Math.max(1, Math.floor(limit)));
 }

@@ -1,24 +1,16 @@
-// Edge function: vibeusage-leaderboard
-// Returns token usage leaderboard for the current UTC period window (auth optional; public read supported).
-// Periods:
-// - week: current UTC calendar week (Sunday start)
-// - month: current UTC calendar month
-// - total: all-time
-
-"use strict";
-
-const { handleOptions, json, requireMethod } = require("../shared/http");
-const { getBearerToken, getEdgeClientAndUserId } = require("../shared/auth");
-const { getAnonKey, getBaseUrl, getServiceRoleKey } = require("../shared/env");
-const { toUtcDay, addUtcDays, formatDateUTC } = require("../shared/date");
-const { toBigInt, toPositiveInt, toPositiveIntOrNull } = require("../shared/numbers");
+import { getAccessContext, getBearerToken } from "./shared/auth.js";
+import { addUtcDays, formatDateUTC, toUtcDay } from "./shared/date.js";
+import { getAnonKey, getBaseUrl, getServiceRoleKey } from "./shared/env.js";
+import { handleOptions, json, requireMethod } from "./shared/http.js";
+import { createEdgeClient } from "./shared/insforge-client.js";
+import { toBigInt, toPositiveInt, toPositiveIntOrNull } from "./shared/numbers.js";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 const DEFAULT_OFFSET = 0;
 const MAX_OFFSET = 10_000;
 
-module.exports = async function (request) {
+export default async function (request) {
   const opt = handleOptions(request);
   if (opt) return opt;
 
@@ -30,12 +22,11 @@ module.exports = async function (request) {
 
   let auth = { ok: false, edgeClient: null, userId: null };
   if (bearer) {
-    auth = await getEdgeClientAndUserId({ baseUrl, bearer });
+    auth = await getAccessContext({ baseUrl, bearer, allowPublic: false });
     if (!auth.ok) return json({ error: auth.error || "Unauthorized" }, auth.status || 401);
   }
 
   const viewerUserId = auth.ok ? auth.userId : null;
-
   const url = new URL(request.url);
   const period = normalizePeriod(url.searchParams.get("period"));
   if (!period) return json({ error: "Invalid period" }, 400);
@@ -51,14 +42,14 @@ module.exports = async function (request) {
   let to;
   try {
     ({ from, to } = await computeWindow({ period }));
-  } catch (err) {
-    return json({ error: String(err && err.message ? err.message : err) }, 500);
+  } catch (error) {
+    return json({ error: String(error?.message || error) }, 500);
   }
 
   const serviceRoleKey = getServiceRoleKey();
   const anonKey = getAnonKey();
   const serviceClient = serviceRoleKey
-    ? createClient({
+    ? await createEdgeClient({
         baseUrl,
         anonKey: anonKey || serviceRoleKey,
         edgeFunctionToken: serviceRoleKey,
@@ -76,7 +67,6 @@ module.exports = async function (request) {
       limit,
       offset,
     });
-
     if (snapshot.ok) {
       return json(
         {
@@ -109,13 +99,43 @@ module.exports = async function (request) {
 
   const readClient = auth.ok
     ? auth.edgeClient
-    : createClient({
-        baseUrl,
-        anonKey: anonKey || undefined,
-        edgeFunctionToken: anonKey || undefined,
-      });
+    : anonKey
+      ? await createEdgeClient({
+          baseUrl,
+          anonKey,
+          edgeFunctionToken: anonKey,
+        })
+      : null;
 
   if (!readClient) return json({ error: "Service unavailable" }, 503);
+
+  if (auth.ok) {
+    const singleQuery = await tryLoadSingleQuery({
+      edgeClient: auth.edgeClient,
+      entriesView,
+      limit,
+      offset,
+    });
+    if (singleQuery) {
+      return json(
+        {
+          period,
+          metric,
+          from,
+          to,
+          generated_at: new Date().toISOString(),
+          page,
+          limit,
+          offset,
+          total_entries: null,
+          total_pages: null,
+          entries: singleQuery.entries,
+          me: singleQuery.me,
+        },
+        200,
+      );
+    }
+  }
 
   const { data: rawEntries, error: entriesErr } = await readClient.database
     .from(entriesView)
@@ -133,7 +153,6 @@ module.exports = async function (request) {
       .from(meView)
       .select("rank,gpt_tokens,claude_tokens,other_tokens,total_tokens")
       .maybeSingle();
-
     if (meRes.error) return json({ error: meRes.error.message }, 500);
     rawMe = meRes.data;
   }
@@ -161,7 +180,7 @@ module.exports = async function (request) {
     },
     200,
   );
-};
+}
 
 function toSafeCount(value) {
   const n = Number(value);
@@ -169,63 +188,25 @@ function toSafeCount(value) {
   return Math.floor(n);
 }
 
-async function tryLoadSingleQuery({ edgeClient, entriesView, limit, offset }) {
-  try {
-    const startRank = offset + 1;
-    const endRank = offset + limit;
-    const { data, error } = await edgeClient.database
-      .from(entriesView)
-      .select(
-        "rank,is_me,display_name,avatar_url,gpt_tokens,claude_tokens,other_tokens,total_tokens,is_public",
-      )
-      .or(`and(rank.gte.${startRank},rank.lte.${endRank}),is_me.eq.true`)
-      .order("rank", { ascending: true });
-
-    if (error) return null;
-
-    const rows = Array.isArray(data) ? data : [];
-    const entries = [];
-
-    for (const row of rows) {
-      const rank = toPositiveInt(row?.rank);
-      if (rank < startRank || rank > endRank) continue;
-      entries.push(normalizeEntry(row));
-    }
-
-    const meRow = rows.find((row) => Boolean(row?.is_me));
-    const me = normalizeMe(meRow);
-
-    return { entries: entries.slice(0, limit), me };
-  } catch (_e) {
-    return null;
-  }
-}
-
 function normalizePeriod(raw) {
   if (typeof raw !== "string") return null;
-  const v = raw.trim().toLowerCase();
-  if (v === "week") return v;
-  if (v === "month") return v;
-  if (v === "total") return v;
+  const value = raw.trim().toLowerCase();
+  if (value === "week" || value === "month" || value === "total") return value;
   return null;
 }
 
 function normalizeMetric(raw) {
   if (typeof raw !== "string") return "all";
-  const v = raw.trim().toLowerCase();
-  if (!v) return "all";
-  if (v === "all") return v;
-  if (v === "gpt") return v;
-  if (v === "claude") return v;
-  if (v === "other") return v;
+  const value = raw.trim().toLowerCase();
+  if (!value) return "all";
+  if (value === "all" || value === "gpt" || value === "claude" || value === "other") return value;
   return null;
 }
 
 function normalizeLimit(raw) {
   if (typeof raw !== "string" || raw.trim().length === 0) return DEFAULT_LIMIT;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return DEFAULT_LIMIT;
-  const i = Math.floor(n);
+  const i = Math.floor(Number(raw));
+  if (!Number.isFinite(i)) return DEFAULT_LIMIT;
   if (i < 1) return 1;
   if (i > MAX_LIMIT) return MAX_LIMIT;
   return i;
@@ -233,9 +214,8 @@ function normalizeLimit(raw) {
 
 function normalizeOffset(raw) {
   if (typeof raw !== "string" || raw.trim().length === 0) return DEFAULT_OFFSET;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return DEFAULT_OFFSET;
-  const i = Math.floor(n);
+  const i = Math.floor(Number(raw));
+  if (!Number.isFinite(i)) return DEFAULT_OFFSET;
   if (i < 0) return 0;
   if (i > MAX_OFFSET) return MAX_OFFSET;
   return i;
@@ -249,6 +229,33 @@ function applyMetricFilter(query, metric) {
   return query;
 }
 
+async function tryLoadSingleQuery({ edgeClient, entriesView, limit, offset }) {
+  try {
+    const startRank = offset + 1;
+    const endRank = offset + limit;
+    const { data, error } = await edgeClient.database
+      .from(entriesView)
+      .select(
+        "rank,is_me,display_name,avatar_url,gpt_tokens,claude_tokens,other_tokens,total_tokens,is_public",
+      )
+      .or(`and(rank.gte.${startRank},rank.lte.${endRank}),is_me.eq.true`)
+      .order("rank", { ascending: true });
+    if (error) return null;
+
+    const rows = Array.isArray(data) ? data : [];
+    const entries = [];
+    for (const row of rows) {
+      const rank = toPositiveInt(row?.rank);
+      if (rank < startRank || rank > endRank) continue;
+      entries.push(normalizeEntry(row));
+    }
+    const meRow = rows.find((row) => Boolean(row?.is_me));
+    return { entries: entries.slice(0, limit), me: normalizeMe(meRow) };
+  } catch (_error) {
+    return null;
+  }
+}
+
 function resolveRankColumn(metric) {
   if (metric === "gpt") return "rank_gpt";
   if (metric === "claude") return "rank_claude";
@@ -258,7 +265,6 @@ function resolveRankColumn(metric) {
 
 async function loadSnapshot({ serviceClient, period, metric, from, to, userId, limit, offset }) {
   const rankColumn = resolveRankColumn(metric);
-
   const countQuery = applyMetricFilter(
     serviceClient.database
       .from("vibeusage_leaderboard_snapshots")
@@ -268,13 +274,8 @@ async function loadSnapshot({ serviceClient, period, metric, from, to, userId, l
       .eq("to_day", to),
     metric,
   );
-
   const countRes = await countQuery.limit(1);
-
-  if (countRes.error) {
-    console.error("snapshot count error", countRes.error);
-    return { ok: false };
-  }
+  if (countRes.error) return { ok: false };
 
   const totalEntries = toSafeCount(countRes.count);
   const totalPages = totalEntries > 0 ? Math.ceil(totalEntries / Math.max(1, limit)) : 0;
@@ -290,19 +291,13 @@ async function loadSnapshot({ serviceClient, period, metric, from, to, userId, l
       .eq("to_day", to),
     metric,
   );
-
   const { data: entryRows, error: entriesErr } = await entriesQuery
     .order(rankColumn, { ascending: true })
     .order("user_id", { ascending: true })
     .range(offset, offset + limit - 1);
-
-  if (entriesErr) {
-    console.error("snapshot entries error", entriesErr);
-    return { ok: false };
-  }
+  if (entriesErr) return { ok: false };
 
   const publicUserSet = await loadActivePublicUserIds({ serviceClient, rows: entryRows });
-
   let meRow = null;
   if (userId) {
     const meRes = await serviceClient.database
@@ -315,12 +310,7 @@ async function loadSnapshot({ serviceClient, period, metric, from, to, userId, l
       .eq("to_day", to)
       .eq("user_id", userId)
       .maybeSingle();
-
-    if (meRes.error) {
-      console.error("snapshot me error", meRes.error);
-      return { ok: false };
-    }
-
+    if (meRes.error) return { ok: false };
     meRow = meRes.data;
   }
 
@@ -328,17 +318,11 @@ async function loadSnapshot({ serviceClient, period, metric, from, to, userId, l
     const metricRank = toPositiveInt(row?.[rankColumn]);
     const resolvedRank = metricRank > 0 ? metricRank : toPositiveInt(row?.rank);
     const normalized = normalizeEntry(row, { userId, publicUserSet });
-    return {
-      ...normalized,
-      rank: resolvedRank,
-    };
+    return { ...normalized, rank: resolvedRank };
   });
-
   const me = userId ? normalizeMetricMe(meRow, metric) : null;
   const generatedAt = normalizeGeneratedAt(entryRows, meRow);
-
   if (entries.length === 0 && !meRow) return { ok: false };
-
   return {
     ok: true,
     total_entries: totalEntries,
@@ -353,13 +337,7 @@ function normalizeMetricMe(row, metric) {
   const gptTokens = toBigInt(row?.gpt_tokens);
   const claudeTokens = toBigInt(row?.claude_tokens);
   const totalTokens = toBigInt(row?.total_tokens);
-  const otherTokens = resolveOtherTokens({
-    row,
-    totalTokens,
-    gptTokens,
-    claudeTokens,
-  });
-
+  const otherTokens = resolveOtherTokens({ row, totalTokens, gptTokens, claudeTokens });
   let rank = toPositiveIntOrNull(row?.rank);
   if (metric === "gpt") {
     rank = gptTokens > 0n ? toPositiveIntOrNull(row?.rank_gpt) : null;
@@ -369,7 +347,6 @@ function normalizeMetricMe(row, metric) {
     const rankOther = toPositiveIntOrNull(row?.rank_other);
     rank = otherTokens > 0n ? (rankOther ?? toPositiveIntOrNull(row?.rank)) : null;
   }
-
   return {
     rank,
     gpt_tokens: gptTokens.toString(),
@@ -380,52 +357,32 @@ function normalizeMetricMe(row, metric) {
 }
 
 async function computeWindow({ period }) {
-  const now = new Date();
-  const today = toUtcDay(now);
-
+  const today = toUtcDay(new Date());
   if (period === "week") {
-    const dow = today.getUTCDay(); // 0=Sunday
+    const dow = today.getUTCDay();
     const from = addUtcDays(today, -dow);
     const to = addUtcDays(from, 6);
     return { from: formatDateUTC(from), to: formatDateUTC(to) };
   }
-
   if (period === "month") {
     const from = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
     const to = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
     return { from: formatDateUTC(from), to: formatDateUTC(to) };
   }
-
-  if (period === "total") {
-    // Represent all-time as an open-ended UTC date range.
-    return { from: "1970-01-01", to: "9999-12-31" };
-  }
-
+  if (period === "total") return { from: "1970-01-01", to: "9999-12-31" };
   throw new Error(`Unsupported period: ${String(period)}`);
 }
 
 function normalizeEntry(row, options = {}) {
   const userId = typeof options?.userId === "string" ? options.userId : null;
   const publicUserSet = options?.publicUserSet;
-
   const gptTokens = toBigInt(row?.gpt_tokens);
   const claudeTokens = toBigInt(row?.claude_tokens);
   const totalTokens = toBigInt(row?.total_tokens);
-  const otherTokens = resolveOtherTokens({
-    row,
-    totalTokens,
-    gptTokens,
-    claudeTokens,
-  });
-
+  const otherTokens = resolveOtherTokens({ row, totalTokens, gptTokens, claudeTokens });
   const rawUserId = typeof row?.user_id === "string" ? row.user_id : null;
-  const isPublic = resolveIsPublic({ row, rawUserId, publicUserSet });
-  const isMe = userId
-    ? rawUserId
-      ? rawUserId === userId
-      : Boolean(row?.is_me)
-    : false;
-
+  const isPublic = resolveIsPublic({ rawUserId, publicUserSet });
+  const isMe = userId ? (rawUserId ? rawUserId === userId : Boolean(row?.is_me)) : false;
   return {
     user_id: isPublic ? rawUserId : null,
     rank: toPositiveInt(row?.rank),
@@ -445,12 +402,7 @@ function normalizeMe(row) {
   const gptTokens = toBigInt(row?.gpt_tokens);
   const claudeTokens = toBigInt(row?.claude_tokens);
   const totalTokens = toBigInt(row?.total_tokens);
-  const otherTokens = resolveOtherTokens({
-    row,
-    totalTokens,
-    gptTokens,
-    claudeTokens,
-  });
+  const otherTokens = resolveOtherTokens({ row, totalTokens, gptTokens, claudeTokens });
   return {
     rank,
     gpt_tokens: gptTokens.toString(),
@@ -463,56 +415,54 @@ function normalizeMe(row) {
 function resolveOtherTokens({ row, totalTokens, gptTokens, claudeTokens }) {
   const explicit = row?.other_tokens;
   if (explicit != null) return toBigInt(explicit);
-
   const derived = totalTokens - gptTokens - claudeTokens;
   return derived > 0n ? derived : 0n;
 }
 
 function resolveIsPublic({ rawUserId, publicUserSet }) {
-  // Fail closed: canonical lookup is the only truth source.
-  if (!(publicUserSet instanceof Set)) return false;
-  if (!rawUserId) return false;
+  if (!(publicUserSet instanceof Set) || !rawUserId) return false;
   return publicUserSet.has(rawUserId);
 }
 
 async function loadActivePublicUserIds({ serviceClient, rows }) {
   if (!serviceClient) return null;
   if (!Array.isArray(rows) || rows.length === 0) return new Set();
-
-  const ids = [...new Set(rows.map((row) => (typeof row?.user_id === "string" ? row.user_id : null)).filter(Boolean))];
+  const ids = [
+    ...new Set(
+      rows
+        .map((row) => (typeof row?.user_id === "string" ? row.user_id : null))
+        .filter(Boolean),
+    ),
+  ];
   if (ids.length === 0) return new Set();
-
   const { data, error } = await serviceClient.database
     .from("vibeusage_public_views")
     .select("user_id")
     .in("user_id", ids)
     .is("revoked_at", null);
-
-  if (error) {
-    console.error("public visibility lookup error", error);
-    return null;
-  }
-
-  return new Set((data || []).map((row) => (typeof row?.user_id === "string" ? row.user_id : null)).filter(Boolean));
+  if (error) return null;
+  return new Set((data || []).map((row) => row?.user_id).filter(Boolean));
 }
 
 function normalizeGeneratedAt(entryRows, meRow) {
   const candidate = entryRows?.[0]?.generated_at || meRow?.generated_at;
-  if (candidate && typeof candidate === "string") {
-    const dt = new Date(candidate);
-    if (!Number.isNaN(dt.getTime())) return dt.toISOString();
-  }
-  return new Date().toISOString();
+  return typeof candidate === "string" && candidate ? candidate : new Date().toISOString();
 }
 
 function normalizeDisplayName(value) {
   if (typeof value !== "string") return "Anonymous";
   const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : "Anonymous";
+  return trimmed || "Anonymous";
 }
 
 function normalizeAvatarUrl(value) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
+  if (!trimmed) return null;
+  if (trimmed.length > 1024) return null;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol === "http:" || url.protocol === "https:") return trimmed;
+  } catch (_error) {}
+  return null;
 }

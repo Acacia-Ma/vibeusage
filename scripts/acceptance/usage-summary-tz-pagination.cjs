@@ -2,6 +2,8 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { loadEdgeFunction } = require("../lib/load-edge-function.cjs");
+const { createTestUserJwt } = require("./_lib/test-user-jwt.cjs");
 
 class DatabaseStub {
   constructor({ calls }) {
@@ -121,14 +123,15 @@ async function main() {
 
   const calls = { ranges: [] };
   global.createClient = () => createClientStub(new DatabaseStub({ calls }));
+  const userJwt = createTestUserJwt();
 
-  const usageSummary = require("../../insforge-src/functions/vibeusage-usage-summary.js");
+  const usageSummary = await loadEdgeFunction("vibeusage-usage-summary");
   const query = "from=2025-12-01&to=2025-12-02&tz_offset_minutes=-480";
 
   const res = await usageSummary(
     new Request(`http://local/functions/vibeusage-usage-summary?${query}`, {
       method: "GET",
-      headers: { Authorization: "Bearer user-jwt" },
+      headers: { Authorization: `Bearer ${userJwt}` },
     }),
   );
 

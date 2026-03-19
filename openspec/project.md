@@ -72,8 +72,10 @@
 提示（开发者必读）：
 
 - 更详细的接口契约、示例、以及 build/deploy 说明：见仓库根目录 `BACKEND_API.md`
-- Edge Functions 源码在 `insforge-src/`；部署产物在 `insforge-functions/`（单文件、生成物）
-  - 修改后端逻辑：改 `insforge-src/` → 运行 `npm run build:insforge` → 用 `insforge2 update-function` 部署
+- Edge Functions 源码在 `insforge-src/`
+  - 旧 CommonJS 函数：源码在 `insforge-src/functions/`，部署产物在 `insforge-functions/`（单文件、生成物）
+  - 新 Deno/ESM 函数：源码在 `insforge-src/functions-esm/`，部署前同样先生成 `insforge-functions/` 单文件产物
+  - `vibeusage-leaderboard` / `vibeusage-usage-summary` / `vibeusage-project-usage-summary` 已切到 `insforge-src/functions-esm/`
 
 - `POST /functions/vibeusage-device-token-issue`
   - Auth：`Authorization: Bearer <user_jwt>`（或 admin bootstrap：Bearer `<service_role_key>` + body `user_id`）

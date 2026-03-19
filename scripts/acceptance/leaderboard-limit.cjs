@@ -2,6 +2,8 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { loadEdgeFunction } = require("../lib/load-edge-function.cjs");
+const { createTestUserJwt } = require("./_lib/test-user-jwt.cjs");
 
 class QueryStub {
   constructor(parent, table) {
@@ -78,6 +80,7 @@ async function main() {
   ];
 
   const db = new DatabaseStub(entries);
+  const userJwt = createTestUserJwt();
 
   global.createClient = () => ({
     auth: {
@@ -88,13 +91,13 @@ async function main() {
     database: db,
   });
 
-  const leaderboard = require("../../insforge-src/functions/vibeusage-leaderboard.js");
+  const leaderboard = await loadEdgeFunction("vibeusage-leaderboard");
   const res = await leaderboard(
     new Request(
       "http://local/functions/vibeusage-leaderboard?period=week&metric=gpt&limit=1&offset=0",
       {
         method: "GET",
-        headers: { Authorization: "Bearer user-jwt" },
+        headers: { Authorization: `Bearer ${userJwt}` },
       },
     ),
   );

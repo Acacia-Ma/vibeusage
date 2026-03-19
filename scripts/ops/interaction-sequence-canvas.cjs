@@ -268,7 +268,7 @@ const SCENARIO_CATALOG = [
     requiredPaths: [
       "dashboard/src/lib/vibeusage-api.js",
       "dashboard/src/lib/insforge-client.js",
-      "insforge-src/functions/vibeusage-usage-summary.js",
+      "insforge-src/functions-esm/vibeusage-usage-summary.js",
     ],
     optionalPaths: [],
     lifelines: [

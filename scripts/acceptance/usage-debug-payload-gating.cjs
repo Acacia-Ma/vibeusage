@@ -2,6 +2,8 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { loadEdgeFunction } = require("../lib/load-edge-function.cjs");
+const { createTestUserJwt } = require("./_lib/test-user-jwt.cjs");
 const { getDefaultPricingProfile } = require("../../insforge-src/shared/pricing");
 
 const ROWS = [
@@ -117,15 +119,16 @@ async function main() {
   };
 
   global.createClient = createClientStub;
+  const userJwt = createTestUserJwt();
 
-  const usageSummary = require("../../insforge-src/functions/vibeusage-usage-summary.js");
+  const usageSummary = await loadEdgeFunction("vibeusage-usage-summary");
 
   const base = "http://local/functions/vibeusage-usage-summary?from=2025-12-30&to=2025-12-30";
 
   const debugRes = await usageSummary(
     new Request(`${base}&debug=1`, {
       method: "GET",
-      headers: { Authorization: "Bearer user-jwt" },
+      headers: { Authorization: `Bearer ${userJwt}` },
     }),
   );
   const debugBody = await debugRes.json();
@@ -141,7 +144,7 @@ async function main() {
   const noDebugRes = await usageSummary(
     new Request(base, {
       method: "GET",
-      headers: { Authorization: "Bearer user-jwt" },
+      headers: { Authorization: `Bearer ${userJwt}` },
     }),
   );
   const noDebugBody = await noDebugRes.json();

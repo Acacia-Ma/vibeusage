@@ -3,6 +3,7 @@ const { createHash, createHmac, webcrypto } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { test, beforeEach, afterEach } = require("node:test");
+const { loadEdgeFunction } = require("../scripts/lib/load-edge-function.cjs");
 
 if (!globalThis.crypto) {
   globalThis.crypto = webcrypto;
@@ -61,15 +62,23 @@ function setDenoEnv(env) {
 }
 
 test("vibeusage function sources are not wrapper shims", () => {
-  const functionsDir = path.join(__dirname, "..", "insforge-src", "functions");
-  const entries = fs
-    .readdirSync(functionsDir)
-    .filter((name) => name.startsWith("vibeusage-") && name.endsWith(".js"));
+  const functionsDirs = [
+    path.join(__dirname, "..", "insforge-src", "functions"),
+    path.join(__dirname, "..", "insforge-src", "functions-esm"),
+  ];
+  const entries = functionsDirs.flatMap((functionsDir) =>
+    fs.existsSync(functionsDir)
+      ? fs
+          .readdirSync(functionsDir)
+          .filter((name) => name.startsWith("vibeusage-") && name.endsWith(".js"))
+          .map((name) => ({ functionsDir, name }))
+      : [],
+  );
   assert.ok(entries.length > 0, "expected vibeusage function sources");
   const wrapperPattern = /module\.exports\s*=\s*require\(['"]\.\/vibescore-/;
   for (const entry of entries) {
-    const content = fs.readFileSync(path.join(functionsDir, entry), "utf8");
-    assert.equal(wrapperPattern.test(content), false, `${entry} still wraps vibescore`);
+    const content = fs.readFileSync(path.join(entry.functionsDir, entry.name), "utf8");
+    assert.equal(wrapperPattern.test(content), false, `${entry.name} still wraps vibescore`);
   }
 });
 
@@ -77,6 +86,30 @@ test("env exposes INSFORGE_JWT_SECRET via getJwtSecret", () => {
   setDenoEnv({ INSFORGE_JWT_SECRET: JWT_SECRET });
   const { getJwtSecret } = require("../insforge-src/shared/env");
   assert.equal(getJwtSecret(), JWT_SECRET);
+});
+
+test("esm env resolves request base url from request origin", async () => {
+  const { getRequestBaseUrl } = await import("../insforge-src/functions-esm/shared/env.js");
+  assert.equal(
+    getRequestBaseUrl({ url: "https://5tmappuk.us-east.insforge.app/functions/vibeusage-usage-summary" }),
+    "https://5tmappuk.us-east.insforge.app",
+  );
+});
+
+test("esm env prefers forwarded host over functions origin", async () => {
+  const { getRequestBaseUrl } = await import("../insforge-src/functions-esm/shared/env.js");
+  const headers = new Headers({
+    host: "5tmappuk.functions.insforge.app",
+    "x-forwarded-host": "5tmappuk.us-east.insforge.app",
+    "x-forwarded-proto": "https",
+  });
+  assert.equal(
+    getRequestBaseUrl({
+      url: "https://5tmappuk.functions.insforge.app/vibeusage-usage-summary",
+      headers,
+    }),
+    "https://5tmappuk.us-east.insforge.app",
+  );
 });
 
 test("local jwt verification accepts valid HS256 token", async () => {
@@ -118,102 +151,26 @@ test("local jwt verification rejects when secret missing", async () => {
   assert.equal(res.code, "missing_jwt_secret");
 });
 
-test("getEdgeClientAndUserIdFast falls back to remote auth when jwt secret missing", async () => {
+test("getEdgeClientAndUserIdFast falls back to jwt claims when jwt secret missing", async () => {
   const userId = "22222222-2222-2222-2222-222222222224";
   const userJwt = createUserJwt(userId);
-  let authCalls = 0;
-
-  globalThis.createClient = () => ({
-    auth: {
-      getCurrentUser: async () => {
-        authCalls += 1;
-        return { data: { user: { id: userId } }, error: null };
-      },
-    },
-  });
+  globalThis.createClient = () => ({});
 
   setDenoEnv({ INSFORGE_JWT_SECRET: undefined, INSFORGE_ANON_KEY: ANON_KEY });
   const { getEdgeClientAndUserIdFast } = require("../insforge-src/shared/auth");
   const res = await getEdgeClientAndUserIdFast({ baseUrl: BASE_URL, bearer: userJwt });
   assert.equal(res.ok, true);
   assert.equal(res.userId, userId);
-  assert.equal(authCalls, 1);
 });
 
-test("getEdgeClientAndUserIdFast rejects when auth lookup fails", async () => {
-  const userId = "33333333-3333-3333-3333-333333333333";
-  const userJwt = createUserJwt(userId);
-  let authCalls = 0;
-
-  globalThis.createClient = () => ({
-    auth: {
-      getCurrentUser: async () => {
-        authCalls += 1;
-        return { data: { user: null }, error: { message: "User missing" } };
-      },
-    },
-  });
+test("getEdgeClientAndUserIdFast rejects malformed jwt claims when jwt secret missing", async () => {
+  const userJwt = createJwt({ role: "authenticated" }, { secret: "test-jwt-secret" });
+  globalThis.createClient = () => ({});
 
   const { getEdgeClientAndUserIdFast } = require("../insforge-src/shared/auth");
   const res = await getEdgeClientAndUserIdFast({ baseUrl: BASE_URL, bearer: userJwt });
   assert.equal(res.ok, false);
   assert.equal(res.status, 401);
-  assert.equal(authCalls, 1);
-});
-
-test("getEdgeClientAndUserIdFast returns 503 when auth lookup fails transiently", async () => {
-  const userId = "33333333-3333-3333-3333-333333333334";
-  const userJwt = createUserJwt(userId);
-  let authCalls = 0;
-
-  globalThis.createClient = () => ({
-    auth: {
-      getCurrentUser: async () => {
-        authCalls += 1;
-        throw new Error("socket hang up");
-      },
-    },
-  });
-
-  const { getEdgeClientAndUserIdFast } = require("../insforge-src/shared/auth");
-  const res = await getEdgeClientAndUserIdFast({ baseUrl: BASE_URL, bearer: userJwt });
-  assert.equal(res.ok, false);
-  assert.equal(res.status, 503);
-  assert.equal(res.error, "Service unavailable");
-  assert.equal(authCalls, 1);
-});
-
-test("vibeusage-usage-summary returns 503 when auth lookup fails transiently", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-summary");
-
-  const userId = "33333333-3333-3333-3333-333333333335";
-  const userJwt = createUserJwt(userId);
-
-  globalThis.createClient = (args) => {
-    if (args && args.edgeFunctionToken === userJwt) {
-      return {
-        auth: {
-          getCurrentUser: async () => {
-            throw new Error("socket hang up");
-          },
-        },
-      };
-    }
-    throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
-  };
-
-  const req = new Request(
-    "http://localhost/functions/vibeusage-usage-summary?from=2026-02-09&to=2026-02-09",
-    {
-      method: "GET",
-      headers: { Authorization: `Bearer ${userJwt}` },
-    },
-  );
-
-  const res = await fn(req);
-  assert.equal(res.status, 503);
-  const body = await res.json();
-  assert.equal(body.error, "Service unavailable");
 });
 
 test("vibeusage-debug-auth accepts locally verified jwt", async () => {
@@ -3225,7 +3182,7 @@ test("vibeusage-usage-monthly honors alias effective_from across range", async (
 
 test("vibeusage-usage-summary uses hourly when rollup disabled", () =>
   withRollupDisabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-summary");
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
 
     const userId = "99999999-9999-9999-9999-999999999999";
     const userJwt = createUserJwt(userId);
@@ -3278,7 +3235,7 @@ test("vibeusage-usage-summary uses hourly when rollup disabled", () =>
   }));
 
 test("vibeusage-project-usage-summary aggregates project usage", async () => {
-  const fn = require("../insforge-functions/vibeusage-project-usage-summary");
+  const fn = await loadEdgeFunction("vibeusage-project-usage-summary");
 
   const userId = "99999999-9999-9999-9999-999999999999";
   const userJwt = createUserJwt(userId);
@@ -3346,7 +3303,7 @@ test("vibeusage-project-usage-summary aggregates project usage", async () => {
 });
 
 test("vibeusage-project-usage-summary ignores date range for all-time totals", async () => {
-  const fn = require("../insforge-functions/vibeusage-project-usage-summary");
+  const fn = await loadEdgeFunction("vibeusage-project-usage-summary");
 
   const userId = "11111111-1111-1111-1111-111111111111";
   const userJwt = createUserJwt(userId);
@@ -3403,7 +3360,7 @@ test("vibeusage-project-usage-summary ignores date range for all-time totals", a
 });
 
 test("vibeusage-project-usage-summary uses PostgREST sum() syntax", async () => {
-  const fn = require("../insforge-functions/vibeusage-project-usage-summary");
+  const fn = await loadEdgeFunction("vibeusage-project-usage-summary");
 
   const userId = "99999999-9999-9999-9999-999999999999";
   const userJwt = createUserJwt(userId);
@@ -3454,7 +3411,7 @@ test("vibeusage-project-usage-summary uses PostgREST sum() syntax", async () => 
 });
 
 test("vibeusage-project-usage-summary falls back on schema cache aggregate error", async () => {
-  const fn = require("../insforge-functions/vibeusage-project-usage-summary");
+  const fn = await loadEdgeFunction("vibeusage-project-usage-summary");
 
   const userId = "99999999-9999-9999-9999-999999999999";
   const userJwt = createUserJwt(userId);
@@ -3559,7 +3516,7 @@ test("vibeusage-project-usage-summary falls back on schema cache aggregate error
 });
 
 test("vibeusage-project-usage-summary falls back when aggregates are blocked", async () => {
-  const fn = require("../insforge-functions/vibeusage-project-usage-summary");
+  const fn = await loadEdgeFunction("vibeusage-project-usage-summary");
 
   const userId = "99999999-9999-9999-9999-999999999999";
   const userJwt = createUserJwt(userId);
@@ -3658,7 +3615,7 @@ test("vibeusage-project-usage-summary falls back when aggregates are blocked", a
 });
 test("vibeusage-usage-summary returns rolling metrics when requested", () =>
   withRollupDisabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-summary");
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
 
     const userId = "99999999-9999-9999-9999-999999999999";
     const userJwt = createUserJwt(userId);
@@ -3750,7 +3707,7 @@ test("vibeusage-usage-summary returns rolling metrics when requested", () =>
 
 test("vibeusage-usage-summary counts rolling active days in local timezone", () =>
   withRollupDisabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-summary");
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
 
     const userId = "99999999-9999-9999-9999-999999999999";
     const userJwt = createUserJwt(userId);
@@ -3828,7 +3785,7 @@ test("vibeusage-usage-summary counts rolling active days in local timezone", () 
 
 test("vibeusage-usage-summary rolling fallback does not double count hourly rows", () =>
   withRollupEnabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-summary");
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
 
     const userId = "99999999-9999-9999-9999-999999999999";
     const userJwt = createUserJwt(userId);
@@ -3908,7 +3865,7 @@ test("vibeusage-usage-summary rolling fallback does not double count hourly rows
 
 test("vibeusage-usage-summary derives active days from hourly when rollup spans local days", () =>
   withRollupEnabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-summary");
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
 
     const userId = "99999999-9999-9999-9999-999999999999";
     const userJwt = createUserJwt(userId);
@@ -4004,7 +3961,7 @@ test("vibeusage-usage-summary derives active days from hourly when rollup spans 
 
 test("vibeusage-usage-summary derives active days from hourly for IANA tz", () =>
   withRollupEnabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-summary");
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
 
     const userId = "99999999-9999-9999-9999-999999999999";
     const userJwt = createUserJwt(userId);
@@ -4100,7 +4057,7 @@ test("vibeusage-usage-summary derives active days from hourly for IANA tz", () =
 
 test("vibeusage-usage-summary clamps rolling windows to local yesterday", () =>
   withRollupDisabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-summary");
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
 
     const userId = "99999999-9999-9999-9999-999999999999";
     const userJwt = createUserJwt(userId);
@@ -4201,7 +4158,7 @@ test("vibeusage-usage-summary clamps rolling windows to local yesterday", () =>
 
 test("vibeusage-usage-summary returns total_cost_usd and pricing metadata", () =>
   withRollupEnabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-summary");
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
 
     const userId = "99999999-9999-9999-9999-999999999999";
     const userJwt = createUserJwt(userId);
@@ -4295,7 +4252,7 @@ test("vibeusage-usage-summary returns total_cost_usd and pricing metadata", () =
 
 test("vibeusage-usage-summary prefers stored billable_total_tokens", () =>
   withRollupEnabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-summary");
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
 
     const userId = "99999999-9999-9999-9999-999999999999";
     const userJwt = createUserJwt(userId);
@@ -4359,7 +4316,7 @@ test("vibeusage-usage-summary prefers stored billable_total_tokens", () =>
 
 test("vibeusage-usage-summary canonical model filter includes alias rows", () =>
   withRollupEnabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-summary");
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
 
     const userId = "99999999-9999-9999-9999-999999999999";
     const userJwt = createUserJwt(userId);
@@ -4433,7 +4390,7 @@ test("vibeusage-usage-summary canonical model filter includes alias rows", () =>
 
 test("vibeusage-usage-summary honors alias effective_from across range", () =>
   withRollupEnabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-summary");
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
 
     const userId = "11111111-1111-1111-1111-111111111111";
     const userJwt = createUserJwt(userId);
@@ -4517,7 +4474,7 @@ test("vibeusage-usage-summary honors alias effective_from across range", () =>
 
 test("vibeusage-usage-summary prices per-alias effective_from when unfiltered", () =>
   withRollupEnabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-summary");
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
 
     const userId = "12121212-1212-1212-1212-121212121212";
     const userJwt = createUserJwt(userId);
@@ -4648,7 +4605,7 @@ test("vibeusage-usage-summary prices per-alias effective_from when unfiltered", 
 
 test("vibeusage-usage-summary emits debug payload when requested", () =>
   withRollupEnabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-summary");
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
     const prevThreshold = process.env.VIBEUSAGE_SLOW_QUERY_MS;
 
     const userId = "99999999-9999-9999-9999-999999999999";
@@ -4759,7 +4716,7 @@ test("vibeusage-usage-summary emits debug payload when requested", () =>
 
 test("vibeusage-usage-summary logs vibeusage function name", () =>
   withRollupEnabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-summary");
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
 
     const userId = "99999999-9999-9999-9999-999999999999";
     const userJwt = createUserJwt(userId);
@@ -4838,9 +4795,9 @@ test("vibeusage-usage-summary logs vibeusage function name", () =>
     }
   }));
 
-test("vibeusage-usage-summary validates user via auth lookup", () =>
+test("vibeusage-usage-summary derives user id from jwt claims when jwt secret missing", () =>
   withRollupEnabled(async () => {
-    const fn = require("../insforge-functions/vibeusage-usage-summary");
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
 
     const userId = "77777777-7777-7777-7777-777777777777";
     const userJwt = createUserJwt(userId);
@@ -4858,18 +4815,10 @@ test("vibeusage-usage-summary validates user via auth lookup", () =>
       },
     ];
 
-    let authCalls = 0;
-
     globalThis.createClient = (args) => {
       if (args && args.edgeFunctionToken === userJwt) {
         assert.equal(args.anonKey, ANON_KEY);
         return {
-          auth: {
-            getCurrentUser: async () => {
-              authCalls += 1;
-              return { data: { user: { id: userId } }, error: null };
-            },
-          },
           database: {
             from: (table) => {
               if (table === "vibeusage_tracker_hourly") {
@@ -4926,11 +4875,10 @@ test("vibeusage-usage-summary validates user via auth lookup", () =>
       ),
     );
     assert.ok(orders.some((o) => o.col === "hour_start"));
-    assert.equal(authCalls, 1, "expected auth.getCurrentUser to be used");
   }));
 
 test("vibeusage-usage-summary rejects oversized ranges", { concurrency: 1 }, async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-summary");
+  const fn = await loadEdgeFunction("vibeusage-usage-summary");
   const prevMaxDays = process.env.VIBEUSAGE_USAGE_MAX_DAYS;
   const userId = "55555555-5555-5555-5555-555555555555";
   const userJwt = createUserJwt(userId);
@@ -5368,7 +5316,7 @@ test(
   "vibeusage usage aggregates stay consistent across summary daily breakdown",
   { concurrency: 1 },
   async () => {
-    const summaryFn = require("../insforge-functions/vibeusage-usage-summary");
+    const summaryFn = await loadEdgeFunction("vibeusage-usage-summary");
     const dailyFn = require("../insforge-functions/vibeusage-usage-daily");
     const breakdownFn = require("../insforge-functions/vibeusage-usage-model-breakdown");
 
@@ -5488,7 +5436,7 @@ test(
   { concurrency: 1 },
   () =>
     withRollupDisabled(async () => {
-      const summaryFn = require("../insforge-functions/vibeusage-usage-summary");
+      const summaryFn = await loadEdgeFunction("vibeusage-usage-summary");
       const dailyFn = require("../insforge-functions/vibeusage-usage-daily");
       const breakdownFn = require("../insforge-functions/vibeusage-usage-model-breakdown");
 
@@ -5611,7 +5559,7 @@ test(
   { concurrency: 1 },
   () =>
     withRollupDisabled(async () => {
-      const summaryFn = require("../insforge-functions/vibeusage-usage-summary");
+      const summaryFn = await loadEdgeFunction("vibeusage-usage-summary");
       const dailyFn = require("../insforge-functions/vibeusage-usage-daily");
       const breakdownFn = require("../insforge-functions/vibeusage-usage-model-breakdown");
 
@@ -6546,7 +6494,7 @@ test("vibeusage-leaderboard returns a week window and slices entries to limit", 
     ANON_KEY,
   });
 
-  const fn = require("../insforge-functions/vibeusage-leaderboard");
+  const fn = await loadEdgeFunction("vibeusage-leaderboard");
 
   const userId = "66666666-6666-6666-6666-666666666666";
   const userJwt = createUserJwt(userId);
@@ -6668,7 +6616,7 @@ test("vibeusage-leaderboard supports month period", async () => {
     ANON_KEY,
   });
 
-  const fn = require("../insforge-functions/vibeusage-leaderboard");
+  const fn = await loadEdgeFunction("vibeusage-leaderboard");
   const userId = "77777777-7777-7777-7777-777777777777";
   const userJwt = createUserJwt(userId);
 
@@ -6755,7 +6703,7 @@ test("vibeusage-leaderboard supports total period", async () => {
     ANON_KEY,
   });
 
-  const fn = require("../insforge-functions/vibeusage-leaderboard");
+  const fn = await loadEdgeFunction("vibeusage-leaderboard");
   const userId = "77777777-7777-7777-7777-777777777778";
   const userJwt = createUserJwt(userId);
 
@@ -6828,7 +6776,7 @@ test("vibeusage-leaderboard supports offset pagination", async () => {
     ANON_KEY,
   });
 
-  const fn = require("../insforge-functions/vibeusage-leaderboard");
+  const fn = await loadEdgeFunction("vibeusage-leaderboard");
 
   const userId = "99999999-6666-6666-6666-666666666666";
   const userJwt = createUserJwt(userId);
@@ -6928,7 +6876,7 @@ test("vibeusage-leaderboard supports metric=Gpt", async () => {
     ANON_KEY,
   });
 
-  const fn = require("../insforge-functions/vibeusage-leaderboard");
+  const fn = await loadEdgeFunction("vibeusage-leaderboard");
 
   const userId = "99999999-7777-7777-7777-777777777777";
   const userJwt = createUserJwt(userId);
@@ -7022,7 +6970,7 @@ test("vibeusage-leaderboard supports metric=other", async () => {
     ANON_KEY,
   });
 
-  const fn = require("../insforge-functions/vibeusage-leaderboard");
+  const fn = await loadEdgeFunction("vibeusage-leaderboard");
 
   const userId = "99999999-7878-7878-7878-787878787878";
   const userJwt = createUserJwt(userId);
@@ -7119,7 +7067,7 @@ test("vibeusage-leaderboard supports metric=other", async () => {
 });
 
 test("vibeusage-leaderboard rejects invalid metric", async () => {
-  const fn = require("../insforge-functions/vibeusage-leaderboard");
+  const fn = await loadEdgeFunction("vibeusage-leaderboard");
   const userId = "99999999-8888-8888-8888-888888888888";
   const userJwt = createUserJwt(userId);
 
@@ -7152,7 +7100,7 @@ test("vibeusage-leaderboard rejects invalid metric", async () => {
 });
 
 test("vibeusage-leaderboard rejects invalid period", async () => {
-  const fn = require("../insforge-functions/vibeusage-leaderboard");
+  const fn = await loadEdgeFunction("vibeusage-leaderboard");
   const userId = "88888888-8888-8888-8888-888888888888";
   const userJwt = createUserJwt(userId);
 
@@ -7188,7 +7136,7 @@ test("vibeusage-leaderboard snapshot entries gate user_id by is_public and inclu
     INSFORGE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
   });
 
-  const fn = require("../insforge-functions/vibeusage-leaderboard");
+  const fn = await loadEdgeFunction("vibeusage-leaderboard");
 
   const userId = "11111111-2222-3333-4444-555555555555";
   const userJwt = createUserJwt(userId);
