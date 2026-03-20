@@ -245,7 +245,10 @@ export function LandingView({
           >
             {/* Button background */}
             <div className="relative bg-[#00FF41] text-black font-black uppercase tracking-[0.3em] py-4 px-6 hover:bg-white transition-colors duration-200">
-              <span className="relative z-10">{copy("landing.cta.login_signup")}</span>
+              <span className="relative z-10">{copy("landing.cta.primary")}</span>
+            </div>
+            <div className="px-4 pt-3 text-[10px] uppercase tracking-[0.2em] text-[#00FF41]/65">
+              {copy("landing.cta.secondary")}
             </div>
             
             {/* Bottom scanline */}

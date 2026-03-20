@@ -58,8 +58,9 @@ function decodeBase64Url(input: string): string | null {
     // fall through
   }
   try {
-    if (typeof Buffer !== "undefined") {
-      return Buffer.from(padded, "base64").toString("utf8");
+    const nodeBuffer = (globalThis as any).Buffer;
+    if (typeof nodeBuffer !== "undefined") {
+      return nodeBuffer.from(padded, "base64").toString("utf8");
     }
   } catch (_e) {
     // fall through
@@ -288,7 +289,8 @@ export function createPersistentStorage() {
       const storage = getStorage();
       if (storage) {
         const ok = setStorageValue(storage, key, persistedValue);
-        if (!ok && process.env.NODE_ENV === "development") {
+        const nodeProcess = (globalThis as any).process;
+        if (!ok && nodeProcess?.env?.NODE_ENV === "development") {
           // Storage quota exceeded or private mode - keep in memory only
           // eslint-disable-next-line no-console
           console.warn("[Auth] Failed to persist session to storage");
