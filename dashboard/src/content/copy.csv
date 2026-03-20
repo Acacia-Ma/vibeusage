@@ -24,10 +24,12 @@ landing.hero.title_secondary,landing,LandingPage,LandingPage,hero_title_secondar
 landing.hero.tagline,landing,LandingPage,LandingPage,hero_tagline,"AI AGENT TOKEN TRACKER",,active
 landing.hero.subtagline,landing,LandingPage,LandingPage,hero_subtagline,"Track Codex, Claude Code, OpenCode, Gemini, and OpenClaw with minimal data collection and auditable metrics.",,active
 landing.screenshot.alt,landing,LandingPage,LandingPage,screenshot_alt,"VibeUsage dashboard screenshot",,active
+landing.screenshot.title,landing,LandingPage,LandingPage,screenshot_title,"DASHBOARD PREVIEW",,active
 landing.nav.login,landing,LandingPage,LandingPage,nav_login,"LOGIN",,active
 landing.nav.signup,landing,LandingPage,LandingPage,nav_signup,"SIGN UP",,active
 landing.nav.login_signup,landing,LandingPage,LandingPage,nav_login_signup,"SIGN IN / SIGN UP",,active
 landing.seo.title,landing,LandingPage,LandingPage,seo_title,"Secure Token Usage Tracking for AI Agent Clients",,active
+landing.features.title,landing,LandingPage,LandingPage,features_title,"FEATURE BRIEF",,active
 landing.seo.summary,landing,LandingPage,LandingPage,seo_summary,"VibeUsage tracks token usage across AI agent clients (Codex, Claude Code, OpenCode, Gemini, OpenClaw) with minimal data collection and auditable metrics.",,active
 landing.install.title,landing,LandingPage,LandingPage,install_title,"INSTALL IN ONE COMMAND",,active
 landing.install.prompt,landing,LandingPage,LandingPage,install_prompt,"Run this in your terminal:",,active

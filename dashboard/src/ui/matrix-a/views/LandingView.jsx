@@ -82,6 +82,7 @@ function TerminalCommand({ command, copied, onCopy, label, helper }) {
 
 export function LandingView({
   copy,
+  appVersion,
   effectsReady,
   signInUrl,
   signUpUrl,
@@ -188,7 +189,7 @@ export function LandingView({
         </MatrixCard>
 
         {/* Quick Install Card */}
-        <MatrixCard className="w-full max-w-2xl" header="Quick Install">
+        <MatrixCard className="w-full max-w-2xl" header={copy("landing.install.title")}>
           <TerminalCommand
             command={installCommand}
             copied={installCopied}
@@ -199,7 +200,7 @@ export function LandingView({
         </MatrixCard>
 
         {/* Screenshot */}
-        <MatrixCard className="w-full max-w-4xl" header="Dashboard Preview">
+        <MatrixCard className="w-full max-w-4xl" header={copy("landing.screenshot.title")}>
           <div className="relative overflow-hidden border border-[#00FF41]/35 bg-black/60">
             <img
               src="/landing-dashboard.jpg"
@@ -213,7 +214,7 @@ export function LandingView({
         </MatrixCard>
 
         {/* Features Card */}
-        <MatrixCard className="w-full max-w-2xl" header="Feature Brief">
+        <MatrixCard className="w-full max-w-2xl" header={copy("landing.features.title")}>
           <div className="space-y-5">
             <h2 className="text-xl sm:text-2xl font-bold text-[#00FF41] tracking-tight">
               {copy("landing.seo.title")}
@@ -260,7 +261,7 @@ export function LandingView({
         <div className="flex items-center gap-4 text-[10px] uppercase tracking-[0.2em] text-[#00FF41]/40">
           <span className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 bg-[#00FF41]/60 rounded-full animate-pulse" />
-            v{copy("version") || "0.2.21"}
+            v{appVersion || "unknown"}
           </span>
           <span>|</span>
           <span>{copy("landing.footer.system_ready")}</span>

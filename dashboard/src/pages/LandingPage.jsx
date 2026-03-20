@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { copy } from "../lib/copy";
+import { getAppVersion } from "../lib/app-version";
 import { safeWriteClipboard } from "../lib/safe-browser";
 import { isScreenshotModeEnabled } from "../lib/screenshot-mode";
 import { LandingView } from "../ui/matrix-a/views/LandingView.jsx";
@@ -43,6 +44,7 @@ function useDeferredMount(delayMs = 0, shouldDefer = true) {
 }
 
 export function LandingPage({ signInUrl, signUpUrl }) {
+  const appVersion = useMemo(() => getAppVersion(import.meta.env), []);
   const specialHandle = copy("landing.handle.special");
   const defaultHandle = copy("landing.handle.default");
   const loginLabel = copy("landing.nav.login");
@@ -97,6 +99,7 @@ export function LandingPage({ signInUrl, signUpUrl }) {
   return (
     <LandingView
       copy={copy}
+      appVersion={appVersion}
       effectsReady={effectsReady}
       signInUrl={signInUrl}
       signUpUrl={signUpUrl}
