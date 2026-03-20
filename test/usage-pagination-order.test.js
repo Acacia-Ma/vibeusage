@@ -52,9 +52,10 @@ test("usage pagination uses deterministic ordering", () => {
   );
   assert.ok(normalize(readFile("insforge-src/shared/db/usage-hourly.js")).includes(hourlyOrder));
   assert.ok(
-    normalize(readFile("insforge-src/functions/vibeusage-usage-monthly.js")).includes(
-      "buildHourlyUsageQuery",
-    ),
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-monthly.js")),
+      hourlyOrder,
+    ) === 1,
   );
   assert.equal(
     countOccurrences(

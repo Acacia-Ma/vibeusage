@@ -2,6 +2,19 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { loadEdgeFunction } = require("../lib/load-edge-function.cjs");
+
+function createUserJwt(userId = "user-id") {
+  const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+  const payload = Buffer.from(
+    JSON.stringify({
+      sub: userId,
+      role: "authenticated",
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    }),
+  ).toString("base64url");
+  return `${header}.${payload}.sig`;
+}
 
 class DatabaseStub {
   constructor({ calls }) {
@@ -74,11 +87,6 @@ class DatabaseStub {
 
 function createClientStub(database) {
   return {
-    auth: {
-      async getCurrentUser() {
-        return { data: { user: { id: "user-id" } }, error: null };
-      },
-    },
     database,
   };
 }
@@ -100,13 +108,14 @@ async function main() {
   const calls = { ranges: [] };
   global.createClient = () => createClientStub(new DatabaseStub({ calls }));
 
-  const usageMonthly = require("../../insforge-src/functions/vibeusage-usage-monthly.js");
+  const usageMonthly = await loadEdgeFunction("vibeusage-usage-monthly");
   const query = "months=2&to=2025-12-15";
+  const userJwt = createUserJwt();
 
   const res = await usageMonthly(
     new Request(`http://local/functions/vibeusage-usage-monthly?${query}`, {
       method: "GET",
-      headers: { Authorization: "Bearer user-jwt" },
+      headers: { Authorization: `Bearer ${userJwt}` },
     }),
   );
 

@@ -2,6 +2,19 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { loadEdgeFunction } = require("../lib/load-edge-function.cjs");
+
+function createUserJwt(userId = "user-id") {
+  const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+  const payload = Buffer.from(
+    JSON.stringify({
+      sub: userId,
+      role: "authenticated",
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    }),
+  ).toString("base64url");
+  return `${header}.${payload}.sig`;
+}
 
 class DatabaseStub {
   constructor({ baseUrl, anonKey, edgeFunctionToken } = {}) {
@@ -81,12 +94,6 @@ class DatabaseStub {
 
 function createClientStub({ baseUrl, anonKey, edgeFunctionToken } = {}) {
   return {
-    auth: {
-      async getCurrentUser() {
-        if (!edgeFunctionToken) return { data: null, error: null };
-        return { data: { user: { id: "user-id" } }, error: null };
-      },
-    },
     database: new DatabaseStub({ baseUrl, anonKey, edgeFunctionToken }),
   };
 }
@@ -110,7 +117,8 @@ async function main() {
   const { handler, calls } = buildFetchStub();
   global.fetch = handler;
 
-  const usageMonthly = require("../../insforge-src/functions/vibeusage-usage-monthly.js");
+  const usageMonthly = await loadEdgeFunction("vibeusage-usage-monthly");
+  const userJwt = createUserJwt();
 
   const query = [
     "months=2",
@@ -122,7 +130,7 @@ async function main() {
   const res = await usageMonthly(
     new Request(`http://local/functions/vibeusage-usage-monthly?${query}`, {
       method: "GET",
-      headers: { Authorization: "Bearer user-jwt" },
+      headers: { Authorization: `Bearer ${userJwt}` },
     }),
   );
 
@@ -161,10 +169,6 @@ function buildFetchStub() {
   async function handler(input, init = {}) {
     const url = new URL(typeof input === "string" ? input : input.url);
     const method = (init.method || "GET").toUpperCase();
-
-    if (url.pathname === "/api/auth/sessions/current" && method === "GET") {
-      return jsonResponse(200, { user: { id: "user-id" } });
-    }
 
     if (url.pathname === "/api/database/records/vibeusage_tracker_daily" && method === "GET") {
       calls.daily += 1;

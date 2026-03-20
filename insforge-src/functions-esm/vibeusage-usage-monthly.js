@@ -1,15 +1,7 @@
-// Edge function: vibeusage-usage-monthly
-// Returns monthly token usage aggregates for the authenticated user (timezone-aware).
-
-"use strict";
-
-const { handleOptions, json } = require("../shared/http");
-const { getBearerToken, getAccessContext } = require("../shared/auth");
-const { getBaseUrl } = require("../shared/env");
-const { getSourceParam } = require("../shared/source");
-const { getModelParam } = require("../shared/model");
-const { resolveUsageModelsForCanonical } = require("../shared/model-identity");
-const {
+import { getAccessContext, getBearerToken } from "./shared/auth.js";
+import { applyCanaryFilter } from "./shared/canary.js";
+import { initMonthlyBuckets, ingestMonthlyRow } from "./shared/core/usage-monthly.js";
+import {
   addDatePartsDays,
   addDatePartsMonths,
   formatDateParts,
@@ -17,18 +9,25 @@ const {
   getUsageTimeZoneContext,
   localDatePartsToUtc,
   parseDateParts,
-} = require("../shared/date");
-const { toPositiveIntOrNull } = require("../shared/numbers");
-const { forEachPage } = require("../shared/pagination");
-const { logSlowQuery, withRequestLogging } = require("../shared/logging");
-const { isDebugEnabled, withSlowQueryDebugPayload } = require("../shared/debug");
-const { initMonthlyBuckets, ingestMonthlyRow } = require("../shared/core/usage-monthly");
-const { buildHourlyUsageQuery } = require("../shared/db/usage-hourly");
-const { buildAliasTimeline, fetchAliasRows } = require("../shared/model-alias-timeline");
+} from "./shared/date.js";
+import { isDebugEnabled, withSlowQueryDebugPayload } from "./shared/debug.js";
+import { getBaseUrl } from "./shared/env.js";
+import { handleOptions, json } from "./shared/http.js";
+import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
+import { toPositiveIntOrNull } from "./shared/numbers.js";
+import { getSourceParam } from "./shared/source.js";
+import {
+  applyUsageModelFilter,
+  buildAliasTimeline,
+  fetchAliasRows,
+  forEachPage,
+  getModelParam,
+  resolveUsageModelsForCanonical,
+} from "./shared/usage-summary-support.js";
 
 const MAX_MONTHS = 24;
 
-module.exports = withRequestLogging("vibeusage-usage-monthly", async function (request, logger) {
+export default withRequestLogging("vibeusage-usage-monthly", async function (request, logger) {
   const opt = handleOptions(request);
   if (opt) return opt;
 
@@ -45,9 +44,9 @@ module.exports = withRequestLogging("vibeusage-usage-monthly", async function (r
   const bearer = getBearerToken(request.headers.get("Authorization"));
   if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
 
-  const baseUrl = getBaseUrl();
-  const auth = await getAccessContext({ baseUrl, bearer, allowPublic: true });
+  const auth = await getAccessContext({ baseUrl: getBaseUrl(), bearer, allowPublic: true });
   if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
+
   const tzContext = getUsageTimeZoneContext(url);
   const sourceResult = getSourceParam(url);
   if (!sourceResult.ok) return respond({ error: sourceResult.error }, 400, 0);
@@ -55,6 +54,7 @@ module.exports = withRequestLogging("vibeusage-usage-monthly", async function (r
   const modelResult = getModelParam(url);
   if (!modelResult.ok) return respond({ error: modelResult.error }, 400, 0);
   const model = modelResult.model;
+
   const monthsRaw = url.searchParams.get("months");
   const monthsParsed = toPositiveIntOrNull(monthsRaw);
   const months = monthsParsed == null ? MAX_MONTHS : monthsParsed;
@@ -73,7 +73,6 @@ module.exports = withRequestLogging("vibeusage-usage-monthly", async function (r
   );
   const from = formatDateParts(startMonthParts);
   const to = formatDateParts(toParts);
-
   if (!from || !to) return respond({ error: "Invalid to date" }, 400, 0);
 
   const startUtc = localDatePartsToUtc(
@@ -83,6 +82,7 @@ module.exports = withRequestLogging("vibeusage-usage-monthly", async function (r
   const endUtc = localDatePartsToUtc(addDatePartsDays(toParts, 1), tzContext);
   const startIso = startUtc.toISOString();
   const endIso = endUtc.toISOString();
+
   const modelFilter = await resolveUsageModelsForCanonical({
     edgeClient: auth.edgeClient,
     canonicalModel: model,
@@ -102,46 +102,44 @@ module.exports = withRequestLogging("vibeusage-usage-monthly", async function (r
   }
 
   const { monthKeys, buckets } = initMonthlyBuckets({ startMonthParts, months });
-
   const queryStartMs = Date.now();
   let rowCount = 0;
-  let pageResult;
-  try {
-    pageResult = await forEachPage({
-      createQuery: () => {
-        return buildHourlyUsageQuery({
-          edgeClient: auth.edgeClient,
-          userId: auth.userId,
+  const { error } = await forEachPage({
+    createQuery: () => {
+      let query = auth.edgeClient.database
+        .from("vibeusage_tracker_hourly")
+        .select(
+          "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
+        )
+        .eq("user_id", auth.userId);
+      if (source) query = query.eq("source", source);
+      if (hasModelFilter) query = applyUsageModelFilter(query, usageModels);
+      query = applyCanaryFilter(query, { source, model: canonicalModel });
+      return query
+        .gte("hour_start", startIso)
+        .lt("hour_start", endIso)
+        .order("hour_start", { ascending: true })
+        .order("device_id", { ascending: true })
+        .order("source", { ascending: true })
+        .order("model", { ascending: true });
+    },
+    onPage: (rows) => {
+      const pageRows = Array.isArray(rows) ? rows : [];
+      rowCount += pageRows.length;
+      for (const row of pageRows) {
+        ingestMonthlyRow({
+          buckets,
+          row,
+          tzContext,
           source,
-          usageModels: hasModelFilter ? usageModels : [],
           canonicalModel,
-          startIso,
-          endIso,
-          select:
-            "hour_start,source,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
+          hasModelFilter,
+          aliasTimeline,
+          to,
         });
-      },
-      onPage: (rows) => {
-        const pageRows = Array.isArray(rows) ? rows : [];
-        rowCount += pageRows.length;
-        for (const row of pageRows) {
-          ingestMonthlyRow({
-            buckets,
-            row,
-            tzContext,
-            source,
-            canonicalModel,
-            hasModelFilter,
-            aliasTimeline,
-            to,
-          });
-        }
-      },
-    });
-  } catch (err) {
-    const queryDurationMs = Date.now() - queryStartMs;
-    return respond({ error: err?.message || "Internal error" }, 500, queryDurationMs);
-  }
+      }
+    },
+  });
   const queryDurationMs = Date.now() - queryStartMs;
   logSlowQuery(logger, {
     query_label: "usage_monthly",
@@ -154,7 +152,7 @@ module.exports = withRequestLogging("vibeusage-usage-monthly", async function (r
     tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null,
   });
 
-  if (pageResult?.error) return respond({ error: pageResult.error.message }, 500, queryDurationMs);
+  if (error) return respond({ error: error.message }, 500, queryDurationMs);
 
   const monthly = monthKeys.map((key) => {
     const bucket = buckets.get(key);

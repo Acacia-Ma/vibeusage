@@ -80,6 +80,20 @@ export function addDatePartsDays(parts, days) {
   return datePartsFromDateUTC(addUtcDays(base, days));
 }
 
+export function addDatePartsMonths(parts, months) {
+  if (!parts) return null;
+  const year = Number(parts.year);
+  const month = Number(parts.month) - 1 + Number(months || 0);
+  const day = Number(parts.day || 1);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  const dt = new Date(Date.UTC(year, month, day));
+  return {
+    year: dt.getUTCFullYear(),
+    month: dt.getUTCMonth() + 1,
+    day: dt.getUTCDate(),
+  };
+}
+
 function parseOffsetMinutes(raw) {
   if (raw == null || raw === "") return null;
   const value = String(raw).trim();

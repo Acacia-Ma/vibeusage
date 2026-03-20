@@ -3126,7 +3126,7 @@ test("vibeusage-usage-hourly honors alias effective_from across day", async () =
 });
 
 test("vibeusage-usage-monthly aggregates hourly rows into months", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-monthly");
+  const fn = await loadEdgeFunction("vibeusage-usage-monthly");
 
   const userId = "88888888-8888-8888-8888-888888888888";
   const userJwt = createUserJwt(userId);
@@ -3243,7 +3243,7 @@ test("vibeusage-usage-monthly aggregates hourly rows into months", async () => {
 });
 
 test("vibeusage-usage-monthly canonical model filter includes alias rows", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-monthly");
+  const fn = await loadEdgeFunction("vibeusage-usage-monthly");
 
   const userId = "22222222-2222-2222-2222-222222222222";
   const userJwt = createUserJwt(userId);
@@ -3301,7 +3301,7 @@ test("vibeusage-usage-monthly canonical model filter includes alias rows", async
 });
 
 test("vibeusage-usage-monthly honors alias effective_from across range", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-monthly");
+  const fn = await loadEdgeFunction("vibeusage-usage-monthly");
 
   const userId = "22222222-2222-2222-2222-222222222222";
   const userJwt = createUserJwt(userId);
