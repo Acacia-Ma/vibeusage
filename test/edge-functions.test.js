@@ -2454,7 +2454,7 @@ test("vibeusage-usage-daily prefers stored billable_total_tokens", async () => {
 });
 
 test("vibeusage-usage-hourly aggregates half-hour buckets into half-hour totals", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-hourly");
+  const fn = await loadEdgeFunction("vibeusage-usage-hourly");
 
   const userId = "77777777-7777-7777-7777-777777777777";
   const userJwt = createUserJwt(userId);
@@ -2563,7 +2563,7 @@ test("vibeusage-usage-hourly aggregates half-hour buckets into half-hour totals"
 });
 
 test("vibeusage-usage-hourly local timezone prefers stored billable_total_tokens", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-hourly");
+  const fn = await loadEdgeFunction("vibeusage-usage-hourly");
 
   const userId = "77777777-7777-7777-7777-777777777777";
   const userJwt = createUserJwt(userId);
@@ -2622,7 +2622,7 @@ test("vibeusage-usage-hourly local timezone prefers stored billable_total_tokens
 });
 
 test("vibeusage-usage-hourly computes billable totals from aggregated rows", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-hourly");
+  const fn = await loadEdgeFunction("vibeusage-usage-hourly");
 
   const userId = "77777777-7777-7777-7777-777777777777";
   const userJwt = createUserJwt(userId);
@@ -2681,7 +2681,7 @@ test("vibeusage-usage-hourly computes billable totals from aggregated rows", asy
 });
 
 test("vibeusage-usage-hourly prefers stored billable totals in aggregate path", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-hourly");
+  const fn = await loadEdgeFunction("vibeusage-usage-hourly");
 
   const userId = "77777777-7777-7777-7777-777777777777";
   const userJwt = createUserJwt(userId);
@@ -2745,7 +2745,7 @@ test("vibeusage-usage-hourly prefers stored billable totals in aggregate path", 
 });
 
 test("vibeusage-usage-hourly aggregate path falls back when billable sums incomplete", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-hourly");
+  const fn = await loadEdgeFunction("vibeusage-usage-hourly");
 
   const userId = "77777777-7777-7777-7777-777777777777";
   const userJwt = createUserJwt(userId);
@@ -2810,7 +2810,7 @@ test("vibeusage-usage-hourly aggregate path falls back when billable sums incomp
 });
 
 test("vibeusage-usage-hourly canonical model filter includes alias rows", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-hourly");
+  const fn = await loadEdgeFunction("vibeusage-usage-hourly");
 
   const userId = "11111111-1111-1111-1111-111111111111";
   const userJwt = createUserJwt(userId);
@@ -2899,7 +2899,7 @@ test("vibeusage-usage-hourly canonical model filter includes alias rows", async 
 });
 
 test("vibeusage-usage-hourly selects model column for canonical filtering (UTC)", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-hourly");
+  const fn = await loadEdgeFunction("vibeusage-usage-hourly");
 
   const userId = "44444444-4444-4444-4444-444444444444";
   const userJwt = createUserJwt(userId);
@@ -2973,7 +2973,7 @@ test("vibeusage-usage-hourly selects model column for canonical filtering (UTC)"
 });
 
 test("vibeusage-usage-hourly selects model column for canonical filtering (local time)", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-hourly");
+  const fn = await loadEdgeFunction("vibeusage-usage-hourly");
 
   const userId = "55555555-5555-5555-5555-555555555555";
   const userJwt = createUserJwt(userId);
@@ -3047,7 +3047,7 @@ test("vibeusage-usage-hourly selects model column for canonical filtering (local
 });
 
 test("vibeusage-usage-hourly honors alias effective_from across day", async () => {
-  const fn = require("../insforge-functions/vibeusage-usage-hourly");
+  const fn = await loadEdgeFunction("vibeusage-usage-hourly");
 
   const userId = "11111111-1111-1111-1111-111111111111";
   const userJwt = createUserJwt(userId);
@@ -3123,6 +3123,88 @@ test("vibeusage-usage-hourly honors alias effective_from across day", async () =
   assert.equal(body.data[0].total_tokens, "0");
   const filterCalls = filters.filter((entry) => entry.op === "or");
   assert.ok(filterCalls.some((entry) => entry.value?.includes?.("model.ilike.gpt-foo")));
+});
+
+test("vibeusage-usage-hourly derives user id from jwt claims when jwt secret missing", async () => {
+  setDenoEnv({
+    INSFORGE_INTERNAL_URL: BASE_URL,
+    ANON_KEY,
+    INSFORGE_JWT_SECRET: "",
+    INSFORGE_SERVICE_ROLE_KEY: "",
+  });
+
+  const fn = await loadEdgeFunction("vibeusage-usage-hourly");
+
+  const userId = "44444444-4444-4444-4444-444444444444";
+  const userJwt = createUserJwt(userId);
+  const filters = [];
+  const orders = [];
+  const rows = [
+    {
+      hour_start: "2025-12-21T00:00:00.000Z",
+      total_tokens: "10",
+      billable_total_tokens: "9",
+      input_tokens: "6",
+      cached_input_tokens: "2",
+      output_tokens: "4",
+      reasoning_output_tokens: "1",
+    },
+  ];
+
+  globalThis.createClient = (args) => {
+    if (args && args.edgeFunctionToken === userJwt) {
+      assert.equal(args.anonKey, ANON_KEY);
+      return {
+        database: {
+          from: (table) => {
+            if (table === "vibeusage_tracker_hourly") {
+              const query = createQueryMock({
+                rows,
+                onFilter: (entry) => {
+                  if (entry.op === "order") orders.push(entry);
+                  else filters.push(entry);
+                },
+              });
+              return { select: () => query };
+            }
+            if (table === "vibeusage_model_aliases") {
+              return createQueryMock({ rows: [] });
+            }
+            if (table === "vibeusage_tracker_device_tokens") {
+              const query = createQueryMock({ rows: [] });
+              return { select: () => query };
+            }
+            throw new Error(`Unexpected table ${table}`);
+          },
+        },
+      };
+    }
+    throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
+  };
+
+  const req = new Request(
+    "http://localhost/functions/vibeusage-usage-hourly?day=2025-12-21",
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${userJwt}` },
+    },
+  );
+
+  const res = await fn(req);
+  assert.equal(res.status, 200);
+
+  assert.ok(filters.some((f) => f.op === "eq" && f.col === "user_id" && f.value === userId));
+  assert.ok(
+    filters.some(
+      (f) => f.op === "gte" && f.col === "hour_start" && f.value === "2025-12-21T00:00:00.000Z",
+    ),
+  );
+  assert.ok(
+    filters.some(
+      (f) => f.op === "lt" && f.col === "hour_start" && f.value === "2025-12-22T00:00:00.000Z",
+    ),
+  );
+  assert.ok(orders.some((o) => o.op === "order"));
 });
 
 test("vibeusage-usage-monthly aggregates hourly rows into months", async () => {

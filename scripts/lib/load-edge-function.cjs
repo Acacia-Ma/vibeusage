@@ -8,6 +8,7 @@ const MIGRATED_FUNCTION_SOURCES = new Map([
   ["vibeusage-leaderboard", "insforge-src/functions-esm/vibeusage-leaderboard.js"],
   ["vibeusage-public-visibility", "insforge-src/functions-esm/vibeusage-public-visibility.js"],
   ["vibeusage-usage-daily", "insforge-src/functions-esm/vibeusage-usage-daily.js"],
+  ["vibeusage-usage-hourly", "insforge-src/functions-esm/vibeusage-usage-hourly.js"],
   ["vibeusage-usage-monthly", "insforge-src/functions-esm/vibeusage-usage-monthly.js"],
   [
     "vibeusage-usage-model-breakdown",

@@ -1,42 +1,39 @@
-// Edge function: vibeusage-usage-hourly
-// Returns half-hour token usage aggregates for the authenticated user (timezone-aware).
-
-"use strict";
-
-const { handleOptions, json } = require("../shared/http");
-const { getBearerToken, getAccessContext } = require("../shared/auth");
-const { getBaseUrl } = require("../shared/env");
-const { getSourceParam } = require("../shared/source");
-const { getModelParam, applyUsageModelFilter, normalizeUsageModel } = require("../shared/model");
-const { resolveUsageModelsForCanonical } = require("../shared/model-identity");
-const { applyCanaryFilter } = require("../shared/canary");
-const {
+import { getAccessContext, getBearerToken } from "./shared/auth.js";
+import { applyCanaryFilter } from "./shared/canary.js";
+import {
   addDatePartsDays,
   addUtcDays,
   formatDateParts,
   formatDateUTC,
   getLocalParts,
-  isUtcTimeZone,
   getUsageTimeZoneContext,
+  isUtcTimeZone,
   localDatePartsToUtc,
   parseDateParts,
   parseUtcDateString,
-} = require("../shared/date");
-const { toBigInt } = require("../shared/numbers");
-const { forEachPage } = require("../shared/pagination");
-const { logSlowQuery, withRequestLogging } = require("../shared/logging");
-const { isDebugEnabled, withSlowQueryDebugPayload } = require("../shared/debug");
-const {
+} from "./shared/date.js";
+import { isDebugEnabled, withSlowQueryDebugPayload } from "./shared/debug.js";
+import { getBaseUrl } from "./shared/env.js";
+import { handleOptions, json } from "./shared/http.js";
+import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
+import { toBigInt } from "./shared/numbers.js";
+import { getSourceParam } from "./shared/source.js";
+import {
+  applyUsageModelFilter,
   buildAliasTimeline,
   extractDateKey,
   fetchAliasRows,
+  forEachPage,
+  getModelParam,
+  normalizeUsageModel,
+  resolveBillableTotals,
   resolveIdentityAtDate,
-} = require("../shared/model-alias-timeline");
-const { resolveBillableTotals } = require("../shared/usage-aggregate");
+  resolveUsageModelsForCanonical,
+} from "./shared/usage-summary-support.js";
 
 const MIN_INTERVAL_MINUTES = 30;
 
-module.exports = withRequestLogging("vibeusage-usage-hourly", async function (request, logger) {
+export default withRequestLogging("vibeusage-usage-hourly", async function (request, logger) {
   const opt = handleOptions(request);
   if (opt) return opt;
 
@@ -349,6 +346,7 @@ module.exports = withRequestLogging("vibeusage-usage-hourly", async function (re
           });
           if (identity.model_id !== filterIdentity.model_id) continue;
         }
+
         const localParts = getLocalParts(dt, tzContext);
         const localDay = formatDateParts(localParts);
         if (localDay !== dayKey) continue;
@@ -411,10 +409,7 @@ function initHourlyBuckets(dayLabel) {
 
   for (let hour = 0; hour < 24; hour += 1) {
     for (const minute of [0, 30]) {
-      const key = `${dayLabel}T${String(hour).padStart(2, "0")}:${String(minute).padStart(
-        2,
-        "0",
-      )}:00`;
+      const key = `${dayLabel}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
       hourKeys.push(key);
       const slot = hour * 2 + (minute >= 30 ? 1 : 0);
       bucketMap.set(key, buckets[slot]);
@@ -446,14 +441,13 @@ function buildHourlyResponse(hourKeys, bucketMap, missingAfterSlot) {
 
 function formatHourKeyFromValue(value) {
   if (!value) return null;
-  if (typeof value === "string") {
-    if (value.length >= 16) {
-      const day = value.slice(0, 10);
-      const hour = value.slice(11, 13);
-      const minute = value.slice(14, 16);
-      const minuteNum = Number(minute);
-      if (!Number.isFinite(minuteNum) || (minuteNum !== 0 && minuteNum !== 30)) return null;
-      if (day && hour && minute) return `${day}T${hour}:${minute}:00`;
+  if (typeof value === "string" && value.length >= 16) {
+    const day = value.slice(0, 10);
+    const hour = value.slice(11, 13);
+    const minute = value.slice(14, 16);
+    const minuteNum = Number(minute);
+    if (Number.isFinite(minuteNum) && (minuteNum === 0 || minuteNum === 30) && day && hour) {
+      return `${day}T${hour}:${minute}:00`;
     }
   }
   const dt = value instanceof Date ? value : new Date(value);
@@ -502,10 +496,9 @@ async function tryAggregateHourlyTotals({
       .lt("hour_start", endIso)
       .order("hour", { ascending: true })
       .order("source", { ascending: true });
-
     if (error) return null;
     return data || [];
-  } catch (_e) {
+  } catch (_error) {
     return null;
   }
 }
@@ -529,7 +522,6 @@ async function getSyncMeta({ edgeClient, userId, startUtc, endUtc, tzContext }) 
   if (!Number.isFinite(lastMs)) {
     return { lastSyncAt: lastSyncIso, missingAfterSlot: null };
   }
-
   if (lastMs < dayStartMs) {
     return { lastSyncAt: lastSyncIso, missingAfterSlot: -1 };
   }
@@ -555,11 +547,10 @@ async function getLastSyncAt({ edgeClient, userId }) {
       .eq("user_id", userId)
       .order("last_sync_at", { ascending: false })
       .limit(1);
-
     if (error) return null;
     if (!Array.isArray(data) || data.length === 0) return null;
     return data[0]?.last_sync_at || null;
-  } catch (_e) {
+  } catch (_error) {
     return null;
   }
 }

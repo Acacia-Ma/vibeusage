@@ -2,6 +2,8 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { loadEdgeFunction } = require("../lib/load-edge-function.cjs");
+const { createTestUserJwt } = require("./_lib/test-user-jwt.cjs");
 
 class DatabaseStub {
   constructor({ baseUrl, anonKey, edgeFunctionToken } = {}) {
@@ -94,6 +96,7 @@ function createClientStub({ baseUrl, anonKey, edgeFunctionToken } = {}) {
 async function main() {
   process.env.INSFORGE_INTERNAL_URL = "http://insforge:7130";
   process.env.INSFORGE_ANON_KEY = "anon";
+  process.env.INSFORGE_JWT_SECRET = "";
   process.env.INSFORGE_SERVICE_ROLE_KEY = "";
 
   global.Deno = {
@@ -106,18 +109,19 @@ async function main() {
   };
 
   global.createClient = createClientStub;
+  const userJwt = createTestUserJwt();
 
   const { handler, calls } = buildFetchStub();
   global.fetch = handler;
 
-  const usageHourly = require("../../insforge-src/functions/vibeusage-usage-hourly.js");
+  const usageHourly = await loadEdgeFunction("vibeusage-usage-hourly");
 
   const query = ["day=2025-12-02", "tz=America/Los_Angeles", "tz_offset_minutes=-480"].join("&");
 
   const res = await usageHourly(
     new Request(`http://local/functions/vibeusage-usage-hourly?${query}`, {
       method: "GET",
-      headers: { Authorization: "Bearer user-jwt" },
+      headers: { Authorization: `Bearer ${userJwt}` },
     }),
   );
 

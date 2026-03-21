@@ -66,7 +66,7 @@ test("usage pagination uses deterministic ordering", () => {
   );
   assert.equal(
     countOccurrences(
-      normalize(readFile("insforge-src/functions/vibeusage-usage-hourly.js")),
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-hourly.js")),
       hourlyOrder,
     ),
     2,

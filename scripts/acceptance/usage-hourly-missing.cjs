@@ -2,6 +2,8 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { loadEdgeFunction } = require("../lib/load-edge-function.cjs");
+const { createTestUserJwt } = require("./_lib/test-user-jwt.cjs");
 
 class DatabaseStub {
   constructor({ tokenRows = [], aggregateRows = [], eventRows = [] } = {}) {
@@ -39,15 +41,18 @@ class DatabaseStub {
   }
 
   order() {
-    if (this._table === "vibeusage_tracker_device_tokens") {
-      return this;
-    }
+    return this;
+  }
 
-    if (this._table !== "vibeusage_tracker_hourly") {
-      return { data: [], error: null };
+  range() {
+    if (this._table === "vibeusage_tracker_hourly") {
+      return { data: this.aggregateRows, error: null };
     }
+    return { data: [], error: null };
+  }
 
-    return { data: this.aggregateRows, error: null };
+  then(resolve, reject) {
+    return Promise.resolve(this.range()).then(resolve, reject);
   }
 
   limit(n) {
@@ -72,6 +77,7 @@ function createClientStub(database) {
 async function main() {
   process.env.INSFORGE_INTERNAL_URL = "http://insforge:7130";
   process.env.INSFORGE_ANON_KEY = "anon";
+  process.env.INSFORGE_JWT_SECRET = "";
 
   global.Deno = {
     env: {
@@ -83,14 +89,14 @@ async function main() {
   };
 
   const tokenRows = [{ last_sync_at: "2025-12-22T10:30:00Z" }];
+  const userJwt = createTestUserJwt();
   global.createClient = () => createClientStub(new DatabaseStub({ tokenRows }));
-  delete require.cache[require.resolve("../../insforge-src/functions/vibeusage-usage-hourly.js")];
-  const usageHourly = require("../../insforge-src/functions/vibeusage-usage-hourly.js");
+  const usageHourly = await loadEdgeFunction("vibeusage-usage-hourly");
 
   const res = await usageHourly(
     new Request("http://local/functions/vibeusage-usage-hourly?day=2025-12-22", {
       method: "GET",
-      headers: { Authorization: "Bearer user-jwt" },
+      headers: { Authorization: `Bearer ${userJwt}` },
     }),
   );
 

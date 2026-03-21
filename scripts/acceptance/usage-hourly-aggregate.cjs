@@ -2,6 +2,8 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { loadEdgeFunction } = require("../lib/load-edge-function.cjs");
+const { createTestUserJwt } = require("./_lib/test-user-jwt.cjs");
 
 class DatabaseStub {
   constructor({ aggregateError = false, aggregateRows = [], bucketRows = [] } = {}) {
@@ -35,6 +37,10 @@ class DatabaseStub {
   }
 
   order() {
+    return this;
+  }
+
+  range() {
     if (this._table !== "vibeusage_tracker_hourly") {
       return { data: [], error: null };
     }
@@ -50,6 +56,10 @@ class DatabaseStub {
     }
 
     return { data: this.bucketRows, error: null };
+  }
+
+  then(resolve, reject) {
+    return Promise.resolve(this.range()).then(resolve, reject);
   }
 }
 
@@ -77,16 +87,15 @@ function expectHourlyTotals(body, expected) {
   }
 }
 
-async function runScenario({ name, aggregateError, aggregateRows, bucketRows, expectedTotals }) {
+async function runScenario({ name, userJwt, aggregateError, aggregateRows, bucketRows, expectedTotals }) {
   global.createClient = () =>
     createClientStub(new DatabaseStub({ aggregateError, aggregateRows, bucketRows }));
-  delete require.cache[require.resolve("../../insforge-src/functions/vibeusage-usage-hourly.js")];
-  const usageHourly = require("../../insforge-src/functions/vibeusage-usage-hourly.js");
+  const usageHourly = await loadEdgeFunction("vibeusage-usage-hourly");
 
   const res = await usageHourly(
     new Request("http://local/functions/vibeusage-usage-hourly?day=2025-12-01", {
       method: "GET",
-      headers: { Authorization: "Bearer user-jwt" },
+      headers: { Authorization: `Bearer ${userJwt}` },
     }),
   );
 
@@ -102,6 +111,7 @@ async function runScenario({ name, aggregateError, aggregateRows, bucketRows, ex
 async function main() {
   process.env.INSFORGE_INTERNAL_URL = "http://insforge:7130";
   process.env.INSFORGE_ANON_KEY = "anon";
+  process.env.INSFORGE_JWT_SECRET = "";
   process.env.INSFORGE_SERVICE_ROLE_KEY = "";
 
   global.Deno = {
@@ -113,6 +123,7 @@ async function main() {
     },
   };
 
+  const userJwt = createTestUserJwt();
   const aggregateRows = [
     {
       hour: "2025-12-01T00:30:00",
@@ -151,6 +162,7 @@ async function main() {
 
   const aggregateBody = await runScenario({
     name: "aggregate",
+    userJwt,
     aggregateError: false,
     aggregateRows,
     bucketRows: [],
@@ -195,6 +207,7 @@ async function main() {
 
   const fallbackBody = await runScenario({
     name: "fallback",
+    userJwt,
     aggregateError: true,
     aggregateRows: [],
     bucketRows,
