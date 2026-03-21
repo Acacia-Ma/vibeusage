@@ -127,6 +127,46 @@ describe("getUsageModelBreakdown", () => {
   });
 });
 
+describe("request scheduling", () => {
+  it("does not start different GET requests concurrently", async () => {
+    const resolvers: Array<(value: any) => void> = [];
+    http.get.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+
+    const summaryPromise = api.getUsageSummary({
+      baseUrl: "https://example.com",
+      accessToken: "token",
+      from: "2024-04-01",
+      to: "2026-03-21",
+      rolling: true,
+    });
+    const breakdownPromise = api.getUsageModelBreakdown({
+      baseUrl: "https://example.com",
+      accessToken: "token",
+      from: "2024-04-01",
+      to: "2026-03-21",
+    });
+
+    await vi.waitFor(() => expect(http.get).toHaveBeenCalledTimes(1));
+
+    resolvers[0]?.({ totals: { total_tokens: "42" }, rolling: null });
+
+    await vi.waitFor(() => expect(http.get).toHaveBeenCalledTimes(2));
+
+    resolvers[1]?.({ sources: [] });
+
+    await expect(summaryPromise).resolves.toEqual({
+      totals: { total_tokens: "42" },
+      rolling: null,
+    });
+    await expect(breakdownPromise).resolves.toEqual({ sources: [] });
+  });
+});
+
 describe("error normalization", () => {
   const jwtToken = [
     Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" }))

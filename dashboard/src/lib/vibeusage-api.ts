@@ -43,6 +43,9 @@ type AnyRecord = Record<string, any>;
 
 let refreshInFlight: Promise<any> | null = null;
 const inFlightGetRequests = new Map<string, Promise<any>>();
+const queuedFunctionRequests: Array<() => void> = [];
+let activeFunctionRequests = 0;
+const MAX_CONCURRENT_FUNCTION_REQUESTS = 1;
 
 async function resolveAccessToken(accessToken: any) {
   return await resolveAuthAccessToken(accessToken);
@@ -586,7 +589,7 @@ async function requestJson({
   };
 
   if (!requestKey) {
-    return await executeRequest();
+    return await scheduleFunctionRequest(executeRequest);
   }
 
   const existing = inFlightGetRequests.get(requestKey);
@@ -594,7 +597,7 @@ async function requestJson({
     return await existing;
   }
 
-  const pending = executeRequest();
+  const pending = scheduleFunctionRequest(executeRequest);
   inFlightGetRequests.set(requestKey, pending);
   try {
     return await pending;
@@ -628,105 +631,107 @@ async function requestPostJson({
   let attempt = 0;
   const { primaryPath, fallbackPath } = buildFunctionPaths(slug);
 
-  while (true) {
-    try {
-      const result = await requestWithFallbackPost({
-        http,
-        primaryPath,
-        fallbackPath,
-        body,
-        fetchOptions,
-      });
-      clearSessionSoftExpiredIfNeeded({
-        hadAccessToken,
-        accessToken: activeAccessToken,
-      });
-      return result;
-    } catch (e) {
-      const errInput = e as any;
-      if (errInput?.name === "AbortError") throw e;
-      let err: any = null;
-      const status = errInput?.statusCode ?? errInput?.status;
-      if (
-        allowRefresh &&
-        shouldAttemptSessionRefresh({
-          status,
-          requestKind: normalizedRequestKind,
+  return await scheduleFunctionRequest(async () => {
+    while (true) {
+      try {
+        const result = await requestWithFallbackPost({
+          http,
+          primaryPath,
+          fallbackPath,
+          body,
+          fetchOptions,
+        });
+        clearSessionSoftExpiredIfNeeded({
           hadAccessToken,
           accessToken: activeAccessToken,
-        })
-      ) {
-        const refreshedSession = await refreshSessionOnce();
-        const refreshedToken = refreshedSession?.accessToken ?? null;
-        if (hasAccessTokenValue(refreshedToken)) {
-          const retryClient = createInsforgeClient({
-            baseUrl,
-            accessToken: refreshedToken,
-          });
-          const retryHttp = retryClient.getHttpClient();
-          activeAccessToken = refreshedToken;
-          hadAccessToken = true;
-          http = retryHttp;
-          try {
-            const retryResult = await requestWithFallbackPost({
-              http: retryHttp,
-              primaryPath,
-              fallbackPath,
-              body,
-              fetchOptions,
-            });
-            clearSessionSoftExpiredIfNeeded({
-              hadAccessToken: true,
-              accessToken: refreshedToken,
-            });
-            return retryResult;
-          } catch (retryErr) {
-            const retryStatus = (retryErr as any)?.statusCode ?? (retryErr as any)?.status;
-            if (
-              shouldMarkSessionSoftExpired({
-                status: retryStatus,
-                hadAccessToken: true,
-                accessToken: refreshedToken,
-                skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
-              })
-            ) {
-              markSessionSoftExpired(refreshedToken);
-            }
-            err = normalizeSdkError(retryErr, {
-              errorPrefix,
-              hadAccessToken: true,
-              accessToken: refreshedToken,
-              skipSessionExpiry: true,
-            });
-          }
-        } else if (
-          canSetSessionSoftExpired({
+        });
+        return result;
+      } catch (e) {
+        const errInput = e as any;
+        if (errInput?.name === "AbortError") throw e;
+        let err: any = null;
+        const status = errInput?.statusCode ?? errInput?.status;
+        if (
+          allowRefresh &&
+          shouldAttemptSessionRefresh({
+            status,
+            requestKind: normalizedRequestKind,
             hadAccessToken,
             accessToken: activeAccessToken,
-            skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
           })
         ) {
-          markSessionSoftExpired(activeAccessToken);
+          const refreshedSession = await refreshSessionOnce();
+          const refreshedToken = refreshedSession?.accessToken ?? null;
+          if (hasAccessTokenValue(refreshedToken)) {
+            const retryClient = createInsforgeClient({
+              baseUrl,
+              accessToken: refreshedToken,
+            });
+            const retryHttp = retryClient.getHttpClient();
+            activeAccessToken = refreshedToken;
+            hadAccessToken = true;
+            http = retryHttp;
+            try {
+              const retryResult = await requestWithFallbackPost({
+                http: retryHttp,
+                primaryPath,
+                fallbackPath,
+                body,
+                fetchOptions,
+              });
+              clearSessionSoftExpiredIfNeeded({
+                hadAccessToken: true,
+                accessToken: refreshedToken,
+              });
+              return retryResult;
+            } catch (retryErr) {
+              const retryStatus = (retryErr as any)?.statusCode ?? (retryErr as any)?.status;
+              if (
+                shouldMarkSessionSoftExpired({
+                  status: retryStatus,
+                  hadAccessToken: true,
+                  accessToken: refreshedToken,
+                  skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
+                })
+              ) {
+                markSessionSoftExpired(refreshedToken);
+              }
+              err = normalizeSdkError(retryErr, {
+                errorPrefix,
+                hadAccessToken: true,
+                accessToken: refreshedToken,
+                skipSessionExpiry: true,
+              });
+            }
+          } else if (
+            canSetSessionSoftExpired({
+              hadAccessToken,
+              accessToken: activeAccessToken,
+              skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
+            })
+          ) {
+            markSessionSoftExpired(activeAccessToken);
+          }
+          err ??= normalizeSdkError(errInput, {
+            errorPrefix,
+            hadAccessToken,
+            accessToken: activeAccessToken,
+            skipSessionExpiry: true,
+          });
         }
         err ??= normalizeSdkError(errInput, {
           errorPrefix,
           hadAccessToken,
           accessToken: activeAccessToken,
-          skipSessionExpiry: true,
+          skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
         });
+        if (!shouldRetry({ err, attempt, retryOptions })) throw err;
+        const delayMs = computeRetryDelayMs({ retryOptions, attempt });
+        await sleep(delayMs);
+        attempt += 1;
       }
-      err ??= normalizeSdkError(errInput, {
-        errorPrefix,
-        hadAccessToken,
-        accessToken: activeAccessToken,
-        skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
-      });
-      if (!shouldRetry({ err, attempt, retryOptions })) throw err;
-      const delayMs = computeRetryDelayMs({ retryOptions, attempt });
-      await sleep(delayMs);
-      attempt += 1;
     }
-  }
+  });
 }
 
 function buildFunctionPaths(slug: any) {
@@ -773,6 +778,33 @@ function serializeRequestParams(params: AnyRecord = {}) {
 function normalizeFunctionSlug(slug: any) {
   const raw = typeof slug === "string" ? slug.trim() : "";
   return raw.replace(/^\/+/, "");
+}
+
+function scheduleFunctionRequest<T>(task: () => Promise<T>) {
+  return new Promise<T>((resolve, reject) => {
+    const run = () => {
+      activeFunctionRequests += 1;
+      Promise.resolve()
+        .then(task)
+        .then(resolve, reject)
+        .finally(() => {
+          activeFunctionRequests = Math.max(0, activeFunctionRequests - 1);
+          flushQueuedFunctionRequests();
+        });
+    };
+    queuedFunctionRequests.push(run);
+    flushQueuedFunctionRequests();
+  });
+}
+
+function flushQueuedFunctionRequests() {
+  while (
+    activeFunctionRequests < MAX_CONCURRENT_FUNCTION_REQUESTS &&
+    queuedFunctionRequests.length > 0
+  ) {
+    const next = queuedFunctionRequests.shift();
+    next?.();
+  }
 }
 
 function normalizePrefix(prefix: any) {
