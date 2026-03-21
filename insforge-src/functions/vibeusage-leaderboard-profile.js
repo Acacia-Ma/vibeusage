@@ -75,6 +75,7 @@ module.exports = async function (request) {
   if (snapshotErr)
     return json({ error: snapshotErr.message || "Failed to fetch leaderboard snapshot" }, 500);
   if (!snapshot) return json({ error: "Not found" }, 404);
+  if (!isSelf && snapshot.is_public !== true) return json({ error: "Not found" }, 404);
 
   return json(
     {

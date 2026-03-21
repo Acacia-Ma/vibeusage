@@ -478,12 +478,12 @@ test("applyDailyBucket rejects invalid hour_start", () => {
   assert.equal(ok, false);
 });
 
-test("usage-monthly imports getLocalParts from shared/date", () => {
+test("usage-monthly esm source imports getLocalParts from shared/date", () => {
   const filePath = path.join(
     __dirname,
     "..",
     "insforge-src",
-    "functions",
+    "functions-esm",
     "vibeusage-usage-monthly.js",
   );
   const content = fs.readFileSync(filePath, "utf8");
