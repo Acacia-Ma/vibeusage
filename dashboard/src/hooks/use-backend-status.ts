@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AuthTokenProvider } from "../lib/auth-token";
-import { resolveAuthAccessToken } from "../lib/auth-token";
+import { isLikelyExpiredAccessToken, resolveAuthAccessToken } from "../lib/auth-token";
 import { createProbeCadence, DEFAULT_PROBE_INTERVAL_MS } from "../lib/backend-probe-scheduler";
 import { probeBackend } from "../lib/vibeusage-api";
 
@@ -35,9 +35,14 @@ export function useBackendStatus({
   const cadenceRef = useRef(createProbeCadence({ intervalMs }));
   const nextDelayRef = useRef(cadenceRef.current.getNextDelay());
   const scheduleNextRef = useRef<((delayMs: number) => void) | null>(null);
+  const resolvedTokenRef = useRef<string | null>(null);
   const threshold = Number.isFinite(Number(failureThreshold))
     ? Math.max(1, Math.floor(Number(failureThreshold)))
     : 2;
+
+  useEffect(() => {
+    resolvedTokenRef.current = null;
+  }, [accessToken]);
 
   useEffect(() => {
     cadenceRef.current = createProbeCadence({ intervalMs });
@@ -61,6 +66,19 @@ export function useBackendStatus({
 
     return nextDelayRef.current;
   }, []);
+
+  const resolveProbeAccessToken = useCallback(async () => {
+    const cachedToken = resolvedTokenRef.current;
+    if (cachedToken && !isLikelyExpiredAccessToken(cachedToken)) {
+      return cachedToken;
+    }
+
+    const resolvedToken = await resolveAuthAccessToken(accessToken);
+    const nextToken =
+      resolvedToken && !isLikelyExpiredAccessToken(resolvedToken) ? resolvedToken : null;
+    resolvedTokenRef.current = nextToken;
+    return nextToken;
+  }, [accessToken]);
 
   const refresh = useCallback(
     async ({ reschedule = true }: { reschedule?: boolean } = {}) => {
@@ -93,7 +111,7 @@ export function useBackendStatus({
         return;
       }
 
-      const resolvedToken = await resolveAuthAccessToken(accessToken);
+      const resolvedToken = await resolveProbeAccessToken();
       if (!resolvedToken) {
         setStatus("unknown");
         setChecking(false);
@@ -143,6 +161,7 @@ export function useBackendStatus({
         setLastCheckedAt(new Date().toISOString());
 
         if (statusCode === 401 || statusCode === 403) {
+          resolvedTokenRef.current = null;
           failureCountRef.current = 0;
           setStatus("error");
           setError("Unauthorized");
@@ -168,7 +187,7 @@ export function useBackendStatus({
         }
       }
     },
-    [accessToken, applyCadence, baseUrl, retryDelayMs, threshold, timeoutMs],
+    [applyCadence, baseUrl, resolveProbeAccessToken, retryDelayMs, threshold, timeoutMs],
   );
 
   useEffect(() => {
