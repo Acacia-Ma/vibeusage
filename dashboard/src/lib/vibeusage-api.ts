@@ -42,6 +42,7 @@ const REQUEST_KIND = {
 type AnyRecord = Record<string, any>;
 
 let refreshInFlight: Promise<any> | null = null;
+const inFlightGetRequests = new Map<string, Promise<any>>();
 
 async function resolveAccessToken(accessToken: any) {
   return await resolveAuthAccessToken(accessToken);
@@ -472,104 +473,134 @@ async function requestJson({
   const normalizedRequestKind = skipSessionExpiry ? REQUEST_KIND.probe : requestKind;
   let attempt = 0;
   const { primaryPath, fallbackPath } = buildFunctionPaths(slug);
+  const requestKey = buildInFlightGetKey({
+    baseUrl,
+    accessToken: activeAccessToken,
+    primaryPath,
+    fallbackPath,
+    params,
+    requestKind: normalizedRequestKind,
+    fetchOptions,
+  });
 
-  while (true) {
-    try {
-      const result = await requestWithFallback({
-        http,
-        primaryPath,
-        fallbackPath,
-        params,
-        fetchOptions,
-      });
-      clearSessionSoftExpiredIfNeeded({
-        hadAccessToken,
-        accessToken: activeAccessToken,
-      });
-      return result;
-    } catch (e) {
-      const errInput = e as any;
-      if (errInput?.name === "AbortError") throw e;
-      let err: any = null;
-      const status = errInput?.statusCode ?? errInput?.status;
-      if (
-        allowRefresh &&
-        shouldAttemptSessionRefresh({
-          status,
-          requestKind: normalizedRequestKind,
+  const executeRequest = async () => {
+    while (true) {
+      try {
+        const result = await requestWithFallback({
+          http,
+          primaryPath,
+          fallbackPath,
+          params,
+          fetchOptions,
+        });
+        clearSessionSoftExpiredIfNeeded({
           hadAccessToken,
           accessToken: activeAccessToken,
-        })
-      ) {
-        const refreshedSession = await refreshSessionOnce();
-        const refreshedToken = refreshedSession?.accessToken ?? null;
-        if (hasAccessTokenValue(refreshedToken)) {
-          const retryClient = createInsforgeClient({
-            baseUrl,
-            accessToken: refreshedToken,
-          });
-          const retryHttp = retryClient.getHttpClient();
-          activeAccessToken = refreshedToken;
-          hadAccessToken = true;
-          http = retryHttp;
-          try {
-            const retryResult = await requestWithFallback({
-              http: retryHttp,
-              primaryPath,
-              fallbackPath,
-              params,
-              fetchOptions,
-            });
-            clearSessionSoftExpiredIfNeeded({
-              hadAccessToken: true,
-              accessToken: refreshedToken,
-            });
-            return retryResult;
-          } catch (retryErr) {
-            const retryStatus = (retryErr as any)?.statusCode ?? (retryErr as any)?.status;
-            if (
-              shouldMarkSessionSoftExpired({
-                status: retryStatus,
-                hadAccessToken: true,
-                accessToken: refreshedToken,
-                skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
-              })
-            ) {
-              markSessionSoftExpired(refreshedToken);
-            }
-            err = normalizeSdkError(retryErr, {
-              errorPrefix,
-              hadAccessToken: true,
-              accessToken: refreshedToken,
-              skipSessionExpiry: true,
-            });
-          }
-        } else if (
-          canSetSessionSoftExpired({
+        });
+        return result;
+      } catch (e) {
+        const errInput = e as any;
+        if (errInput?.name === "AbortError") throw e;
+        let err: any = null;
+        const status = errInput?.statusCode ?? errInput?.status;
+        if (
+          allowRefresh &&
+          shouldAttemptSessionRefresh({
+            status,
+            requestKind: normalizedRequestKind,
             hadAccessToken,
             accessToken: activeAccessToken,
-            skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
           })
         ) {
-          markSessionSoftExpired(activeAccessToken);
+          const refreshedSession = await refreshSessionOnce();
+          const refreshedToken = refreshedSession?.accessToken ?? null;
+          if (hasAccessTokenValue(refreshedToken)) {
+            const retryClient = createInsforgeClient({
+              baseUrl,
+              accessToken: refreshedToken,
+            });
+            const retryHttp = retryClient.getHttpClient();
+            activeAccessToken = refreshedToken;
+            hadAccessToken = true;
+            http = retryHttp;
+            try {
+              const retryResult = await requestWithFallback({
+                http: retryHttp,
+                primaryPath,
+                fallbackPath,
+                params,
+                fetchOptions,
+              });
+              clearSessionSoftExpiredIfNeeded({
+                hadAccessToken: true,
+                accessToken: refreshedToken,
+              });
+              return retryResult;
+            } catch (retryErr) {
+              const retryStatus = (retryErr as any)?.statusCode ?? (retryErr as any)?.status;
+              if (
+                shouldMarkSessionSoftExpired({
+                  status: retryStatus,
+                  hadAccessToken: true,
+                  accessToken: refreshedToken,
+                  skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
+                })
+              ) {
+                markSessionSoftExpired(refreshedToken);
+              }
+              err = normalizeSdkError(retryErr, {
+                errorPrefix,
+                hadAccessToken: true,
+                accessToken: refreshedToken,
+                skipSessionExpiry: true,
+              });
+            }
+          } else if (
+            canSetSessionSoftExpired({
+              hadAccessToken,
+              accessToken: activeAccessToken,
+              skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
+            })
+          ) {
+            markSessionSoftExpired(activeAccessToken);
+          }
+          err ??= normalizeSdkError(errInput, {
+            errorPrefix,
+            hadAccessToken,
+            accessToken: activeAccessToken,
+            skipSessionExpiry: true,
+          });
         }
         err ??= normalizeSdkError(errInput, {
           errorPrefix,
           hadAccessToken,
           accessToken: activeAccessToken,
-          skipSessionExpiry: true,
+          skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
         });
+        if (!shouldRetry({ err, attempt, retryOptions })) throw err;
+        const delayMs = computeRetryDelayMs({ retryOptions, attempt });
+        await sleep(delayMs);
+        attempt += 1;
       }
-      err ??= normalizeSdkError(errInput, {
-        errorPrefix,
-        hadAccessToken,
-        accessToken: activeAccessToken,
-        skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
-      });
-      if (!shouldRetry({ err, attempt, retryOptions })) throw err;
-      const delayMs = computeRetryDelayMs({ retryOptions, attempt });
-      await sleep(delayMs);
-      attempt += 1;
+    }
+  };
+
+  if (!requestKey) {
+    return await executeRequest();
+  }
+
+  const existing = inFlightGetRequests.get(requestKey);
+  if (existing) {
+    return await existing;
+  }
+
+  const pending = executeRequest();
+  inFlightGetRequests.set(requestKey, pending);
+  try {
+    return await pending;
+  } finally {
+    if (inFlightGetRequests.get(requestKey) === pending) {
+      inFlightGetRequests.delete(requestKey);
     }
   }
 }
@@ -703,6 +734,40 @@ function buildFunctionPaths(slug: any) {
   const primaryPath = `${normalizePrefix(FUNCTION_PREFIX)}/${normalized}`;
   const fallbackPath = `${normalizePrefix(LEGACY_FUNCTION_PREFIX)}/${normalized}`;
   return { primaryPath, fallbackPath };
+}
+
+function buildInFlightGetKey({
+  baseUrl,
+  accessToken,
+  primaryPath,
+  fallbackPath,
+  params,
+  requestKind,
+  fetchOptions,
+}: AnyRecord = {}) {
+  if (fetchOptions?.signal) return null;
+  const normalizedBaseUrl = typeof baseUrl === "string" ? baseUrl.trim() : "";
+  const normalizedToken = hasAccessTokenValue(accessToken) ? String(accessToken) : "";
+  const normalizedPrimaryPath = typeof primaryPath === "string" ? primaryPath : "";
+  const normalizedFallbackPath = typeof fallbackPath === "string" ? fallbackPath : "";
+  const normalizedRequestKind = typeof requestKind === "string" ? requestKind : REQUEST_KIND.business;
+  const normalizedParams = serializeRequestParams(params);
+  return [
+    normalizedBaseUrl,
+    normalizedToken,
+    normalizedRequestKind,
+    normalizedPrimaryPath,
+    normalizedFallbackPath,
+    normalizedParams,
+  ].join("::");
+}
+
+function serializeRequestParams(params: AnyRecord = {}) {
+  if (!params || typeof params !== "object") return "";
+  return Object.keys(params)
+    .sort()
+    .map((key) => `${key}=${String(params[key] ?? "")}`)
+    .join("&");
 }
 
 function normalizeFunctionSlug(slug: any) {

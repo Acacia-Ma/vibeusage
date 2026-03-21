@@ -77,6 +77,54 @@ describe("getUsageSummary", () => {
     const [, options] = http.get.mock.calls[0];
     expect(options?.params?.rolling).toBe("1");
   });
+
+  it("dedupes concurrent identical summary requests", async () => {
+    let resolveHttp: ((value: any) => void) | null = null;
+    const httpPromise = new Promise((resolve) => {
+      resolveHttp = resolve;
+    });
+    http.get.mockReturnValueOnce(httpPromise);
+
+    const first = api.getUsageSummary({ ...baseArgs, rolling: true });
+    const second = api.getUsageSummary({ ...baseArgs, rolling: true });
+
+    await vi.waitFor(() => expect(http.get).toHaveBeenCalledTimes(1));
+
+    resolveHttp?.({ totals: { total_tokens: "42" }, rolling: null });
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { totals: { total_tokens: "42" }, rolling: null },
+      { totals: { total_tokens: "42" }, rolling: null },
+    ]);
+    expect(http.get).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("getUsageModelBreakdown", () => {
+  const baseArgs = {
+    baseUrl: "https://example.com",
+    accessToken: "token",
+    from: "2024-04-01",
+    to: "2026-03-21",
+  };
+
+  it("dedupes concurrent identical model breakdown requests", async () => {
+    let resolveHttp: ((value: any) => void) | null = null;
+    const httpPromise = new Promise((resolve) => {
+      resolveHttp = resolve;
+    });
+    http.get.mockReturnValueOnce(httpPromise);
+
+    const first = api.getUsageModelBreakdown(baseArgs);
+    const second = api.getUsageModelBreakdown(baseArgs);
+
+    await vi.waitFor(() => expect(http.get).toHaveBeenCalledTimes(1));
+
+    resolveHttp?.({ sources: [] });
+
+    await expect(Promise.all([first, second])).resolves.toEqual([{ sources: [] }, { sources: [] }]);
+    expect(http.get).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("error normalization", () => {
