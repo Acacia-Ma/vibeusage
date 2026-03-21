@@ -24,7 +24,7 @@ import {
 } from "./lib/auth-storage";
 import { isLikelyExpiredAccessToken } from "./lib/auth-token";
 import { getInsforgeBaseUrl } from "./lib/config";
-import { insforgeAuthClient } from "./lib/insforge-auth-client";
+import { getCurrentInsforgeSession, insforgeAuthClient } from "./lib/insforge-auth-client";
 import { clearInsforgePersistentStorage } from "./lib/insforge-client";
 import { isMockEnabled } from "./lib/mock-data";
 import { fetchLatestTrackerVersion } from "./lib/npm-version";
@@ -108,11 +108,9 @@ export default function App() {
     }
     let active = true;
     const refreshSession = () => {
-      return insforgeAuthClient.auth
-        .getCurrentSession()
-        .then(({ data }) => {
+      return getCurrentInsforgeSession()
+        .then((session) => {
           if (!active) return;
-          const session = data?.session ?? null;
           setInsforgeSession(session);
 
           // Debug logging for mobile troubleshooting
@@ -172,15 +170,18 @@ export default function App() {
     const fallbackToken = !isLikelyExpiredAccessToken(insforgeSession?.accessToken)
       ? (insforgeSession?.accessToken ?? null)
       : null;
-    if (!insforgeSignedIn) {
+    if (fallbackToken) {
       return fallbackToken;
     }
-    const { data } = await insforgeAuthClient.auth.getCurrentSession();
-    const sessionToken = data?.session?.accessToken ?? null;
+    if (!insforgeSignedIn) {
+      return null;
+    }
+    const session = await getCurrentInsforgeSession();
+    const sessionToken = session?.accessToken ?? null;
     if (!isLikelyExpiredAccessToken(sessionToken)) {
       return sessionToken;
     }
-    return fallbackToken;
+    return null;
   }, [insforgeSession, insforgeSignedIn]);
 
   useEffect(() => {
@@ -193,9 +194,9 @@ export default function App() {
         return;
       }
       try {
-        const { data } = await insforgeAuthClient.auth.getCurrentSession();
+        const session = await getCurrentInsforgeSession();
         if (!active) return;
-        const nextToken = data?.session?.accessToken ?? null;
+        const nextToken = session?.accessToken ?? null;
         if (shouldClearSessionSoftExpiredForToken(nextToken)) {
           clearSessionSoftExpired();
           return;

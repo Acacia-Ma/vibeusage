@@ -27,6 +27,10 @@ vi.mock("../auth-storage", () => authStorage);
 
 vi.mock("../insforge-auth-client", () => ({
   insforgeAuthClient: authClient,
+  getCurrentInsforgeSession: vi.fn(async () => {
+    const { data } = await authClient.auth.getCurrentSession();
+    return data?.session ?? null;
+  }),
 }));
 
 vi.mock("../auth-token", () => ({
@@ -164,6 +168,61 @@ describe("request scheduling", () => {
       rolling: null,
     });
     await expect(breakdownPromise).resolves.toEqual({ sources: [] });
+  });
+
+  it("drops aborted queued GET requests before they consume the queue", async () => {
+    const resolvers: Array<(value: any) => void> = [];
+    http.get.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+
+    const first = api.getUsageSummary({
+      baseUrl: "https://example.com",
+      accessToken: "token",
+      from: "2024-04-01",
+      to: "2026-03-21",
+      rolling: true,
+    });
+
+    await vi.waitFor(() => expect(http.get).toHaveBeenCalledTimes(1));
+
+    const controller = new AbortController();
+    const second = api.getUsageModelBreakdown({
+      baseUrl: "https://example.com",
+      accessToken: "token",
+      from: "2024-04-01",
+      to: "2026-03-21",
+      signal: controller.signal,
+    });
+    const secondAssertion = expect(second).rejects.toMatchObject({ name: "AbortError" });
+
+    controller.abort();
+
+    const third = api.getProjectUsageSummary({
+      baseUrl: "https://example.com",
+      accessToken: "token",
+      from: "2024-04-01",
+      to: "2026-03-21",
+      limit: 3,
+    });
+
+    resolvers[0]?.({ totals: { total_tokens: "42" }, rolling: null });
+
+    await vi.waitFor(() => expect(http.get).toHaveBeenCalledTimes(2));
+
+    resolvers[1]?.({ entries: [{ project_key: "owner/repo" }] });
+
+    await expect(first).resolves.toEqual({
+      totals: { total_tokens: "42" },
+      rolling: null,
+    });
+    await secondAssertion;
+    await expect(third).resolves.toEqual({
+      entries: [{ project_key: "owner/repo" }],
+    });
   });
 });
 

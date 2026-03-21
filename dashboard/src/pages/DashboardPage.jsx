@@ -172,6 +172,7 @@ export function DashboardPage({
       return;
     }
     let active = true;
+    const controller = new AbortController();
     const resetLinkCode = () => {
       setLinkCode(null);
       setLinkCodeExpiresAt(null);
@@ -196,11 +197,13 @@ export function DashboardPage({
         const data = await requestInstallLinkCode({
           baseUrl,
           accessToken: resolvedToken,
+          signal: controller.signal,
         });
         if (!active) return;
         setLinkCode(typeof data?.link_code === "string" ? data.link_code : null);
         setLinkCodeExpiresAt(typeof data?.expires_at === "string" ? data.expires_at : null);
       } catch (err) {
+        if (controller.signal.aborted || err?.name === "AbortError") return;
         if (!active) return;
         setLinkCode(null);
         setLinkCodeExpiresAt(null);
@@ -212,6 +215,7 @@ export function DashboardPage({
     })();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [
     baseUrl,
@@ -241,6 +245,7 @@ export function DashboardPage({
       return;
     }
     let active = true;
+    const controller = new AbortController();
     setPublicViewLoading(true);
     (async () => {
       let resolvedToken = null;
@@ -276,6 +281,7 @@ export function DashboardPage({
     })();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [baseUrl, mockEnabled, signedIn, publicMode, authTokenReady, effectiveAuthToken]);
 
@@ -293,7 +299,8 @@ export function DashboardPage({
     setPublicProfileName(null);
     setPublicProfileAvatarUrl(null);
     let active = true;
-    getPublicViewProfile({ baseUrl, accessToken: publicToken })
+    const controller = new AbortController();
+    getPublicViewProfile({ baseUrl, accessToken: publicToken, signal: controller.signal })
       .then((data) => {
         if (!active) return;
         setPublicProfileName(typeof data?.display_name === "string" ? data.display_name : null);
@@ -306,6 +313,7 @@ export function DashboardPage({
       });
     return () => {
       active = false;
+      controller.abort();
     };
   }, [baseUrl, publicMode, publicToken]);
 
@@ -319,6 +327,7 @@ export function DashboardPage({
       return;
     }
     let active = true;
+    const controller = new AbortController();
     (async () => {
       let resolvedToken = null;
       try {
@@ -335,6 +344,7 @@ export function DashboardPage({
         const data = await getUserStatus({
           baseUrl,
           accessToken: resolvedToken,
+          signal: controller.signal,
         });
         if (!active) return;
         setUserStatus(data && typeof data === "object" ? data : null);
@@ -345,6 +355,7 @@ export function DashboardPage({
     })();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [authTokenReady, baseUrl, effectiveAuthToken, mockEnabled, publicMode, signedIn]);
 
@@ -1153,6 +1164,7 @@ export function DashboardPage({
         const data = await getPublicVisibility({
           baseUrl,
           accessToken: resolvedToken,
+          signal: controller.signal,
         });
         const token = typeof data?.share_token === "string" ? data.share_token : null;
         setPublicViewToken(token);

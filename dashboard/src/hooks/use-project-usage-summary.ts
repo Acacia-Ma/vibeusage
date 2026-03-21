@@ -19,7 +19,7 @@ export function useProjectUsageSummary({
   const mockEnabled = isMockEnabled();
   const tokenReady = isAccessTokenReady(accessToken);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async ({ signal }: any = {}) => {
     const resolvedToken = await resolveAuthAccessToken(accessToken);
     if (!resolvedToken && !mockEnabled) {
       setEntries([]);
@@ -27,6 +27,7 @@ export function useProjectUsageSummary({
       setLoading(false);
       return;
     }
+    if (signal?.aborted) return;
     setLoading(true);
     setError(null);
     try {
@@ -39,13 +40,17 @@ export function useProjectUsageSummary({
         source,
         timeZone,
         tzOffsetMinutes,
+        signal,
       });
+      if (signal?.aborted) return;
       setEntries(Array.isArray(res?.entries) ? res.entries : []);
     } catch (err) {
+      if (signal?.aborted || (err as any)?.name === "AbortError") return;
       const message = (err as any)?.message || String(err);
       setError(message);
       setEntries([]);
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, [accessToken, baseUrl, from, limit, mockEnabled, source, timeZone, to, tzOffsetMinutes]);
@@ -57,7 +62,11 @@ export function useProjectUsageSummary({
       setLoading(false);
       return;
     }
-    refresh();
+    const controller = new AbortController();
+    refresh({ signal: controller.signal });
+    return () => {
+      controller.abort();
+    };
   }, [mockEnabled, refresh, tokenReady]);
 
   return { entries, loading, error, refresh };

@@ -72,9 +72,10 @@ export function useActivityHeatmap({
     }
   }, [storageKey]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async ({ signal }: any = {}) => {
     const resolvedToken = await resolveAuthAccessToken(accessToken);
     if (!resolvedToken && !mockEnabled) return;
+    if (signal?.aborted) return;
     setLoading(true);
     setError(null);
     try {
@@ -87,7 +88,9 @@ export function useActivityHeatmap({
           weekStartsOn,
           timeZone,
           tzOffsetMinutes,
+          signal,
         });
+        if (signal?.aborted) return;
         const weeksData = Array.isArray(res?.weeks) ? res.weeks : [];
         if (!weeksData.length && cacheAllowed) {
           const cached = readCache();
@@ -183,7 +186,9 @@ export function useActivityHeatmap({
         to: range.to,
         timeZone,
         tzOffsetMinutes,
+        signal,
       });
+      if (signal?.aborted) return;
       const rows = Array.isArray(dailyRes?.data) ? dailyRes.data : [];
       setDaily(rows);
       const localHeatmap = buildActivityHeatmap({
@@ -218,6 +223,7 @@ export function useActivityHeatmap({
         clearCache();
       }
     } catch (e) {
+      if (signal?.aborted || (e as any)?.name === "AbortError") return;
       if (cacheAllowed) {
         const cached = readCache();
         if (cached?.heatmap) {
@@ -240,6 +246,7 @@ export function useActivityHeatmap({
         setSource("edge");
       }
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, [
@@ -283,7 +290,11 @@ export function useActivityHeatmap({
         setSource("cache");
       }
     }
-    refresh();
+    const controller = new AbortController();
+    refresh({ signal: controller.signal });
+    return () => {
+      controller.abort();
+    };
   }, [
     accessToken,
     mockEnabled,

@@ -70,9 +70,10 @@ export function useUsageData({
     }
   }, [storageKey]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async ({ signal }: any = {}) => {
     const resolvedToken = await resolveAuthAccessToken(accessToken);
     if (!resolvedToken && !mockEnabled) return;
+    if (signal?.aborted) return;
     setLoading(true);
     setError(null);
     try {
@@ -87,6 +88,7 @@ export function useUsageData({
             to,
             timeZone,
             tzOffsetMinutes,
+            signal,
           }),
           getUsageSummary({
             baseUrl,
@@ -95,9 +97,11 @@ export function useUsageData({
             to,
             timeZone,
             tzOffsetMinutes,
+            signal,
             rolling: true,
           }),
         ]);
+        if (signal?.aborted) return;
         if (dailyResult.status === "rejected") throw dailyResult.reason;
         dailyRes = dailyResult.value;
         summaryRes = summaryResult.status === "fulfilled" ? summaryResult.value : null;
@@ -109,6 +113,7 @@ export function useUsageData({
           to,
           timeZone,
           tzOffsetMinutes,
+          signal,
           rolling: true,
         });
       }
@@ -132,6 +137,7 @@ export function useUsageData({
             to,
             timeZone,
             tzOffsetMinutes,
+            signal,
             rolling: true,
           });
           nextSummary = fallback?.totals || null;
@@ -141,6 +147,7 @@ export function useUsageData({
         }
       }
       const nowIso = new Date().toISOString();
+      if (signal?.aborted) return;
 
       setDaily(nextDaily);
       setSummary(nextSummary);
@@ -162,6 +169,7 @@ export function useUsageData({
         clearCache();
       }
     } catch (e) {
+      if (signal?.aborted || (e as any)?.name === "AbortError") return;
       if (cacheAllowed) {
         const cached = readCache();
         if (cached?.summary) {
@@ -198,6 +206,7 @@ export function useUsageData({
         setFetchedAt(null);
       }
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, [
@@ -255,7 +264,11 @@ export function useUsageData({
         setFetchedAt(cached.fetchedAt || null);
       }
     }
-    refresh();
+    const controller = new AbortController();
+    refresh({ signal: controller.signal });
+    return () => {
+      controller.abort();
+    };
   }, [
     accessToken,
     mockEnabled,

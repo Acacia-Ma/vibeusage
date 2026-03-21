@@ -63,9 +63,10 @@ export function useUsageModelBreakdown({
     }
   }, [storageKey]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async ({ signal }: any = {}) => {
     const resolvedToken = await resolveAuthAccessToken(accessToken);
     if (!resolvedToken && !mockEnabled) return;
+    if (signal?.aborted) return;
     setLoading(true);
     setError(null);
     try {
@@ -76,7 +77,9 @@ export function useUsageModelBreakdown({
         to,
         timeZone,
         tzOffsetMinutes,
+        signal,
       });
+      if (signal?.aborted) return;
       setBreakdown(res || null);
       setSource("edge");
       if (res && cacheAllowed) {
@@ -85,6 +88,7 @@ export function useUsageModelBreakdown({
         clearCache();
       }
     } catch (e) {
+      if (signal?.aborted || (e as any)?.name === "AbortError") return;
       if (cacheAllowed) {
         const cached = readCache();
         if (cached?.breakdown) {
@@ -104,6 +108,7 @@ export function useUsageModelBreakdown({
         setError(err?.message || String(err));
       }
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, [
@@ -142,7 +147,11 @@ export function useUsageModelBreakdown({
         setSource("cache");
       }
     }
-    refresh();
+    const controller = new AbortController();
+    refresh({ signal: controller.signal });
+    return () => {
+      controller.abort();
+    };
   }, [
     accessToken,
     mockEnabled,
