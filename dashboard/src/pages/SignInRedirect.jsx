@@ -6,13 +6,7 @@ import {
   stripNextParam,
   stripRedirectParam,
 } from "../lib/auth-redirect";
-import {
-  clearAuthStorage,
-  clearSessionExpired,
-  clearSessionSoftExpired,
-} from "../lib/auth-storage";
-import { insforgeAuthClient } from "../lib/insforge-auth-client";
-import { clearInsforgePersistentStorage } from "../lib/insforge-client";
+import { startGithubOAuthRedirect } from "../lib/oauth-redirect-init";
 
 function buildCallbackUrl() {
   if (typeof window === "undefined") return "/auth/callback";
@@ -40,27 +34,9 @@ export function SignInRedirect() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    let active = true;
-
     const run = async () => {
       try {
-        // Force a clean auth state so stale mobile sessions cannot short-circuit
-        // OAuth and bounce back to a useless dashboard.
-        await insforgeAuthClient.auth.signOut().catch(() => {});
-        clearInsforgePersistentStorage();
-        clearAuthStorage();
-        clearSessionExpired();
-        clearSessionSoftExpired();
-
-        const { error } = await insforgeAuthClient.auth.signInWithOAuth({
-          provider: "github",
-          redirectTo: callbackUrl,
-        });
-        if (error) {
-          // eslint-disable-next-line no-console
-          console.error("OAuth init failed:", error);
-          navigate("/", { replace: true });
-        }
+        await startGithubOAuthRedirect({ callbackUrl });
       } catch (error) {
         // eslint-disable-next-line no-console
         console.error("Sign-in redirect failed:", error);
@@ -69,9 +45,6 @@ export function SignInRedirect() {
     };
 
     run();
-    return () => {
-      active = false;
-    };
   }, [callbackUrl, navigate]);
 
   return <div className="min-h-screen bg-matrix-dark" />;
