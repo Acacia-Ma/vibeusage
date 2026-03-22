@@ -142,7 +142,7 @@ Once `init` completes, all supported CLI tools are automatically configured for 
 | **Gemini CLI** | `~/.gemini/settings.json` (or `GEMINI_HOME`) | `SessionEnd` hook |
 | **Opencode** | Global plugins | Message parser plugin |
 | **Claude Code** | `~/.claude/hooks/` | Hook configuration |
-| **OpenClaw** | Auto-links when installed | Gateway hook (requires restart) |
+| **OpenClaw** | Auto-links when installed | Session plugin (requires restart) |
 
 No further intervention required! 🎉
 
@@ -204,7 +204,7 @@ graph LR
     C[Gemini CLI] -->|Session Logs| G
     D[Opencode] -->|Message Logs| G
     E[Claude Code] -->|Hook Output| G
-    F[OpenClaw] -->|Gateway Hook| G
+    F[OpenClaw] -->|Session Plugin| G
     G -->|AI Tokens| H{Core Relay}
     H --> I[VibeUsage Dashboard]
     H --> J[AI Analytics Engine]
@@ -245,7 +245,7 @@ graph LR
 | **Gemini CLI** | `~/.gemini/tmp/**/chats/session-*.json` | `GEMINI_HOME` |
 | **Opencode** | `~/.opencode/messages/*.json` | - |
 | **Claude Code** | Parsed from hook output | - |
-| **OpenClaw** | Gateway hook integration | - |
+| **OpenClaw** | Session plugin integration | - |
 
 ## ⚙️ Configuration
 
