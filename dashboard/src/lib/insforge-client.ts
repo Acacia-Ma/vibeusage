@@ -342,7 +342,10 @@ export function createInsforgeAuthClient() {
   return client;
 }
 
-function persistSessionToStorage(client: InsforgeClientBridgeLike, session: InsforgeSessionLike) {
+export function persistInsforgeSession(
+  client: InsforgeClientBridgeLike,
+  session: InsforgeSessionLike,
+) {
   if (!session?.accessToken) return;
   const tokenManager = getTokenManager(client);
   if (!tokenManager || typeof tokenManager.saveSession !== "function") return;
@@ -363,7 +366,7 @@ export function installSessionPersistenceBridge(client: InsforgeClientBridgeLike
   const originalGetCurrentSession = auth.getCurrentSession.bind(auth);
   auth.getCurrentSession = async (...args: unknown[]) => {
     const result = await originalGetCurrentSession(...args);
-    persistSessionToStorage(client, result?.data?.session ?? null);
+    persistInsforgeSession(client, result?.data?.session ?? null);
     return result;
   };
 
@@ -378,7 +381,7 @@ export function forceStorageMode(client: InsforgeClientBridgeLike) {
     }
     tokenManager.setStorageMode();
     if (typeof tokenManager.getSession === "function") {
-      persistSessionToStorage(client, tokenManager.getSession());
+      persistInsforgeSession(client, tokenManager.getSession());
     }
   } catch (_e) {
     // ignore SDK internals mismatch
