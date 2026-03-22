@@ -55,7 +55,7 @@ VibeUsage 会自动检测并配置以下客户端：
 | Gemini CLI | ~/.gemini/settings.json |
 | OpenCode | 全局插件 |
 | Claude Code | ~/.claude/hooks/ |
-| OpenClaw | Gateway hook |
+| OpenClaw | Session plugin |
 
 ## 常用命令
 
