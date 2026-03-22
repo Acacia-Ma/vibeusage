@@ -3,8 +3,11 @@ import { safeGetItem, safeRemoveItem, safeSetItem } from "./safe-browser";
 const VERSION_CACHE_KEY = "vibeusage.latest_tracker_version";
 const VERSION_CACHE_AT_KEY = "vibeusage.latest_tracker_version_at";
 const VERSION_FAILURE_AT_KEY = "vibeusage.latest_tracker_version_failure_at";
+const VERSION_IN_FLIGHT_AT_KEY = "vibeusage.latest_tracker_version_in_flight_at";
 const VERSION_TTL_MS = 6 * 60 * 60 * 1000;
 const VERSION_FAILURE_TTL_MS = 60 * 1000;
+const VERSION_IN_FLIGHT_TTL_MS = 3_000;
+const VERSION_IN_FLIGHT_POLL_MS = 100;
 const REGISTRY_URL = "https://registry.npmjs.org/vibeusage/latest";
 
 let versionRequestInFlight: Promise<string | null> | null = null;
@@ -45,6 +48,21 @@ function markFailedVersionFetch(nowMs: number) {
   safeSetItem(VERSION_FAILURE_AT_KEY, String(nowMs));
 }
 
+function hasFreshVersionFetchInFlight(nowMs: number) {
+  const inFlightAtRaw = safeGetItem(VERSION_IN_FLIGHT_AT_KEY);
+  const inFlightAt = Number(inFlightAtRaw);
+  if (!Number.isFinite(inFlightAt)) return false;
+  return nowMs - inFlightAt <= VERSION_IN_FLIGHT_TTL_MS;
+}
+
+function markVersionFetchInFlight(nowMs: number) {
+  safeSetItem(VERSION_IN_FLIGHT_AT_KEY, String(nowMs));
+}
+
+function clearVersionFetchInFlight() {
+  safeRemoveItem(VERSION_IN_FLIGHT_AT_KEY);
+}
+
 export async function fetchLatestTrackerVersion({ allowStale = true } = {}) {
   const nowMs = Date.now();
   const cached = readCachedVersion(nowMs);
@@ -60,6 +78,10 @@ export async function fetchLatestTrackerVersion({ allowStale = true } = {}) {
   if (versionRequestInFlight) {
     return versionRequestInFlight;
   }
+  if (hasFreshVersionFetchInFlight(nowMs)) {
+    return await waitForSharedVersionResult({ allowStale, timeoutMs: VERSION_IN_FLIGHT_TTL_MS });
+  }
+  markVersionFetchInFlight(nowMs);
 
   versionRequestInFlight = (async () => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -96,9 +118,35 @@ export async function fetchLatestTrackerVersion({ allowStale = true } = {}) {
       return allowStale ? readStaleVersion() : null;
     } finally {
       if (timeoutId) clearTimeoutFn(timeoutId);
+      clearVersionFetchInFlight();
       versionRequestInFlight = null;
     }
   })();
 
   return versionRequestInFlight;
+}
+
+async function waitForSharedVersionResult({
+  allowStale,
+  timeoutMs,
+}: {
+  allowStale: boolean;
+  timeoutMs: number;
+}) {
+  const deadline = Date.now() + Math.max(VERSION_IN_FLIGHT_POLL_MS, timeoutMs);
+  while (Date.now() <= deadline) {
+    const cached = readCachedVersion(Date.now());
+    if (cached) return cached;
+    if (hasFreshFailure(Date.now())) {
+      return allowStale ? readStaleVersion() : null;
+    }
+    if (!hasFreshVersionFetchInFlight(Date.now())) break;
+    await sleep(VERSION_IN_FLIGHT_POLL_MS);
+  }
+  return allowStale ? readStaleVersion() : null;
+}
+
+function sleep(ms: number) {
+  if (!ms || ms <= 0) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
