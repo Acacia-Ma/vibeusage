@@ -6855,7 +6855,7 @@
     {
       "id": "utils_insforge-auth-client_160e321e",
       "type": "text",
-      "text": "**insforge-auth-client**\n`dashboard/src/lib/insforge-auth-client.ts`\n\nShared utilities.\n\n包含：\n- insforge-auth-client (18 行)\n- getCurrentInsforgeSession (0 个参数)\n\n依赖：0 个模块\n被依赖：1 次",
+      "text": "**insforge-auth-client**\n`dashboard/src/lib/insforge-auth-client.ts`\n\nShared utilities.\n\n包含：\n- insforge-auth-client (68 行)\n- normalizeName (1 个参数)\n\n依赖：0 个模块\n被依赖：1 次",
       "x": 3340,
       "y": 1712,
       "width": 280,
@@ -6872,7 +6872,7 @@
     {
       "id": "utils_insforge-client_8b24659b",
       "type": "text",
-      "text": "**insforge-client**\n`dashboard/src/lib/insforge-client.ts`\n\nShared utilities.\n\n包含：\n- insforge-client (387 行)\n- getTokenManager (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**insforge-client**\n`dashboard/src/lib/insforge-client.ts`\n\nShared utilities.\n\n包含：\n- insforge-client (390 行)\n- getTokenManager (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 3700,
       "y": 1712,
       "width": 280,
@@ -7144,7 +7144,7 @@
     {
       "id": "test_insforge-auth-client_test_b9f51e6c",
       "type": "text",
-      "text": "**insforge-auth-client.test**\n`dashboard/src/lib/__tests__/insforge-auth-client.test.ts`\n\nTest module.\n\n包含：\n- insforge-auth-client.test (54 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**insforge-auth-client.test**\n`dashboard/src/lib/__tests__/insforge-auth-client.test.ts`\n\nTest module.\n\n包含：\n- insforge-auth-client.test (102 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 2620,
       "y": 992,
       "width": 280,
