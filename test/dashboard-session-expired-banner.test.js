@@ -79,14 +79,15 @@ test("App keeps auth while session is soft-expired", () => {
 
 test("App provides InsForge access token resolver", () => {
   const src = read("dashboard/src/App.jsx");
-  assert.match(src, /getCurrentSession/);
+  assert.match(src, /getCurrentInsforgeSession/);
   assert.match(src, /getAccessToken/);
 });
 
-test("App prefers InsForge profile name for identity", () => {
+test("App resolves current identity from backend profile", () => {
   const src = read("dashboard/src/App.jsx");
-  assert.match(src, /profile\?\.name/);
-  assert.match(src, /user\?\.name/);
+  assert.match(src, /resolveCurrentIdentity/);
+  assert.match(src, /currentIdentity/);
+  assert.doesNotMatch(src, /name:\s*displayName/);
 });
 
 test("App subscribes to sessionSoftExpired state", () => {
@@ -122,13 +123,13 @@ test("App registers visibility revalidate for soft-expired sessions", () => {
   const src = read("dashboard/src/App.jsx");
   assert.match(src, /visibilitychange/);
   assert.match(src, /sessionSoftExpired/);
-  assert.match(src, /getCurrentSession/);
+  assert.match(src, /getCurrentInsforgeSession/);
 });
 
 test("App probes backend to clear same-token soft-expired sessions", () => {
   const src = read("dashboard/src/App.jsx");
   assert.match(src, /probeBackend/);
-  assert.match(src, /const nextToken = data\?\.session\?\.accessToken \?\? null;/);
+  assert.match(src, /const nextToken = session\?\.accessToken \?\? null;/);
   assert.match(src, /if \(shouldClearSessionSoftExpiredForToken\(nextToken\)\) \{/);
   assert.match(src, /if \(!nextToken \|\| isLikelyExpiredAccessToken\(nextToken\)\) \{/);
   assert.match(src, /await probeBackend\(\{\s*baseUrl,\s*accessToken:\s*nextToken\s*\}\)/);
