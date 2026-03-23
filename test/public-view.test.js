@@ -152,7 +152,7 @@ test("public view clears profile state before fetching new token", () => {
   const src = read("dashboard/src/pages/DashboardPage.jsx");
   assert.match(
     src,
-    /if\s*\(!publicToken\)\s*\{[\s\S]*?\}\s*setPublicProfileName\(null\);\s*setPublicProfileAvatarUrl\(null\);\s*let active = true;\s*getPublicViewProfile/s,
+    /if\s*\(!publicToken\)\s*\{[\s\S]*?\}\s*setPublicProfileName\(null\);\s*setPublicProfileAvatarUrl\(null\);\s*let active = true;\s*const controller = new AbortController\(\);\s*getPublicViewProfile/s,
   );
 });
 

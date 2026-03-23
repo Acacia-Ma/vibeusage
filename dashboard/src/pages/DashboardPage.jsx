@@ -97,6 +97,7 @@ function isForceInstallEnabled() {
 export function DashboardPage({
   baseUrl,
   auth,
+  currentIdentity,
   signedIn,
   sessionSoftExpired,
   signOut,
@@ -725,13 +726,14 @@ export function DashboardPage({
     return /unauthorized|invalid|token|revoked|401/i.test(message);
   }, [publicMode, usageError]);
   const identityRawName = useMemo(() => {
-    if (typeof auth?.name !== "string") return "";
-    return auth.name.trim();
-  }, [auth?.name]);
+    if (typeof currentIdentity?.displayName !== "string") return "";
+    return currentIdentity.displayName.trim();
+  }, [currentIdentity?.displayName]);
   const publicIdentityName = useMemo(() => {
     if (typeof publicProfileName !== "string") return "";
     return publicProfileName.trim();
   }, [publicProfileName]);
+  const identityPending = !publicMode && signedIn && currentIdentity === undefined;
 
   const identityLabel = useMemo(() => {
     if (!identityRawName || identityRawName.includes("@")) {
@@ -748,8 +750,11 @@ export function DashboardPage({
     if (publicMode) {
       return publicIdentityName || copy("dashboard.identity.fallback");
     }
+    if (identityPending) {
+      return copy("shared.placeholder.short");
+    }
     return identityHandle;
-  }, [identityHandle, publicIdentityName, publicMode]);
+  }, [identityHandle, identityPending, publicIdentityName, publicMode]);
   const identityStartDate = useMemo(() => {
     let earliest = null;
 

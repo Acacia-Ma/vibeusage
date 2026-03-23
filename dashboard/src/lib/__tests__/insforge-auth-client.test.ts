@@ -57,7 +57,7 @@ describe("getCurrentInsforgeSession", () => {
     ]);
   });
 
-  it("hydrates missing identity from profile when session name is absent", async () => {
+  it("returns the raw session without profile hydration", async () => {
     authClient.auth.getCurrentSession.mockResolvedValueOnce({
       data: {
         session: {
@@ -65,17 +65,10 @@ describe("getCurrentInsforgeSession", () => {
           user: {
             id: "u2",
             email: "neo@example.com",
-            profile: null,
+            profile: {
+              name: "",
+            },
           },
-        },
-      },
-    });
-    authClient.auth.getProfile.mockResolvedValueOnce({
-      data: {
-        id: "u2",
-        profile: {
-          name: "Neo",
-          avatar_url: "https://example.com/neo.png",
         },
       },
     });
@@ -88,14 +81,12 @@ describe("getCurrentInsforgeSession", () => {
         id: "u2",
         email: "neo@example.com",
         profile: {
-          name: "Neo",
-          avatar_url: "https://example.com/neo.png",
+          name: "",
         },
-        name: "Neo",
       },
     });
 
-    expect(authClient.auth.getProfile).toHaveBeenCalledWith("u2");
-    expect(persistInsforgeSession).toHaveBeenCalledTimes(1);
+    expect(authClient.auth.getProfile).not.toHaveBeenCalled();
+    expect(persistInsforgeSession).not.toHaveBeenCalled();
   });
 });

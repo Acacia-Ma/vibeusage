@@ -45,7 +45,7 @@ test("buildRedirectUrl preserves existing query params", async () => {
   assert.equal(parsed.searchParams.get("access_token"), "token");
   assert.equal(parsed.searchParams.get("user_id"), "user-1");
   assert.equal(parsed.searchParams.get("email"), "user@example.com");
-  assert.equal(parsed.searchParams.get("name"), "User");
+  assert.equal(parsed.searchParams.get("name"), null);
 });
 
 test("stored redirect is consumed once", async () => {
