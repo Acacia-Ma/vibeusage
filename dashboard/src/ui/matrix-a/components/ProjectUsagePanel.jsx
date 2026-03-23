@@ -76,6 +76,7 @@ export function ProjectUsagePanel({
   const tokensLabel = copy("dashboard.projects.tokens_label");
   const starsLabel = copy("dashboard.projects.stars_label");
   const emptyLabel = copy("dashboard.projects.empty");
+  const errorLabel = copy("backend.meta.error_label");
   const limitLabel = copy("dashboard.projects.limit_label");
   const limitAria = copy("dashboard.projects.limit_aria");
   const optionLabels = {
@@ -163,7 +164,16 @@ export function ProjectUsagePanel({
 
       {displayEntries.length === 0 ? (
         <div className="text-caption text-matrix-muted uppercase tracking-[0.2em]">
-          {loading ? placeholder : error ? placeholder : emptyLabel}
+          {loading ? (
+            placeholder
+          ) : error ? (
+            <>
+              <span>{errorLabel}:</span>{" "}
+              <span className="normal-case tracking-normal">{error}</span>
+            </>
+          ) : (
+            emptyLabel
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
