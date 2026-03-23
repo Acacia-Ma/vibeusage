@@ -1,7 +1,7 @@
 import { clearSessionSoftExpired, markSessionSoftExpired } from "./auth-storage";
 import { normalizeAccessToken, resolveAuthAccessToken } from "./auth-token";
 import { formatDateLocal } from "./date-range";
-import { insforgeAuthClient } from "./insforge-auth-client";
+import { refreshInsforgeSession } from "./insforge-auth-client";
 import { createInsforgeClient } from "./insforge-client";
 import {
   getMockUsageDaily,
@@ -41,7 +41,6 @@ const REQUEST_KIND = {
 };
 type AnyRecord = Record<string, any>;
 
-let refreshInFlight: Promise<any> | null = null;
 const inFlightGetRequests = new Map<string, Promise<any>>();
 const queuedFunctionRequests: Array<() => void> = [];
 let activeFunctionRequests = 0;
@@ -510,6 +509,8 @@ async function requestJson({
           allowRefresh &&
           shouldAttemptSessionRefresh({
             status,
+            message: errInput?.message,
+            error: errInput?.error,
             requestKind: normalizedRequestKind,
             hadAccessToken,
             accessToken: activeAccessToken,
@@ -542,8 +543,10 @@ async function requestJson({
             } catch (retryErr) {
               const retryStatus = (retryErr as any)?.statusCode ?? (retryErr as any)?.status;
               if (
-                shouldMarkSessionSoftExpired({
+                shouldMarkSessionSoftExpiredAfterRefreshFailure({
                   status: retryStatus,
+                  message: (retryErr as any)?.message,
+                  error: (retryErr as any)?.error,
                   hadAccessToken: true,
                   accessToken: refreshedToken,
                   skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
@@ -655,6 +658,8 @@ async function requestPostJson({
           allowRefresh &&
           shouldAttemptSessionRefresh({
             status,
+            message: errInput?.message,
+            error: errInput?.error,
             requestKind: normalizedRequestKind,
             hadAccessToken,
             accessToken: activeAccessToken,
@@ -687,8 +692,10 @@ async function requestPostJson({
             } catch (retryErr) {
               const retryStatus = (retryErr as any)?.statusCode ?? (retryErr as any)?.status;
               if (
-                shouldMarkSessionSoftExpired({
+                shouldMarkSessionSoftExpiredAfterRefreshFailure({
                   status: retryStatus,
+                  message: (retryErr as any)?.message,
+                  error: (retryErr as any)?.error,
                   hadAccessToken: true,
                   accessToken: refreshedToken,
                   skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
@@ -879,6 +886,8 @@ function normalizeSdkError(
   if (
     shouldMarkSessionSoftExpired({
       status,
+      message: rawMessage,
+      error: rawError,
       hadAccessToken,
       accessToken,
       skipSessionExpiry,
@@ -910,11 +919,25 @@ function canSetSessionSoftExpired({
 
 function shouldMarkSessionSoftExpired({
   status,
+  message,
+  error,
   hadAccessToken,
   accessToken,
   skipSessionExpiry,
 }: AnyRecord = {}) {
   if (status !== 401) return false;
+  return canSetSessionSoftExpired({ hadAccessToken, accessToken, skipSessionExpiry });
+}
+
+function shouldMarkSessionSoftExpiredAfterRefreshFailure({
+  status,
+  message,
+  error,
+  hadAccessToken,
+  accessToken,
+  skipSessionExpiry,
+}: AnyRecord = {}) {
+  if (!isSessionAuthFailure({ status, message, error })) return false;
   return canSetSessionSoftExpired({ hadAccessToken, accessToken, skipSessionExpiry });
 }
 
@@ -945,25 +968,27 @@ function isBackendRuntimeDownMessage(message: any) {
 
 function shouldAttemptSessionRefresh({
   status,
+  message,
+  error,
   requestKind,
   hadAccessToken,
   accessToken,
 }: AnyRecord = {}) {
-  if (status !== 401) return false;
+  if (!isSessionAuthFailure({ status, message, error })) return false;
   if (requestKind !== REQUEST_KIND.business) return false;
   return canSetSessionSoftExpired({ hadAccessToken, accessToken });
 }
 
 async function refreshSessionOnce() {
-  if (refreshInFlight) return refreshInFlight;
-  refreshInFlight = insforgeAuthClient.auth
-    .getCurrentSession()
-    .then(({ data }: AnyRecord) => data?.session ?? null)
-    .catch(() => null)
-    .finally(() => {
-      refreshInFlight = null;
-    });
-  return refreshInFlight;
+  return await refreshInsforgeSession();
+}
+
+function isSessionAuthFailure({ status, message, error }: AnyRecord = {}) {
+  if (status === 401) return true;
+  if (status !== 500) return false;
+  const raw = `${message || ""} ${error || ""}`.toLowerCase();
+  if (!raw) return false;
+  return raw.includes("jwsinvalidsignature") || raw.includes("invalid signature");
 }
 
 function isRetryableStatus(status: any) {
