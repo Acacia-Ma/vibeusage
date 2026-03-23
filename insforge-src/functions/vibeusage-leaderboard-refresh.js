@@ -10,6 +10,7 @@ const { getAnonKey, getBaseUrl, getServiceRoleKey } = require("../shared/env");
 const { toUtcDay, addUtcDays, formatDateUTC } = require("../shared/date");
 const { forEachPage } = require("../shared/pagination");
 const { toBigInt, toPositiveInt } = require("../shared/numbers");
+const { resolveUserIdentity } = require("../shared/user-identity");
 
 const PERIODS = ["week", "month"];
 const SOURCE_PAGE_SIZE = 1000;
@@ -201,8 +202,7 @@ async function loadPublicProfileLookup({ serviceClient, userIds }) {
     for (const userId of uniqueUserIds) {
       const row = usersMap.get(userId) || null;
       const isPublic = hasActiveLink.has(userId);
-      const displayName = resolveDisplayName(row);
-      const avatarUrl = resolveAvatarUrl(row);
+      const { displayName, avatarUrl } = resolveUserIdentity(row);
 
       lookup.set(userId, {
         isPublic,
@@ -279,56 +279,6 @@ function resolveOtherTokens({ row, totalTokens, gptTokens, claudeTokens }) {
   return derived > 0n ? derived : 0n;
 }
 
-function resolveDisplayName(row) {
-  const profile = isObject(row?.profile) ? row.profile : null;
-  const metadata = isObject(row?.metadata) ? row.metadata : null;
-
-  return (
-    sanitizeName(row?.nickname) ||
-    sanitizeName(profile?.name) ||
-    sanitizeName(profile?.full_name) ||
-    sanitizeName(metadata?.full_name) ||
-    sanitizeName(metadata?.name) ||
-    null
-  );
-}
-
-function resolveAvatarUrl(row) {
-  const profile = isObject(row?.profile) ? row.profile : null;
-  const metadata = isObject(row?.metadata) ? row.metadata : null;
-
-  return (
-    sanitizeAvatarUrl(row?.avatar_url) ||
-    sanitizeAvatarUrl(profile?.avatar_url) ||
-    sanitizeAvatarUrl(metadata?.avatar_url) ||
-    sanitizeAvatarUrl(metadata?.picture) ||
-    null
-  );
-}
-
-function sanitizeName(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  if (trimmed.includes("@")) return null;
-  if (trimmed.length > 128) return trimmed.slice(0, 128);
-  return trimmed;
-}
-
-function sanitizeAvatarUrl(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  if (trimmed.length > 1024) return null;
-  try {
-    const url = new URL(trimmed);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-    return url.toString();
-  } catch (_e) {
-    return null;
-  }
-}
-
 function normalizeDisplayName(value) {
   if (typeof value !== "string") return "Anonymous";
   const trimmed = value.trim();
@@ -339,10 +289,6 @@ function normalizeAvatarUrl(value) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
-}
-
-function isObject(value) {
-  return Boolean(value && typeof value === "object");
 }
 
 function chunkRows(rows, size) {

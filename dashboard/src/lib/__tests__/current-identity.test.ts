@@ -1,30 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const authClient = vi.hoisted(() => ({
-  auth: {
-    getProfile: vi.fn(),
-  },
+const api = vi.hoisted(() => ({
+  getViewerIdentity: vi.fn(),
 }));
 
-vi.mock("../insforge-auth-client", () => ({
-  insforgeAuthClient: authClient,
+vi.mock("../vibeusage-api", () => ({
+  getViewerIdentity: api.getViewerIdentity,
 }));
 
 describe("resolveCurrentIdentity", () => {
   beforeEach(() => {
     vi.resetModules();
-    authClient.auth.getProfile.mockReset();
+    api.getViewerIdentity.mockReset();
   });
 
-  it("resolves identity from profile instead of stale session name", async () => {
-    authClient.auth.getProfile.mockResolvedValueOnce({
-      data: {
-        id: "u1",
-        profile: {
-          name: "Neo Prime",
-          avatar_url: "https://example.com/neo.png",
-        },
-      },
+  it("resolves identity from viewer identity instead of stale session name", async () => {
+    api.getViewerIdentity.mockResolvedValueOnce({
+      user_id: "u1",
+      display_name: "Neo Prime",
+      avatar_url: "https://example.com/neo.png",
     });
 
     const mod = await import("../current-identity");
@@ -47,14 +41,11 @@ describe("resolveCurrentIdentity", () => {
     });
   });
 
-  it("returns anonymous identity when profile name is missing", async () => {
-    authClient.auth.getProfile.mockResolvedValueOnce({
-      data: {
-        id: "u2",
-        profile: {
-          avatar_url: "https://example.com/ghost.png",
-        },
-      },
+  it("preserves null display name when viewer identity is anonymous", async () => {
+    api.getViewerIdentity.mockResolvedValueOnce({
+      user_id: "u2",
+      display_name: null,
+      avatar_url: "https://example.com/ghost.png",
     });
 
     const mod = await import("../current-identity");
@@ -83,6 +74,32 @@ describe("resolveCurrentIdentity", () => {
       }),
     ).resolves.toBeNull();
 
-    expect(authClient.auth.getProfile).not.toHaveBeenCalled();
+    expect(api.getViewerIdentity).not.toHaveBeenCalled();
+  });
+
+  it("uses viewer identity even when only metadata full_name exists upstream", async () => {
+    api.getViewerIdentity.mockResolvedValueOnce({
+      user_id: "u3",
+      display_name: "Meta Neo",
+      avatar_url: null,
+    });
+
+    const mod = await import("../current-identity");
+
+    await expect(
+      mod.resolveCurrentIdentity({
+        accessToken: "token-3",
+        user: {
+          id: "u3",
+          profile: {
+            name: "",
+          },
+        },
+      }),
+    ).resolves.toEqual({
+      userId: "u3",
+      displayName: "Meta Neo",
+      avatarUrl: null,
+    });
   });
 });

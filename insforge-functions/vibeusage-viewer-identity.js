@@ -88,7 +88,7 @@ var require_public_view = __commonJS({
     "use strict";
     var { getAnonKey, getServiceRoleKey } = require_env();
     var PUBLIC_USER_TOKEN_RE = /^pv1-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
-    async function resolvePublicView2({ baseUrl, shareToken }) {
+    async function resolvePublicView({ baseUrl, shareToken }) {
       const token = normalizeShareToken(shareToken);
       if (!token) {
         return { ok: false, edgeClient: null, userId: null };
@@ -139,7 +139,7 @@ var require_public_view = __commonJS({
       return Boolean(normalizeShareToken(value));
     }
     module2.exports = {
-      resolvePublicView: resolvePublicView2,
+      resolvePublicView,
       isPublicShareToken
     };
   }
@@ -150,7 +150,7 @@ var require_auth = __commonJS({
   "insforge-src/shared/auth.js"(exports2, module2) {
     "use strict";
     var { getAnonKey, getJwtSecret } = require_env();
-    var { resolvePublicView: resolvePublicView2, isPublicShareToken } = require_public_view();
+    var { resolvePublicView, isPublicShareToken } = require_public_view();
     function getBearerToken2(headerValue) {
       if (!headerValue) return null;
       const prefix = "Bearer ";
@@ -338,7 +338,7 @@ var require_auth = __commonJS({
       }
       return { ok: true, edgeClient, userId: claimed.userId };
     }
-    async function getAccessContext({ baseUrl, bearer, allowPublic = false }) {
+    async function getAccessContext2({ baseUrl, bearer, allowPublic = false }) {
       if (!bearer) {
         return {
           ok: false,
@@ -376,7 +376,7 @@ var require_auth = __commonJS({
           code: auth.code ?? null
         };
       }
-      const publicView = await resolvePublicView2({ baseUrl, shareToken: bearer });
+      const publicView = await resolvePublicView({ baseUrl, shareToken: bearer });
       if (!publicView.ok) {
         return {
           ok: false,
@@ -396,7 +396,7 @@ var require_auth = __commonJS({
     }
     module2.exports = {
       getBearerToken: getBearerToken2,
-      getAccessContext,
+      getAccessContext: getAccessContext2,
       getEdgeClientAndUserId,
       getEdgeClientAndUserIdFast,
       isProjectAdminBearer,
@@ -606,25 +606,34 @@ var require_user_identity = __commonJS({
   }
 });
 
-// insforge-src/functions/vibeusage-public-view-profile.js
+// insforge-src/functions/vibeusage-viewer-identity.js
 var { handleOptions, json, requireMethod } = require_http();
-var { getBearerToken } = require_auth();
-var { resolvePublicView } = require_public_view();
+var { getBearerToken, getAccessContext } = require_auth();
 var { getBaseUrl } = require_env();
 var { withRequestLogging } = require_logging();
 var { resolveUserIdentity } = require_user_identity();
-module.exports = withRequestLogging("vibeusage-public-view-profile", async function(request) {
+module.exports = withRequestLogging("vibeusage-viewer-identity", async function(request) {
   const opt = handleOptions(request);
   if (opt) return opt;
   const methodErr = requireMethod(request, "GET");
   if (methodErr) return methodErr;
   const bearer = getBearerToken(request.headers.get("Authorization"));
-  if (!bearer) return json({ error: "Missing bearer token" }, 401);
   const baseUrl = getBaseUrl();
-  const publicView = await resolvePublicView({ baseUrl, shareToken: bearer });
-  if (!publicView.ok) return json({ error: "Unauthorized" }, 401);
-  const { data, error } = await publicView.edgeClient.database.from("users").select("nickname,avatar_url,profile,metadata").eq("id", publicView.userId).maybeSingle();
-  if (error) return json({ error: "Failed to fetch public profile" }, 500);
+  const access = await getAccessContext({ baseUrl, bearer, allowPublic: false });
+  if (!access.ok) {
+    return json({ error: access.error || "Unauthorized" }, access.status || 401);
+  }
+  const { data, error } = await access.edgeClient.database.from("users").select("nickname,avatar_url,profile,metadata").eq("id", access.userId).maybeSingle();
+  if (error) {
+    return json({ error: "Failed to fetch viewer identity" }, 500);
+  }
   const { displayName, avatarUrl } = resolveUserIdentity(data);
-  return json({ display_name: displayName, avatar_url: avatarUrl }, 200);
+  return json(
+    {
+      user_id: access.userId,
+      display_name: displayName,
+      avatar_url: avatarUrl
+    },
+    200
+  );
 });
