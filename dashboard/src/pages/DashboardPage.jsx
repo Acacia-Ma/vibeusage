@@ -97,6 +97,7 @@ function isForceInstallEnabled() {
 export function DashboardPage({
   baseUrl,
   auth,
+  currentIdentity,
   signedIn,
   sessionSoftExpired,
   signOut,
@@ -172,6 +173,7 @@ export function DashboardPage({
       return;
     }
     let active = true;
+    const controller = new AbortController();
     const resetLinkCode = () => {
       setLinkCode(null);
       setLinkCodeExpiresAt(null);
@@ -196,11 +198,13 @@ export function DashboardPage({
         const data = await requestInstallLinkCode({
           baseUrl,
           accessToken: resolvedToken,
+          signal: controller.signal,
         });
         if (!active) return;
         setLinkCode(typeof data?.link_code === "string" ? data.link_code : null);
         setLinkCodeExpiresAt(typeof data?.expires_at === "string" ? data.expires_at : null);
       } catch (err) {
+        if (controller.signal.aborted || err?.name === "AbortError") return;
         if (!active) return;
         setLinkCode(null);
         setLinkCodeExpiresAt(null);
@@ -212,6 +216,7 @@ export function DashboardPage({
     })();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [
     baseUrl,
@@ -241,6 +246,7 @@ export function DashboardPage({
       return;
     }
     let active = true;
+    const controller = new AbortController();
     setPublicViewLoading(true);
     (async () => {
       let resolvedToken = null;
@@ -276,6 +282,7 @@ export function DashboardPage({
     })();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [baseUrl, mockEnabled, signedIn, publicMode, authTokenReady, effectiveAuthToken]);
 
@@ -293,7 +300,8 @@ export function DashboardPage({
     setPublicProfileName(null);
     setPublicProfileAvatarUrl(null);
     let active = true;
-    getPublicViewProfile({ baseUrl, accessToken: publicToken })
+    const controller = new AbortController();
+    getPublicViewProfile({ baseUrl, accessToken: publicToken, signal: controller.signal })
       .then((data) => {
         if (!active) return;
         setPublicProfileName(typeof data?.display_name === "string" ? data.display_name : null);
@@ -306,6 +314,7 @@ export function DashboardPage({
       });
     return () => {
       active = false;
+      controller.abort();
     };
   }, [baseUrl, publicMode, publicToken]);
 
@@ -319,6 +328,7 @@ export function DashboardPage({
       return;
     }
     let active = true;
+    const controller = new AbortController();
     (async () => {
       let resolvedToken = null;
       try {
@@ -335,6 +345,7 @@ export function DashboardPage({
         const data = await getUserStatus({
           baseUrl,
           accessToken: resolvedToken,
+          signal: controller.signal,
         });
         if (!active) return;
         setUserStatus(data && typeof data === "object" ? data : null);
@@ -345,6 +356,7 @@ export function DashboardPage({
     })();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [authTokenReady, baseUrl, effectiveAuthToken, mockEnabled, publicMode, signedIn]);
 
@@ -714,13 +726,14 @@ export function DashboardPage({
     return /unauthorized|invalid|token|revoked|401/i.test(message);
   }, [publicMode, usageError]);
   const identityRawName = useMemo(() => {
-    if (typeof auth?.name !== "string") return "";
-    return auth.name.trim();
-  }, [auth?.name]);
+    if (typeof currentIdentity?.displayName !== "string") return "";
+    return currentIdentity.displayName.trim();
+  }, [currentIdentity?.displayName]);
   const publicIdentityName = useMemo(() => {
     if (typeof publicProfileName !== "string") return "";
     return publicProfileName.trim();
   }, [publicProfileName]);
+  const identityPending = !publicMode && signedIn && currentIdentity === undefined;
 
   const identityLabel = useMemo(() => {
     if (!identityRawName || identityRawName.includes("@")) {
@@ -737,8 +750,11 @@ export function DashboardPage({
     if (publicMode) {
       return publicIdentityName || copy("dashboard.identity.fallback");
     }
+    if (identityPending) {
+      return copy("shared.placeholder.short");
+    }
     return identityHandle;
-  }, [identityHandle, publicIdentityName, publicMode]);
+  }, [identityHandle, identityPending, publicIdentityName, publicMode]);
   const identityStartDate = useMemo(() => {
     let earliest = null;
 
@@ -1153,6 +1169,7 @@ export function DashboardPage({
         const data = await getPublicVisibility({
           baseUrl,
           accessToken: resolvedToken,
+          signal: controller.signal,
         });
         const token = typeof data?.share_token === "string" ? data.share_token : null;
         setPublicViewToken(token);
