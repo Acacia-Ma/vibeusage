@@ -1,4 +1,5 @@
-import { insforgeAuthClient } from "./insforge-auth-client";
+import { getInsforgeBaseUrl } from "./config";
+import { getViewerIdentity } from "./vibeusage-api";
 
 type CurrentIdentity = {
   userId: string;
@@ -10,30 +11,21 @@ function normalizeString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
-function resolveProfile(data: unknown): Record<string, unknown> | null {
-  if (!data || typeof data !== "object") return null;
-  const candidate = (data as { profile?: unknown }).profile;
-  if (!candidate || typeof candidate !== "object") return null;
-  return candidate as Record<string, unknown>;
-}
-
 export async function resolveCurrentIdentity(session: any): Promise<CurrentIdentity | null> {
   if (!session?.accessToken) return null;
 
   const userId = normalizeString(session?.user?.id);
   if (!userId) return null;
 
-  if (typeof insforgeAuthClient.auth.getProfile !== "function") {
-    return { userId, displayName: null, avatarUrl: null };
-  }
-
   try {
-    const { data } = await insforgeAuthClient.auth.getProfile(userId);
-    const profile = resolveProfile(data);
+    const data = await getViewerIdentity({
+      baseUrl: getInsforgeBaseUrl(),
+      accessToken: session.accessToken,
+    });
     return {
       userId,
-      displayName: normalizeString(profile?.name),
-      avatarUrl: normalizeString(profile?.avatar_url),
+      displayName: normalizeString((data as { display_name?: unknown } | null)?.display_name),
+      avatarUrl: normalizeString((data as { avatar_url?: unknown } | null)?.avatar_url),
     };
   } catch (_error) {
     return { userId, displayName: null, avatarUrl: null };

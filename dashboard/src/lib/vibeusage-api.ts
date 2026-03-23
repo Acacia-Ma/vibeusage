@@ -28,6 +28,7 @@ const PATHS = {
   leaderboard: "vibeusage-leaderboard",
   leaderboardProfile: "vibeusage-leaderboard-profile",
   userStatus: "vibeusage-user-status",
+  viewerIdentity: "vibeusage-viewer-identity",
   linkCodeInit: "vibeusage-link-code-init",
   publicViewProfile: "vibeusage-public-view-profile",
   publicVisibility: "vibeusage-public-visibility",
@@ -462,6 +463,16 @@ export async function getPublicViewProfile({ baseUrl, accessToken, signal }: Any
     baseUrl,
     accessToken: resolvedAccessToken,
     slug: PATHS.publicViewProfile,
+    fetchOptions: buildSignalFetchOptions(signal),
+  });
+}
+
+export async function getViewerIdentity({ baseUrl, accessToken, signal }: AnyRecord = {}) {
+  const resolvedAccessToken = await resolveAccessToken(accessToken);
+  return requestJson({
+    baseUrl,
+    accessToken: resolvedAccessToken,
+    slug: PATHS.viewerIdentity,
     fetchOptions: buildSignalFetchOptions(signal),
   });
 }
