@@ -24,7 +24,8 @@ import {
 } from "./lib/auth-storage";
 import { isLikelyExpiredAccessToken } from "./lib/auth-token";
 import { getInsforgeBaseUrl } from "./lib/config";
-import { insforgeAuthClient } from "./lib/insforge-auth-client";
+import { resolveCurrentIdentity } from "./lib/current-identity";
+import { getCurrentInsforgeSession } from "./lib/insforge-auth-client";
 import { clearInsforgePersistentStorage } from "./lib/insforge-client";
 import { isMockEnabled } from "./lib/mock-data";
 import { fetchLatestTrackerVersion } from "./lib/npm-version";
@@ -78,6 +79,7 @@ export default function App() {
   const appVersion = useMemo(() => getAppVersion(import.meta.env), []);
   const [latestVersion, setLatestVersion] = useState(null);
   const [insforgeSession, setInsforgeSession] = useState();
+  const [currentIdentity, setCurrentIdentity] = useState(undefined);
   const [sessionExpired, setSessionExpired] = useState(() => loadSessionExpired());
   const [sessionSoftExpired, setSessionSoftExpired] = useState(() => loadSessionSoftExpired());
 
@@ -108,11 +110,9 @@ export default function App() {
     }
     let active = true;
     const refreshSession = () => {
-      return insforgeAuthClient.auth
-        .getCurrentSession()
-        .then(({ data }) => {
+      return getCurrentInsforgeSession()
+        .then((session) => {
           if (!active) return;
-          const session = data?.session ?? null;
           setInsforgeSession(session);
 
           // Debug logging for mobile troubleshooting
@@ -147,6 +147,35 @@ export default function App() {
   }, [insforgeLoaded, insforgeSignedIn]);
 
   useEffect(() => {
+    if (!insforgeLoaded) {
+      setCurrentIdentity(undefined);
+      return;
+    }
+
+    const sessionToken = insforgeSession?.accessToken ?? null;
+    if (!sessionToken || isLikelyExpiredAccessToken(sessionToken)) {
+      setCurrentIdentity(null);
+      return;
+    }
+
+    let active = true;
+    setCurrentIdentity(undefined);
+    resolveCurrentIdentity(insforgeSession)
+      .then((identity) => {
+        if (!active) return;
+        setCurrentIdentity(identity);
+      })
+      .catch(() => {
+        if (!active) return;
+        setCurrentIdentity(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [insforgeLoaded, insforgeSession]);
+
+  useEffect(() => {
     return subscribeSessionExpired((next) => {
       setSessionExpired(Boolean(next));
     });
@@ -172,15 +201,18 @@ export default function App() {
     const fallbackToken = !isLikelyExpiredAccessToken(insforgeSession?.accessToken)
       ? (insforgeSession?.accessToken ?? null)
       : null;
-    if (!insforgeSignedIn) {
+    if (fallbackToken) {
       return fallbackToken;
     }
-    const { data } = await insforgeAuthClient.auth.getCurrentSession();
-    const sessionToken = data?.session?.accessToken ?? null;
+    if (!insforgeSignedIn) {
+      return null;
+    }
+    const session = await getCurrentInsforgeSession();
+    const sessionToken = session?.accessToken ?? null;
     if (!isLikelyExpiredAccessToken(sessionToken)) {
       return sessionToken;
     }
-    return fallbackToken;
+    return null;
   }, [insforgeSession, insforgeSignedIn]);
 
   useEffect(() => {
@@ -193,9 +225,9 @@ export default function App() {
         return;
       }
       try {
-        const { data } = await insforgeAuthClient.auth.getCurrentSession();
+        const session = await getCurrentInsforgeSession();
         if (!active) return;
-        const nextToken = data?.session?.accessToken ?? null;
+        const nextToken = session?.accessToken ?? null;
         if (shouldClearSessionSoftExpiredForToken(nextToken)) {
           clearSessionSoftExpired();
           return;
@@ -237,14 +269,11 @@ export default function App() {
     const sessionToken = insforgeSession?.accessToken ?? null;
     if (!sessionToken || isLikelyExpiredAccessToken(sessionToken)) return null;
     const user = insforgeSession.user;
-    const profileName = user?.profile?.name;
-    const displayName = profileName ?? user?.name ?? null;
     return {
       accessToken: sessionToken,
       getAccessToken: getInsforgeAccessToken,
       userId: user?.id ?? null,
       email: user?.email ?? null,
-      name: displayName,
       savedAt: new Date().toISOString(),
     };
   }, [getInsforgeAccessToken, insforgeSession]);
@@ -259,14 +288,11 @@ export default function App() {
     const target = resolveRedirectTarget(window.location.search);
     if (target) {
       const user = insforgeSession.user;
-      const profileName = user?.profile?.name;
-      const displayName = profileName ?? user?.name ?? null;
       redirectOnceRef.current = true;
       const redirectUrl = buildRedirectUrl(target, {
         accessToken: sessionToken,
         userId: user?.id ?? null,
         email: user?.email ?? null,
-        name: displayName,
       });
       window.location.assign(redirectUrl);
       return;
@@ -395,6 +421,7 @@ export default function App() {
         <PageComponent
           baseUrl={baseUrl}
           auth={auth}
+          currentIdentity={currentIdentity}
           signedIn={signedIn}
           sessionSoftExpired={sessionSoftExpired}
           signOut={signOut}

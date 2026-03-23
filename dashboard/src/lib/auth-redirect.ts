@@ -156,7 +156,7 @@ export function stripNextParam(urlString: any) {
 
 export function buildRedirectUrl(
   target: any,
-  { accessToken, userId, email, name }: Record<string, any> = {},
+  { accessToken, userId, email }: Record<string, any> = {},
 ) {
   const url = new URL(target);
   if (typeof accessToken === "string" && accessToken.length > 0) {
@@ -167,9 +167,6 @@ export function buildRedirectUrl(
   }
   if (typeof email === "string" && email.length > 0) {
     url.searchParams.set("email", email);
-  }
-  if (typeof name === "string" && name.length > 0) {
-    url.searchParams.set("name", name);
   }
   return url.toString();
 }
