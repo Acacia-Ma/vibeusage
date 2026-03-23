@@ -1,6 +1,6 @@
 ## MODIFIED Requirements
 
-### Requirement: Dashboard shows identity information from current-user profile
+### Requirement: Dashboard shows identity information from login state
 
 The dashboard UI SHALL show the authenticated viewer's identity from the current-user profile. The current-user profile SHALL be the single source of truth for dashboard display identity. Session payload fields and redirect parameters MUST NOT be treated as authoritative display identity.
 
@@ -31,4 +31,3 @@ Loopback auth redirect payloads used by the dashboard MUST NOT carry display ide
 - **WHEN** it builds a loopback redirect URL
 - **THEN** the redirect payload SHALL omit `name`
 - **AND** subsequent dashboard rendering SHALL resolve display identity from the authenticated user's profile
-
