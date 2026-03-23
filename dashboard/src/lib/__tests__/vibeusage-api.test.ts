@@ -27,6 +27,14 @@ vi.mock("../auth-storage", () => authStorage);
 
 vi.mock("../insforge-auth-client", () => ({
   insforgeAuthClient: authClient,
+  getCurrentInsforgeSession: vi.fn(async () => {
+    const { data } = await authClient.auth.getCurrentSession();
+    return data?.session ?? null;
+  }),
+  refreshInsforgeSession: vi.fn(async () => {
+    const { data } = await authClient.auth.getCurrentSession();
+    return data?.session ?? null;
+  }),
 }));
 
 vi.mock("../auth-token", () => ({
@@ -177,6 +185,15 @@ describe("error normalization", () => {
       .replace(/=/g, ""),
     "sig",
   ].join(".");
+  const refreshedJwtToken = [
+    Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" }))
+      .toString("base64url")
+      .replace(/=/g, ""),
+    Buffer.from(JSON.stringify({ sub: "user-1", iat: 1773954616, exp: 1773956516 }))
+      .toString("base64url")
+      .replace(/=/g, ""),
+    "freshsig",
+  ].join(".");
 
   it("uses the InsForgeError `error` field when message is empty", async () => {
     http.get.mockRejectedValueOnce({
@@ -214,6 +231,70 @@ describe("error normalization", () => {
       status: 401,
     });
 
+    expect(authStorage.markSessionSoftExpired).toHaveBeenCalledWith(jwtToken);
+  });
+
+  it("retries business requests after invalid-signature auth failures", async () => {
+    http.get
+      .mockRejectedValueOnce({
+        name: "InsForgeError",
+        message: "",
+        error: "JWSError JWSInvalidSignature",
+        statusCode: 500,
+      })
+      .mockResolvedValueOnce({
+        entries: [{ project_key: "octo/hello" }],
+      });
+    authClient.auth.getCurrentSession.mockResolvedValueOnce({
+      data: {
+        session: {
+          accessToken: refreshedJwtToken,
+          user: { id: "user-1" },
+        },
+      },
+    });
+
+    await expect(
+      api.getProjectUsageSummary({
+        baseUrl: "https://example.com",
+        accessToken: jwtToken,
+        from: "2026-01-01",
+        to: "2026-01-02",
+        limit: 3,
+      }),
+    ).resolves.toEqual({
+      entries: [{ project_key: "octo/hello" }],
+    });
+
+    expect(authClient.auth.getCurrentSession).toHaveBeenCalledTimes(1);
+    expect(http.get).toHaveBeenCalledTimes(2);
+    expect(authStorage.clearSessionSoftExpired).toHaveBeenCalledTimes(1);
+    expect(authStorage.markSessionSoftExpired).not.toHaveBeenCalled();
+  });
+
+  it("marks soft expiry when invalid-signature auth failures cannot be refreshed", async () => {
+    http.get.mockRejectedValueOnce({
+      name: "InsForgeError",
+      message: "",
+      error: "JWSError JWSInvalidSignature",
+      statusCode: 500,
+    });
+
+    await expect(
+      api.getProjectUsageSummary({
+        baseUrl: "https://example.com",
+        accessToken: jwtToken,
+        from: "2026-01-01",
+        to: "2026-01-02",
+        limit: 3,
+      }),
+    ).rejects.toMatchObject({
+      message: "JWSError JWSInvalidSignature",
+      status: 500,
+      statusCode: 500,
+    });
+
+    expect(authClient.auth.getCurrentSession).toHaveBeenCalledTimes(1);
     expect(authStorage.markSessionSoftExpired).toHaveBeenCalledWith(jwtToken);
   });
 });

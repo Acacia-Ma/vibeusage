@@ -70,4 +70,10 @@ describe("ProjectUsagePanel", () => {
     });
     expect(screen.queryByRole("listbox", { name: limitAria })).not.toBeInTheDocument();
   });
+
+  it("shows the current error instead of the empty placeholder", () => {
+    render(<ProjectUsagePanel entries={[]} error="JWSError JWSInvalidSignature" />);
+
+    expect(screen.getByText(/JWSError JWSInvalidSignature/)).toBeInTheDocument();
+  });
 });
