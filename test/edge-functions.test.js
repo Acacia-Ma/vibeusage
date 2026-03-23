@@ -141,6 +141,132 @@ test("local jwt verification rejects expired token", async () => {
   assert.equal(res.ok, false);
 });
 
+test("shared user identity resolver prefers nickname and sanitizes avatar", () => {
+  const { resolveUserIdentity } = require("../insforge-src/shared/user-identity");
+
+  const resolved = resolveUserIdentity({
+    nickname: "Neo Prime",
+    avatar_url: "https://example.com/avatar.png",
+    profile: {
+      name: "Profile Name",
+      full_name: "Profile Full Name",
+      avatar_url: "https://example.com/profile.png",
+    },
+    metadata: {
+      full_name: "Metadata Full Name",
+      name: "Metadata Name",
+      picture: "https://example.com/picture.png",
+    },
+  });
+
+  assert.deepEqual(resolved, {
+    displayName: "Neo Prime",
+    avatarUrl: "https://example.com/avatar.png",
+  });
+});
+
+test("shared user identity resolver falls back to profile and metadata fields", () => {
+  const { resolveUserIdentity } = require("../insforge-src/shared/user-identity");
+
+  assert.deepEqual(
+    resolveUserIdentity({
+      nickname: "   ",
+      avatar_url: "",
+      profile: {
+        full_name: "Profile Full Name",
+      },
+      metadata: {
+        full_name: "Metadata Full Name",
+        picture: "https://example.com/picture.png",
+      },
+    }),
+    {
+      displayName: "Profile Full Name",
+      avatarUrl: "https://example.com/picture.png",
+    },
+  );
+
+  assert.deepEqual(
+    resolveUserIdentity({
+      nickname: null,
+      avatar_url: null,
+      profile: {
+        name: "",
+      },
+      metadata: {
+        full_name: "Metadata Full Name",
+        avatar_url: "https://example.com/meta.png",
+      },
+    }),
+    {
+      displayName: "Metadata Full Name",
+      avatarUrl: "https://example.com/meta.png",
+    },
+  );
+});
+
+test("vibeusage-viewer-identity resolves current viewer identity from unified row fields", async () => {
+  const userId = "33333333-3333-3333-3333-333333333330";
+  const userJwt = createUserJwt(userId);
+  setDenoEnv({
+    INSFORGE_INTERNAL_URL: BASE_URL,
+    INSFORGE_ANON_KEY: ANON_KEY,
+    INSFORGE_JWT_SECRET: JWT_SECRET,
+  });
+
+  const fn = require("../insforge-functions/vibeusage-viewer-identity");
+
+  globalThis.createClient = (args) => {
+    assert.equal(args?.edgeFunctionToken, userJwt);
+    return {
+      database: {
+        from(table) {
+          assert.equal(table, "users");
+          return {
+            select(columns) {
+              assert.equal(columns, "nickname,avatar_url,profile,metadata");
+              return {
+                eq(column, value) {
+                  assert.equal(column, "id");
+                  assert.equal(value, userId);
+                  return {
+                    maybeSingle: async () => ({
+                      data: {
+                        nickname: "",
+                        avatar_url: null,
+                        profile: { name: "", full_name: "" },
+                        metadata: {
+                          full_name: "Metadata Neo",
+                          picture: "https://example.com/meta.png",
+                        },
+                      },
+                      error: null,
+                    }),
+                  };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+  };
+
+  const req = new Request("http://localhost/functions/vibeusage-viewer-identity", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${userJwt}` },
+  });
+
+  const res = await fn(req);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.deepEqual(body, {
+    user_id: userId,
+    display_name: "Metadata Neo",
+    avatar_url: "https://example.com/meta.png",
+  });
+});
+
 test("local jwt verification rejects when secret missing", async () => {
   const userId = "22222222-2222-2222-2222-222222222223";
   const jwt = signJwt({ sub: userId, exp: Math.floor(Date.now() / 1000) + 3600 }, JWT_SECRET);

@@ -28,6 +28,7 @@ const PATHS = {
   leaderboard: "vibeusage-leaderboard",
   leaderboardProfile: "vibeusage-leaderboard-profile",
   userStatus: "vibeusage-user-status",
+  viewerIdentity: "vibeusage-viewer-identity",
   linkCodeInit: "vibeusage-link-code-init",
   publicViewProfile: "vibeusage-public-view-profile",
   publicVisibility: "vibeusage-public-visibility",
@@ -434,6 +435,14 @@ export async function getPublicViewProfile({ baseUrl, accessToken }: AnyRecord =
   });
 }
 
+export async function getViewerIdentity({ baseUrl, accessToken }: AnyRecord = {}) {
+  const resolvedAccessToken = await resolveAccessToken(accessToken);
+  return requestJson({
+    baseUrl,
+    accessToken: resolvedAccessToken,
+    slug: PATHS.viewerIdentity,
+  });
+}
 function buildTimeZoneParams({ timeZone, tzOffsetMinutes }: AnyRecord = {}) {
   const params: AnyRecord = {};
   const tz = typeof timeZone === "string" ? timeZone.trim() : "";

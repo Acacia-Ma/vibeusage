@@ -811,6 +811,60 @@ var require_numbers = __commonJS({
   }
 });
 
+// insforge-src/shared/user-identity.js
+var require_user_identity = __commonJS({
+  "insforge-src/shared/user-identity.js"(exports2, module2) {
+    "use strict";
+    function resolveUserIdentity2(row) {
+      return {
+        displayName: resolveUserDisplayName(row),
+        avatarUrl: resolveUserAvatarUrl(row)
+      };
+    }
+    function resolveUserDisplayName(row) {
+      const profile = isObject(row?.profile) ? row.profile : null;
+      const metadata = isObject(row?.metadata) ? row.metadata : null;
+      return sanitizeDisplayName(row?.nickname) || sanitizeDisplayName(profile?.name) || sanitizeDisplayName(profile?.full_name) || sanitizeDisplayName(metadata?.full_name) || sanitizeDisplayName(metadata?.name) || null;
+    }
+    function resolveUserAvatarUrl(row) {
+      const profile = isObject(row?.profile) ? row.profile : null;
+      const metadata = isObject(row?.metadata) ? row.metadata : null;
+      return sanitizeAvatarUrl(row?.avatar_url) || sanitizeAvatarUrl(profile?.avatar_url) || sanitizeAvatarUrl(metadata?.avatar_url) || sanitizeAvatarUrl(metadata?.picture) || null;
+    }
+    function sanitizeDisplayName(value) {
+      if (typeof value !== "string") return null;
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      if (trimmed.includes("@")) return null;
+      if (trimmed.length > 128) return trimmed.slice(0, 128);
+      return trimmed;
+    }
+    function sanitizeAvatarUrl(value) {
+      if (typeof value !== "string") return null;
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      if (trimmed.length > 1024) return null;
+      try {
+        const url = new URL(trimmed);
+        if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+        return url.toString();
+      } catch (_error) {
+        return null;
+      }
+    }
+    function isObject(value) {
+      return Boolean(value && typeof value === "object");
+    }
+    module2.exports = {
+      resolveUserIdentity: resolveUserIdentity2,
+      resolveUserDisplayName,
+      resolveUserAvatarUrl,
+      sanitizeDisplayName,
+      sanitizeAvatarUrl
+    };
+  }
+});
+
 // insforge-src/functions/vibeusage-leaderboard-refresh.js
 var { handleOptions, json, requireMethod } = require_http();
 var { getBearerToken } = require_auth();
@@ -818,6 +872,7 @@ var { getAnonKey, getBaseUrl, getServiceRoleKey } = require_env();
 var { toUtcDay, addUtcDays, formatDateUTC } = require_date();
 var { forEachPage } = require_pagination();
 var { toBigInt, toPositiveInt } = require_numbers();
+var { resolveUserIdentity } = require_user_identity();
 var PERIODS = ["week", "month"];
 var SOURCE_PAGE_SIZE = 1e3;
 var INSERT_BATCH_SIZE = 500;
@@ -956,8 +1011,7 @@ async function loadPublicProfileLookup({ serviceClient, userIds }) {
     for (const userId of uniqueUserIds) {
       const row = usersMap.get(userId) || null;
       const isPublic = hasActiveLink.has(userId);
-      const displayName = resolveDisplayName(row);
-      const avatarUrl = resolveAvatarUrl(row);
+      const { displayName, avatarUrl } = resolveUserIdentity(row);
       lookup.set(userId, {
         isPublic,
         displayName: displayName || null,
@@ -1022,37 +1076,6 @@ function resolveOtherTokens({ row, totalTokens, gptTokens, claudeTokens }) {
   const derived = totalTokens - gptTokens - claudeTokens;
   return derived > 0n ? derived : 0n;
 }
-function resolveDisplayName(row) {
-  const profile = isObject(row?.profile) ? row.profile : null;
-  const metadata = isObject(row?.metadata) ? row.metadata : null;
-  return sanitizeName(row?.nickname) || sanitizeName(profile?.name) || sanitizeName(profile?.full_name) || sanitizeName(metadata?.full_name) || sanitizeName(metadata?.name) || null;
-}
-function resolveAvatarUrl(row) {
-  const profile = isObject(row?.profile) ? row.profile : null;
-  const metadata = isObject(row?.metadata) ? row.metadata : null;
-  return sanitizeAvatarUrl(row?.avatar_url) || sanitizeAvatarUrl(profile?.avatar_url) || sanitizeAvatarUrl(metadata?.avatar_url) || sanitizeAvatarUrl(metadata?.picture) || null;
-}
-function sanitizeName(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  if (trimmed.includes("@")) return null;
-  if (trimmed.length > 128) return trimmed.slice(0, 128);
-  return trimmed;
-}
-function sanitizeAvatarUrl(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  if (trimmed.length > 1024) return null;
-  try {
-    const url = new URL(trimmed);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-    return url.toString();
-  } catch (_e) {
-    return null;
-  }
-}
 function normalizeDisplayName(value) {
   if (typeof value !== "string") return "Anonymous";
   const trimmed = value.trim();
@@ -1062,9 +1085,6 @@ function normalizeAvatarUrl(value) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
-}
-function isObject(value) {
-  return Boolean(value && typeof value === "object");
 }
 function chunkRows(rows, size) {
   if (!Array.isArray(rows) || rows.length === 0) return [];
