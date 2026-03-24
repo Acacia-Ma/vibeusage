@@ -64,7 +64,13 @@ describe("resolveCurrentIdentity", () => {
     });
   });
 
-  it("returns null when session cannot identify the user", async () => {
+  it("resolves user id from viewer identity when session payload is sparse", async () => {
+    api.getViewerIdentity.mockResolvedValueOnce({
+      user_id: "u3",
+      display_name: "Viewer Neo",
+      avatar_url: null,
+    });
+
     const mod = await import("../current-identity");
 
     await expect(
@@ -72,9 +78,11 @@ describe("resolveCurrentIdentity", () => {
         accessToken: "token-3",
         user: null,
       }),
-    ).resolves.toBeNull();
-
-    expect(api.getViewerIdentity).not.toHaveBeenCalled();
+    ).resolves.toEqual({
+      userId: "u3",
+      displayName: "Viewer Neo",
+      avatarUrl: null,
+    });
   });
 
   it("uses viewer identity even when only metadata full_name exists upstream", async () => {
@@ -101,5 +109,20 @@ describe("resolveCurrentIdentity", () => {
       displayName: "Meta Neo",
       avatarUrl: null,
     });
+  });
+
+  it("returns null when viewer identity cannot be resolved", async () => {
+    api.getViewerIdentity.mockRejectedValueOnce(new Error("boom"));
+
+    const mod = await import("../current-identity");
+
+    await expect(
+      mod.resolveCurrentIdentity({
+        accessToken: "token-4",
+        user: {
+          id: "u4",
+        },
+      }),
+    ).resolves.toBeNull();
   });
 });

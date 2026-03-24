@@ -1,6 +1,8 @@
-const DEFAULT_BASE_URL = "https://5tmappuk.us-east.insforge.app";
-const DEFAULT_DASHBOARD_URL = "https://www.vibeusage.cc";
-const DEFAULT_HTTP_TIMEOUT_MS = 20_000;
+const {
+  DEFAULT_INSFORGE_BASE_URL,
+  DEFAULT_DASHBOARD_URL,
+  DEFAULT_HTTP_TIMEOUT_MS,
+} = require("../shared/runtime-defaults");
 
 function resolveRuntimeConfig({ cli = {}, config = {}, env = process.env, defaults = {} } = {}) {
   const baseUrl = pickString(
@@ -8,7 +10,7 @@ function resolveRuntimeConfig({ cli = {}, config = {}, env = process.env, defaul
     config.baseUrl,
     env?.VIBEUSAGE_INSFORGE_BASE_URL,
     defaults.baseUrl,
-    DEFAULT_BASE_URL,
+    DEFAULT_INSFORGE_BASE_URL,
   );
   const dashboardUrl = pickString(
     cli.dashboardUrl,
@@ -125,7 +127,7 @@ function clampInt(value, min, max) {
 }
 
 module.exports = {
-  DEFAULT_BASE_URL,
+  DEFAULT_BASE_URL: DEFAULT_INSFORGE_BASE_URL,
   DEFAULT_DASHBOARD_URL,
   DEFAULT_HTTP_TIMEOUT_MS,
   resolveRuntimeConfig,

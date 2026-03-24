@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { isAccessTokenReady, resolveAuthAccessToken } from "../lib/auth-token";
+import {
+  buildDashboardCacheKey,
+  clearDashboardCache,
+  readDashboardCache,
+  writeDashboardCache,
+} from "../lib/dashboard-cache";
 import { formatDateLocal, formatDateUTC } from "../lib/date-range";
 import { isMockEnabled } from "../lib/mock-data";
 import { getLocalDayKey, getTimeZoneCacheKey } from "../lib/timezone";
@@ -28,46 +34,31 @@ export function useUsageData({
   const tokenReady = isAccessTokenReady(accessToken);
   const cacheAllowed = !guestAllowed;
 
-  const storageKey = (() => {
-    if (!cacheKey) return null;
-    const host = safeHost(baseUrl) || "default";
-    const dailyKey = includeDaily ? "daily" : "summary";
-    const tzKey = getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes });
-    return `vibeusage.usage.${cacheKey}.${host}.${from}.${to}.${dailyKey}.${tzKey}`;
-  })();
+  const storageKey = buildDashboardCacheKey({
+    scope: "usage",
+    cacheKey,
+    baseUrl,
+    segments: [
+      from,
+      to,
+      includeDaily ? "daily" : "summary",
+      getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes }),
+    ],
+  });
 
   const readCache = useCallback(() => {
-    if (!storageKey || typeof window === "undefined") return null;
-    try {
-      const raw = window.localStorage.getItem(storageKey);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed || !parsed.summary) return null;
-      return parsed;
-    } catch (_e) {
-      return null;
-    }
+    return readDashboardCache(storageKey, (parsed) => Boolean(parsed?.summary));
   }, [storageKey]);
 
   const writeCache = useCallback(
     (payload: any) => {
-      if (!storageKey || typeof window === "undefined") return;
-      try {
-        window.localStorage.setItem(storageKey, JSON.stringify(payload));
-      } catch (_e) {
-        // ignore write errors (quota/private mode)
-      }
+      writeDashboardCache(storageKey, payload, { source: "edge" });
     },
     [storageKey],
   );
 
   const clearCache = useCallback(() => {
-    if (!storageKey || typeof window === "undefined") return;
-    try {
-      window.localStorage.removeItem(storageKey);
-    } catch (_e) {
-      // ignore remove errors (quota/private mode)
-    }
+    clearDashboardCache(storageKey);
   }, [storageKey]);
 
   const refresh = useCallback(async ({ signal }: any = {}) => {
@@ -292,15 +283,6 @@ export function useUsageData({
     error,
     refresh,
   };
-}
-
-function safeHost(baseUrl: any) {
-  try {
-    const u = new URL(baseUrl);
-    return u.host;
-  } catch (_e) {
-    return null;
-  }
 }
 
 function parseUtcDate(yyyyMmDd: any) {

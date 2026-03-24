@@ -1,0 +1,32 @@
+## 1. Baseline
+
+- [x] 1.1 Regenerate Canvas before implementation and after verification.
+- [x] 1.2 Validate this umbrella change and use it as the only SSOT refactor tracker.
+- [x] 1.3 Record the core domain matrix and strict-cutover rules.
+
+## 2. Shared contracts
+
+- [x] 2.1 Extract shared copy registry parser and reuse it in dashboard runtime, validator, and Vite meta injection.
+- [x] 2.2 Extract shared runtime defaults and reuse them in CLI, dashboard, and selected smoke/acceptance scripts.
+- [x] 2.3 Extract shared function slug contract and reuse it in dashboard and CLI API clients.
+
+## 3. Dashboard state convergence
+
+- [x] 3.1 Remove `vibeusage.dashboard.auth.v1` as a state source.
+- [x] 3.2 Keep only UI expiry markers in `auth-storage.ts`.
+- [x] 3.3 Ensure `CurrentIdentity` derives from viewer identity endpoint data.
+- [x] 3.4 Move usage/trend/heatmap/model-breakdown cache reads/writes to a shared cache helper.
+- [x] 3.5 Aggregate top models by canonical `model_id`.
+
+## 4. Backend convergence
+
+- [ ] 4.1 Add backend SSOT guardrails for duplicated shared semantics.
+- [ ] 4.2 Continue migrating ESM shared business rules behind canonical backend modules without changing public slugs.
+
+## 5. Verification
+
+- [x] 5.1 `openspec validate 2026-03-24-refactor-ssot-foundations --strict`
+- [x] 5.2 `node --test test/model-breakdown.test.js test/runtime-config.test.js test/dashboard-session-expired-banner.test.js test/insforge-esm-artifacts.test.js`
+- [x] 5.3 `npm --prefix dashboard run test`
+- [x] 5.4 `npm --prefix dashboard run typecheck`
+- [x] 5.5 `npm run validate:copy`

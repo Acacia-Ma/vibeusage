@@ -14,20 +14,19 @@ function normalizeString(value: unknown): string | null {
 export async function resolveCurrentIdentity(session: any): Promise<CurrentIdentity | null> {
   if (!session?.accessToken) return null;
 
-  const userId = normalizeString(session?.user?.id);
-  if (!userId) return null;
-
   try {
     const data = await getViewerIdentity({
       baseUrl: getInsforgeBaseUrl(),
       accessToken: session.accessToken,
     });
+    const userId = normalizeString((data as { user_id?: unknown } | null)?.user_id);
+    if (!userId) return null;
     return {
       userId,
       displayName: normalizeString((data as { display_name?: unknown } | null)?.display_name),
       avatarUrl: normalizeString((data as { avatar_url?: unknown } | null)?.avatar_url),
     };
   } catch (_error) {
-    return { userId, displayName: null, avatarUrl: null };
+    return null;
   }
 }

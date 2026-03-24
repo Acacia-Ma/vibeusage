@@ -94,7 +94,7 @@ export function buildTopModels(modelBreakdown: any, { limit = 3, copyFn }: AnyRe
       if (!Number.isFinite(tokens) || tokens <= 0) continue;
       totalTokensAll += tokens;
       const name = resolveModelName(model, safeCopy("shared.placeholder.short"));
-      const key = normalizeModelId(name);
+      const key = resolveModelId(model) || normalizeModelId(name);
       if (!key) continue;
       totalsByKey.set(key, (totalsByKey.get(key) || 0) + tokens);
       const currentWeight = nameWeight.get(key) || 0;

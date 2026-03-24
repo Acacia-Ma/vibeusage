@@ -3,6 +3,7 @@ import { normalizeAccessToken, resolveAuthAccessToken } from "./auth-token";
 import { formatDateLocal } from "./date-range";
 import { refreshInsforgeSession } from "./insforge-auth-client";
 import { createInsforgeClient } from "./insforge-client";
+import * as vibeusageFunctionContract from "../../../src/shared/vibeusage-function-contract.js";
 import {
   getMockUsageDaily,
   getMockUsageHourly,
@@ -15,27 +16,12 @@ import {
   isMockEnabled,
 } from "./mock-data";
 
-const BACKEND_RUNTIME_UNAVAILABLE = "Backend runtime unavailable (InsForge). Please retry later.";
-
-const PATHS = {
-  usageSummary: "vibeusage-usage-summary",
-  usageDaily: "vibeusage-usage-daily",
-  usageHourly: "vibeusage-usage-hourly",
-  usageMonthly: "vibeusage-usage-monthly",
-  usageHeatmap: "vibeusage-usage-heatmap",
-  usageModelBreakdown: "vibeusage-usage-model-breakdown",
-  projectUsageSummary: "vibeusage-project-usage-summary",
-  leaderboard: "vibeusage-leaderboard",
-  leaderboardProfile: "vibeusage-leaderboard-profile",
-  userStatus: "vibeusage-user-status",
-  viewerIdentity: "vibeusage-viewer-identity",
-  linkCodeInit: "vibeusage-link-code-init",
-  publicViewProfile: "vibeusage-public-view-profile",
-  publicVisibility: "vibeusage-public-visibility",
-};
-
-const FUNCTION_PREFIX = "/functions";
-const LEGACY_FUNCTION_PREFIX = "/api/functions";
+const {
+  BACKEND_RUNTIME_UNAVAILABLE_MESSAGE: BACKEND_RUNTIME_UNAVAILABLE,
+  FUNCTION_PREFIX,
+  FUNCTION_SLUGS: PATHS,
+  LEGACY_FUNCTION_PREFIX,
+} = vibeusageFunctionContract as any;
 const REQUEST_KIND = {
   business: "business",
   probe: "probe",

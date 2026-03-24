@@ -17,6 +17,8 @@ test("auth storage exposes session soft expired helpers", () => {
   assert.match(src, /markSessionSoftExpired/);
   assert.match(src, /subscribeAuthStorage/);
   assert.match(src, /subscribeSessionSoftExpired/);
+  assert.doesNotMatch(src, /loadAuthFromStorage/);
+  assert.doesNotMatch(src, /saveAuthToStorage/);
 });
 
 test("App does not use legacy auth hook", () => {
@@ -79,14 +81,15 @@ test("App keeps auth while session is soft-expired", () => {
 
 test("App provides InsForge access token resolver", () => {
   const src = read("dashboard/src/App.jsx");
-  assert.match(src, /getCurrentSession/);
+  assert.match(src, /getCurrentInsforgeSession/);
   assert.match(src, /getAccessToken/);
 });
 
-test("App prefers InsForge profile name for identity", () => {
+test("App resolves identity through viewer identity helper", () => {
   const src = read("dashboard/src/App.jsx");
-  assert.match(src, /profile\?\.name/);
-  assert.match(src, /user\?\.name/);
+  assert.match(src, /resolveCurrentIdentity/);
+  assert.doesNotMatch(src, /profile\?\.name/);
+  assert.doesNotMatch(src, /user\?\.name/);
 });
 
 test("App subscribes to sessionSoftExpired state", () => {
@@ -122,16 +125,16 @@ test("App registers visibility revalidate for soft-expired sessions", () => {
   const src = read("dashboard/src/App.jsx");
   assert.match(src, /visibilitychange/);
   assert.match(src, /sessionSoftExpired/);
-  assert.match(src, /getCurrentSession/);
+  assert.match(src, /getCurrentInsforgeSession/);
 });
 
 test("App probes backend to clear same-token soft-expired sessions", () => {
   const src = read("dashboard/src/App.jsx");
   assert.match(src, /probeBackend/);
-  assert.match(src, /const nextToken = data\?\.session\?\.accessToken \?\? null;/);
+  assert.match(src, /const nextToken = session\?\.accessToken \?\? null;/);
   assert.match(src, /if \(shouldClearSessionSoftExpiredForToken\(nextToken\)\) \{/);
   assert.match(src, /if \(!nextToken \|\| isLikelyExpiredAccessToken\(nextToken\)\) \{/);
-  assert.match(src, /await probeBackend\(\{\s*baseUrl,\s*accessToken:\s*nextToken\s*\}\)/);
+  assert.match(src, /await probeBackend\(\{ baseUrl, accessToken: nextToken \}\)/);
 });
 
 test("vibeusage-api resolves access token providers", () => {
@@ -228,7 +231,7 @@ test("vibeusage-api marks session soft expired only for jwt access tokens", () =
   assert.match(src, /isJwtAccessToken/);
   const markMatch = src.match(/function shouldMarkSessionSoftExpired\([\s\S]*?\)\s*\{[\s\S]*?\n\}/);
   assert.ok(markMatch, "expected shouldMarkSessionSoftExpired helper");
-  assert.match(markMatch[0], /status\s*!==\s*401/);
+  assert.match(markMatch[0], /isSessionAuthFailure/);
   assert.match(markMatch[0], /canSetSessionSoftExpired/);
   const guardMatch = src.match(/function canSetSessionSoftExpired\([\s\S]*?\)\s*\{[\s\S]*?\n\}/);
   assert.ok(guardMatch, "expected canSetSessionSoftExpired helper");

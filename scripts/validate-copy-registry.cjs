@@ -1,102 +1,21 @@
 const fs = require("fs");
 const path = require("path");
+const { buildCopyRegistry, REQUIRED_COPY_COLUMNS } = require("../src/shared/copy-registry");
 
 const ROOT = path.resolve(__dirname, "..");
 const COPY_PATH = path.join(ROOT, "dashboard", "src", "content", "copy.csv");
 const SRC_ROOT = path.join(ROOT, "dashboard", "src");
 
-const REQUIRED_COLUMNS = ["key", "module", "page", "component", "slot", "text"];
-
-function parseCsv(raw) {
-  const rows = [];
-  let row = [];
-  let field = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < raw.length; i += 1) {
-    const ch = raw[i];
-
-    if (inQuotes) {
-      if (ch === '"') {
-        const next = raw[i + 1];
-        if (next === '"') {
-          field += '"';
-          i += 1;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += ch;
-      }
-      continue;
-    }
-
-    if (ch === '"') {
-      inQuotes = true;
-      continue;
-    }
-
-    if (ch === ",") {
-      row.push(field);
-      field = "";
-      continue;
-    }
-
-    if (ch === "\n") {
-      row.push(field);
-      field = "";
-      if (!row.every((cell) => String(cell).trim() === "")) {
-        rows.push(row);
-      }
-      row = [];
-      continue;
-    }
-
-    if (ch === "\r") {
-      continue;
-    }
-
-    field += ch;
-  }
-
-  row.push(field);
-  if (!row.every((cell) => String(cell).trim() === "")) {
-    rows.push(row);
-  }
-
-  return rows;
-}
-
 function readRegistry() {
   const raw = fs.readFileSync(COPY_PATH, "utf8");
-  const rows = parseCsv(raw || "");
-  if (!rows.length) {
+  const registry = buildCopyRegistry(raw || "");
+  if (!registry.header.length) {
     throw new Error(`Copy registry is empty: ${COPY_PATH}`);
   }
-
-  const header = rows[0].map((cell) => String(cell).trim());
-  const missing = REQUIRED_COLUMNS.filter((col) => !header.includes(col));
-  if (missing.length) {
-    throw new Error(`Copy registry missing columns: ${missing.join(", ")}`);
+  if (registry.missingColumns.length) {
+    throw new Error(`Copy registry missing columns: ${registry.missingColumns.join(", ")}`);
   }
-
-  const idx = Object.fromEntries(header.map((col, index) => [col, index]));
-  const entries = [];
-  rows.slice(1).forEach((cells, rowIndex) => {
-    const record = {
-      key: String(cells[idx.key] || "").trim(),
-      module: String(cells[idx.module] || "").trim(),
-      page: String(cells[idx.page] || "").trim(),
-      component: String(cells[idx.component] || "").trim(),
-      slot: String(cells[idx.slot] || "").trim(),
-      text: String(cells[idx.text] ?? "").trim(),
-      row: rowIndex + 2,
-    };
-    if (!record.key) return;
-    entries.push(record);
-  });
-
-  return entries;
+  return registry;
 }
 
 function walkFiles(dir, results = []) {
@@ -129,7 +48,7 @@ function main() {
   const errors = [];
   const warnings = [];
 
-  let registry = [];
+  let registry = null;
   try {
     registry = readRegistry();
   } catch (err) {
@@ -138,17 +57,11 @@ function main() {
   }
 
   const registryMap = new Map();
-  const duplicates = new Map();
 
-  for (const record of registry) {
-    if (registryMap.has(record.key)) {
-      const list = duplicates.get(record.key) || [registryMap.get(record.key).row];
-      list.push(record.row);
-      duplicates.set(record.key, list);
-    }
+  for (const record of registry.rows) {
     registryMap.set(record.key, record);
 
-    for (const col of REQUIRED_COLUMNS) {
+    for (const col of REQUIRED_COPY_COLUMNS) {
       const value = record[col];
       if (!value || String(value).trim() === "") {
         errors.push(`Row ${record.row}: missing ${col} for key '${record.key || "<empty>"}'`);
@@ -157,7 +70,7 @@ function main() {
     }
   }
 
-  for (const [key, rows] of duplicates.entries()) {
+  for (const [key, rows] of registry.duplicates.entries()) {
     errors.push(`Duplicate key '${key}' found on rows: ${rows.join(", ")}`);
   }
 
@@ -191,7 +104,7 @@ function main() {
     process.exit(1);
   }
 
-  console.log(`Copy registry ok: ${registryMap.size} entries, ${usedKeys.size} keys used.`);
+  console.log(`Copy registry ok: ${registry.rows.length} entries, ${usedKeys.size} keys used.`);
 }
 
 main();

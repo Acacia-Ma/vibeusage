@@ -5,6 +5,12 @@ import {
   getHeatmapRangeLocal,
 } from "../lib/activity-heatmap";
 import { isAccessTokenReady, resolveAuthAccessToken } from "../lib/auth-token";
+import {
+  buildDashboardCacheKey,
+  clearDashboardCache,
+  readDashboardCache,
+  writeDashboardCache,
+} from "../lib/dashboard-cache";
 import { isMockEnabled } from "../lib/mock-data";
 import { getTimeZoneCacheKey } from "../lib/timezone";
 import { getUsageDaily, getUsageHeatmap } from "../lib/vibeusage-api";
@@ -32,44 +38,30 @@ export function useActivityHeatmap({
   const tokenReady = isAccessTokenReady(accessToken);
   const cacheAllowed = !guestAllowed;
 
-  const storageKey = useMemo(() => {
-    if (!cacheKey) return null;
-    const tzKey = getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes });
-    return `vibeusage.heatmap.${cacheKey}.${weeks}.${weekStartsOn}.${tzKey}`;
-  }, [cacheKey, timeZone, tzOffsetMinutes, weeks, weekStartsOn]);
+  const storageKey = useMemo(
+    () =>
+      buildDashboardCacheKey({
+        scope: "heatmap",
+        cacheKey,
+        baseUrl,
+        segments: [weeks, weekStartsOn, getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes })],
+      }),
+    [baseUrl, cacheKey, timeZone, tzOffsetMinutes, weeks, weekStartsOn],
+  );
 
   const readCache = useCallback(() => {
-    if (!storageKey || typeof window === "undefined") return null;
-    try {
-      const raw = window.localStorage.getItem(storageKey);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed || !parsed.heatmap) return null;
-      return parsed;
-    } catch (_e) {
-      return null;
-    }
+    return readDashboardCache(storageKey, (parsed) => Boolean(parsed?.heatmap));
   }, [storageKey]);
 
   const writeCache = useCallback(
     (payload: any) => {
-      if (!storageKey || typeof window === "undefined") return;
-      try {
-        window.localStorage.setItem(storageKey, JSON.stringify(payload));
-      } catch (_e) {
-        // ignore write errors (quota/private mode)
-      }
+      writeDashboardCache(storageKey, payload, { source: payload?.source || "client" });
     },
     [storageKey],
   );
 
   const clearCache = useCallback(() => {
-    if (!storageKey || typeof window === "undefined") return;
-    try {
-      window.localStorage.removeItem(storageKey);
-    } catch (_e) {
-      // ignore remove errors (quota/private mode)
-    }
+    clearDashboardCache(storageKey);
   }, [storageKey]);
 
   const refresh = useCallback(async ({ signal }: any = {}) => {
@@ -153,6 +145,7 @@ export function useActivityHeatmap({
               },
               daily: rows,
               fetchedAt: new Date().toISOString(),
+              source: "client",
             });
           } else {
             clearCache();
@@ -168,6 +161,7 @@ export function useActivityHeatmap({
             heatmap: res,
             daily: [],
             fetchedAt: new Date().toISOString(),
+            source: "edge",
           });
         } else if (!cacheAllowed) {
           clearCache();
@@ -218,6 +212,7 @@ export function useActivityHeatmap({
           },
           daily: rows,
           fetchedAt: new Date().toISOString(),
+          source: "client",
         });
       } else {
         clearCache();

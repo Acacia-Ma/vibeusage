@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { isAccessTokenReady, resolveAuthAccessToken } from "../lib/auth-token";
+import {
+  buildDashboardCacheKey,
+  clearDashboardCache,
+  readDashboardCache,
+  writeDashboardCache,
+} from "../lib/dashboard-cache";
 import { isMockEnabled } from "../lib/mock-data";
 import { getTimeZoneCacheKey } from "../lib/timezone";
 import { getUsageModelBreakdown } from "../lib/vibeusage-api";
@@ -22,45 +28,30 @@ export function useUsageModelBreakdown({
   const tokenReady = isAccessTokenReady(accessToken);
   const cacheAllowed = !guestAllowed;
 
-  const storageKey = useMemo(() => {
-    if (!cacheKey) return null;
-    const host = safeHost(baseUrl) || "default";
-    const tzKey = getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes });
-    return `vibeusage.modelBreakdown.${cacheKey}.${host}.${from}.${to}.${tzKey}`;
-  }, [baseUrl, cacheKey, from, timeZone, to, tzOffsetMinutes]);
+  const storageKey = useMemo(
+    () =>
+      buildDashboardCacheKey({
+        scope: "modelBreakdown",
+        cacheKey,
+        baseUrl,
+        segments: [from, to, getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes })],
+      }),
+    [baseUrl, cacheKey, from, timeZone, to, tzOffsetMinutes],
+  );
 
   const readCache = useCallback(() => {
-    if (!storageKey || typeof window === "undefined") return null;
-    try {
-      const raw = window.localStorage.getItem(storageKey);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed || !parsed.breakdown) return null;
-      return parsed;
-    } catch (_e) {
-      return null;
-    }
+    return readDashboardCache(storageKey, (parsed) => Boolean(parsed?.breakdown));
   }, [storageKey]);
 
   const writeCache = useCallback(
     (payload: any) => {
-      if (!storageKey || typeof window === "undefined") return;
-      try {
-        window.localStorage.setItem(storageKey, JSON.stringify(payload));
-      } catch (_e) {
-        // ignore write errors
-      }
+      writeDashboardCache(storageKey, payload, { source: "edge" });
     },
     [storageKey],
   );
 
   const clearCache = useCallback(() => {
-    if (!storageKey || typeof window === "undefined") return;
-    try {
-      window.localStorage.removeItem(storageKey);
-    } catch (_e) {
-      // ignore remove errors
-    }
+    clearDashboardCache(storageKey);
   }, [storageKey]);
 
   const refresh = useCallback(async ({ signal }: any = {}) => {
@@ -172,13 +163,4 @@ export function useUsageModelBreakdown({
     error,
     refresh,
   };
-}
-
-function safeHost(baseUrl: any) {
-  try {
-    const url = new URL(baseUrl);
-    return url.host;
-  } catch (_e) {
-    return null;
-  }
 }
