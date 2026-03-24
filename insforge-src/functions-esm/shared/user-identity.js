@@ -1,13 +1,11 @@
-"use strict";
-
-function resolveUserIdentity(row) {
+export function resolveUserIdentity(row) {
   return {
     displayName: resolveUserDisplayName(row),
     avatarUrl: resolveUserAvatarUrl(row),
   };
 }
 
-function resolveUserDisplayName(row) {
+export function resolveUserDisplayName(row) {
   const profile = isObject(row?.profile) ? row.profile : null;
   const metadata = isObject(row?.metadata) ? row.metadata : null;
 
@@ -21,7 +19,7 @@ function resolveUserDisplayName(row) {
   );
 }
 
-function resolveUserAvatarUrl(row) {
+export function resolveUserAvatarUrl(row) {
   const profile = isObject(row?.profile) ? row.profile : null;
   const metadata = isObject(row?.metadata) ? row.metadata : null;
 
@@ -34,7 +32,7 @@ function resolveUserAvatarUrl(row) {
   );
 }
 
-function sanitizeDisplayName(value) {
+export function sanitizeDisplayName(value) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -43,7 +41,7 @@ function sanitizeDisplayName(value) {
   return trimmed;
 }
 
-function sanitizeAvatarUrl(value) {
+export function sanitizeAvatarUrl(value) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -60,11 +58,3 @@ function sanitizeAvatarUrl(value) {
 function isObject(value) {
   return Boolean(value && typeof value === "object");
 }
-
-module.exports = {
-  resolveUserIdentity,
-  resolveUserDisplayName,
-  resolveUserAvatarUrl,
-  sanitizeDisplayName,
-  sanitizeAvatarUrl,
-};

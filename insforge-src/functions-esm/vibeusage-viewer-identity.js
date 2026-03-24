@@ -1,15 +1,10 @@
-// Edge function: vibeusage-viewer-identity
-// Returns the authenticated viewer's privacy-safe display identity.
+import { getAccessContext, getBearerToken } from "./shared/auth.js";
+import { getBaseUrl } from "./shared/env.js";
+import { handleOptions, json, requireMethod } from "./shared/http.js";
+import { withRequestLogging } from "./shared/logging.js";
+import { resolveUserIdentity } from "./shared/user-identity.js";
 
-"use strict";
-
-const { handleOptions, json, requireMethod } = require("../shared/http");
-const { getBearerToken, getAccessContext } = require("../shared/auth");
-const { getBaseUrl } = require("../shared/env");
-const { withRequestLogging } = require("../shared/logging");
-const { resolveUserIdentity } = require("../shared/user-identity");
-
-module.exports = withRequestLogging("vibeusage-viewer-identity", async function (request) {
+export default withRequestLogging("vibeusage-viewer-identity", async function (request) {
   const opt = handleOptions(request);
   if (opt) return opt;
 
