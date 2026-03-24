@@ -643,75 +643,11 @@ var require_logging = __commonJS({
   }
 });
 
-// insforge-src/shared/public-view.js
-var require_public_view = __commonJS({
-  "insforge-src/shared/public-view.js"(exports2, module2) {
+// insforge-src/shared/auth-core.js
+var require_auth_core = __commonJS({
+  "insforge-src/shared/auth-core.js"() {
     "use strict";
-    var { getAnonKey: getAnonKey2, getServiceRoleKey: getServiceRoleKey2 } = require_env();
-    var PUBLIC_USER_TOKEN_RE = /^pv1-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
-    async function resolvePublicView({ baseUrl, shareToken }) {
-      const token = normalizeShareToken(shareToken);
-      if (!token) {
-        return { ok: false, edgeClient: null, userId: null };
-      }
-      const serviceRoleKey = getServiceRoleKey2();
-      if (!serviceRoleKey) return { ok: false, edgeClient: null, userId: null };
-      const anonKey = getAnonKey2();
-      const dbClient = createClient({
-        baseUrl,
-        anonKey: anonKey || serviceRoleKey,
-        edgeFunctionToken: serviceRoleKey
-      });
-      const resolvedUserId = await resolvePublicUserId({ dbClient, token });
-      if (!resolvedUserId) {
-        return { ok: false, edgeClient: null, userId: null };
-      }
-      const { data: settings, error: settingsErr } = await dbClient.database.from("vibeusage_user_settings").select("leaderboard_public").eq("user_id", resolvedUserId).maybeSingle();
-      if (settingsErr || settings?.leaderboard_public !== true) {
-        return { ok: false, edgeClient: null, userId: null };
-      }
-      return { ok: true, edgeClient: dbClient, userId: resolvedUserId };
-    }
-    async function resolvePublicUserId({ dbClient, token }) {
-      if (!dbClient || !token) return null;
-      const { data, error } = await dbClient.database.from("vibeusage_public_views").select("user_id").eq("user_id", token.userId).is("revoked_at", null).maybeSingle();
-      if (error || !data?.user_id) return null;
-      return data.user_id;
-    }
-    function normalizeToken(value) {
-      if (typeof value !== "string") return null;
-      const token = value.trim();
-      if (!token) return null;
-      if (token.length > 256) return null;
-      return token;
-    }
-    function normalizeShareToken(value) {
-      const token = normalizeToken(value);
-      if (!token) return null;
-      const normalized = token.toLowerCase();
-      if (token !== normalized) return null;
-      const publicUserMatch = normalized.match(PUBLIC_USER_TOKEN_RE);
-      if (publicUserMatch?.[1]) {
-        return { kind: "user", userId: publicUserMatch[1] };
-      }
-      return null;
-    }
-    function isPublicShareToken(value) {
-      return Boolean(normalizeShareToken(value));
-    }
-    module2.exports = {
-      resolvePublicView,
-      isPublicShareToken
-    };
-  }
-});
-
-// insforge-src/shared/auth.js
-var require_auth = __commonJS({
-  "insforge-src/shared/auth.js"(exports2, module2) {
-    "use strict";
-    var { getAnonKey: getAnonKey2, getJwtSecret } = require_env();
-    var { resolvePublicView, isPublicShareToken } = require_public_view();
+    var CORE_KEY = "__vibeusageAuthCore";
     function getBearerToken2(headerValue) {
       if (!headerValue) return null;
       const prefix = "Bearer ";
@@ -721,44 +657,38 @@ var require_auth = __commonJS({
     }
     function decodeBase64Url(value) {
       if (typeof value !== "string") return null;
-      let s = value.replace(/-/g, "+").replace(/_/g, "/");
-      const pad = s.length % 4;
-      if (pad) s += "=".repeat(4 - pad);
+      let normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+      const pad = normalized.length % 4;
+      if (pad) normalized += "=".repeat(4 - pad);
       try {
-        if (typeof atob === "function") return atob(s);
-      } catch (_e) {
+        if (typeof atob === "function") return atob(normalized);
+      } catch (_error) {
       }
       try {
         if (typeof Buffer !== "undefined") {
-          return Buffer.from(s, "base64").toString("utf8");
+          return Buffer.from(normalized, "base64").toString("utf8");
         }
-      } catch (_e) {
+      } catch (_error) {
       }
       return null;
     }
-    function decodeJwtPayload(token) {
+    function decodeJwtSection(token, index) {
       if (typeof token !== "string") return null;
       const parts = token.split(".");
-      if (parts.length < 2) return null;
-      const raw = decodeBase64Url(parts[1]);
+      if (parts.length < index + 1) return null;
+      const raw = decodeBase64Url(parts[index]);
       if (!raw) return null;
       try {
         return JSON.parse(raw);
-      } catch (_e) {
+      } catch (_error) {
         return null;
       }
     }
+    function decodeJwtPayload(token) {
+      return decodeJwtSection(token, 1);
+    }
     function decodeJwtHeader(token) {
-      if (typeof token !== "string") return null;
-      const parts = token.split(".");
-      if (parts.length < 2) return null;
-      const raw = decodeBase64Url(parts[0]);
-      if (!raw) return null;
-      try {
-        return JSON.parse(raw);
-      } catch (_e) {
-        return null;
-      }
+      return decodeJwtSection(token, 0);
     }
     function getJwtRole(token) {
       const payload = decodeJwtPayload(token);
@@ -775,8 +705,7 @@ var require_auth = __commonJS({
       return null;
     }
     function isProjectAdminBearer(token) {
-      const role = getJwtRole(token);
-      return role === "project_admin";
+      return getJwtRole(token) === "project_admin";
     }
     function isJwtExpired(payload) {
       const exp = Number(payload?.exp);
@@ -789,7 +718,7 @@ var require_auth = __commonJS({
         if (typeof Buffer !== "undefined") {
           base64 = Buffer.from(value).toString("base64");
         }
-      } catch (_e) {
+      } catch (_error) {
       }
       if (!base64 && typeof btoa === "function" && value instanceof ArrayBuffer) {
         const bytes = new Uint8Array(value);
@@ -800,37 +729,25 @@ var require_auth = __commonJS({
       if (!base64) return null;
       return base64.replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
     }
-    async function verifyUserJwtHs256({ token }) {
-      const secret = getJwtSecret();
+    async function verifyUserJwtHs256({ token, jwtSecret }) {
+      const secret = typeof jwtSecret === "string" && jwtSecret.length > 0 ? jwtSecret : null;
       if (!secret) {
         return { ok: false, userId: null, error: "Missing jwt secret", code: "missing_jwt_secret" };
       }
-      if (typeof token !== "string") {
-        return { ok: false, userId: null, error: "Invalid token" };
-      }
+      if (typeof token !== "string") return { ok: false, userId: null, error: "Invalid token" };
       const parts = token.split(".");
-      if (parts.length !== 3) {
-        return { ok: false, userId: null, error: "Invalid token" };
-      }
+      if (parts.length !== 3) return { ok: false, userId: null, error: "Invalid token" };
       const header = decodeJwtHeader(token);
       if (!header || header.alg !== "HS256") {
         return { ok: false, userId: null, error: "Unsupported alg" };
       }
       const payload = decodeJwtPayload(token);
-      if (!payload) {
-        return { ok: false, userId: null, error: "Invalid payload" };
-      }
+      if (!payload) return { ok: false, userId: null, error: "Invalid payload" };
       const exp = Number(payload?.exp);
-      if (!Number.isFinite(exp)) {
-        return { ok: false, userId: null, error: "Missing exp" };
-      }
-      if (isJwtExpired(payload)) {
-        return { ok: false, userId: null, error: "Token expired" };
-      }
+      if (!Number.isFinite(exp)) return { ok: false, userId: null, error: "Missing exp" };
+      if (isJwtExpired(payload)) return { ok: false, userId: null, error: "Token expired" };
       const cryptoSubtle = globalThis.crypto?.subtle;
-      if (!cryptoSubtle) {
-        return { ok: false, userId: null, error: "Crypto unavailable" };
-      }
+      if (!cryptoSubtle) return { ok: false, userId: null, error: "Crypto unavailable" };
       const data = `${parts[0]}.${parts[1]}`;
       const encoder = new TextEncoder();
       const key = await cryptoSubtle.importKey(
@@ -846,33 +763,30 @@ var require_auth = __commonJS({
         return { ok: false, userId: null, error: "Invalid signature" };
       }
       const userId = typeof payload.sub === "string" ? payload.sub : null;
-      if (!userId) {
-        return { ok: false, userId: null, error: "Missing sub" };
-      }
+      if (!userId) return { ok: false, userId: null, error: "Missing sub" };
       return { ok: true, userId, error: null };
     }
-    async function getEdgeClientAndUserId({ baseUrl, bearer }) {
-      const auth = await getEdgeClientAndUserIdFast({ baseUrl, bearer });
-      if (!auth.ok) {
-        return {
-          ok: false,
-          edgeClient: null,
-          userId: null,
-          status: auth.status ?? 401,
-          error: auth.error ?? "Unauthorized",
-          code: auth.code ?? null
-        };
+    function getClaimedJwtUser({ token }) {
+      const header = decodeJwtHeader(token);
+      if (!header || header.alg !== "HS256") {
+        return { ok: false, userId: null, code: "invalid_jwt" };
       }
-      return { ok: true, edgeClient: auth.edgeClient, userId: auth.userId };
+      const payload = decodeJwtPayload(token);
+      if (!payload || isJwtExpired(payload)) {
+        return { ok: false, userId: null, code: "invalid_jwt" };
+      }
+      const userId = typeof payload.sub === "string" ? payload.sub : null;
+      if (!userId) return { ok: false, userId: null, code: "invalid_jwt" };
+      return { ok: true, userId, code: null };
     }
-    async function getEdgeClientAndUserIdFast({ baseUrl, bearer }) {
-      const anonKey = getAnonKey2();
-      const edgeClient = createClient({
-        baseUrl,
-        anonKey: anonKey || void 0,
-        edgeFunctionToken: bearer
-      });
-      const local = await verifyUserJwtHs256({ token: bearer });
+    async function getEdgeClientAndUserIdFast({
+      baseUrl,
+      bearer,
+      createUserEdgeClient,
+      jwtSecret
+    } = {}) {
+      const edgeClient = typeof createUserEdgeClient === "function" ? await createUserEdgeClient({ baseUrl, bearer }) : null;
+      const local = await verifyUserJwtHs256({ token: bearer, jwtSecret });
       if (local.ok) {
         return { ok: true, edgeClient, userId: local.userId };
       }
@@ -899,7 +813,39 @@ var require_auth = __commonJS({
       }
       return { ok: true, edgeClient, userId: claimed.userId };
     }
-    async function getAccessContext({ baseUrl, bearer, allowPublic = false }) {
+    async function getEdgeClientAndUserId({
+      baseUrl,
+      bearer,
+      createUserEdgeClient,
+      jwtSecret
+    } = {}) {
+      const auth = await getEdgeClientAndUserIdFast({
+        baseUrl,
+        bearer,
+        createUserEdgeClient,
+        jwtSecret
+      });
+      if (!auth.ok) {
+        return {
+          ok: false,
+          edgeClient: null,
+          userId: null,
+          status: auth.status ?? 401,
+          error: auth.error ?? "Unauthorized",
+          code: auth.code ?? null
+        };
+      }
+      return { ok: true, edgeClient: auth.edgeClient, userId: auth.userId };
+    }
+    async function getAccessContext({
+      baseUrl,
+      bearer,
+      allowPublic = false,
+      createUserEdgeClient,
+      jwtSecret,
+      isPublicShareToken,
+      resolvePublicView
+    } = {}) {
       if (!bearer) {
         return {
           ok: false,
@@ -911,7 +857,12 @@ var require_auth = __commonJS({
           code: "missing_bearer"
         };
       }
-      const auth = await getEdgeClientAndUserIdFast({ baseUrl, bearer });
+      const auth = await getEdgeClientAndUserIdFast({
+        baseUrl,
+        bearer,
+        createUserEdgeClient,
+        jwtSecret
+      });
       if (auth.ok) {
         return { ok: true, edgeClient: auth.edgeClient, userId: auth.userId, accessType: "user" };
       }
@@ -926,7 +877,7 @@ var require_auth = __commonJS({
           code: auth.code ?? null
         };
       }
-      if (!isPublicShareToken(bearer)) {
+      if (typeof isPublicShareToken !== "function" || !isPublicShareToken(bearer)) {
         return {
           ok: false,
           edgeClient: null,
@@ -937,8 +888,8 @@ var require_auth = __commonJS({
           code: auth.code ?? null
         };
       }
-      const publicView = await resolvePublicView({ baseUrl, shareToken: bearer });
-      if (!publicView.ok) {
+      const publicView = typeof resolvePublicView === "function" ? await resolvePublicView({ baseUrl, shareToken: bearer }) : null;
+      if (!publicView?.ok) {
         return {
           ok: false,
           edgeClient: null,
@@ -955,27 +906,271 @@ var require_auth = __commonJS({
         accessType: "public"
       };
     }
-    module2.exports = {
-      getBearerToken: getBearerToken2,
-      getAccessContext,
-      getEdgeClientAndUserId,
-      getEdgeClientAndUserIdFast,
-      isProjectAdminBearer,
-      verifyUserJwtHs256
-    };
-    function getClaimedJwtUser({ token }) {
-      const header = decodeJwtHeader(token);
-      if (!header || header.alg !== "HS256") {
-        return { ok: false, userId: null, code: "invalid_jwt" };
-      }
-      const payload = decodeJwtPayload(token);
-      if (!payload || isJwtExpired(payload)) {
-        return { ok: false, userId: null, code: "invalid_jwt" };
-      }
-      const userId = typeof payload.sub === "string" ? payload.sub : null;
-      if (!userId) return { ok: false, userId: null, code: "invalid_jwt" };
-      return { ok: true, userId, code: null };
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          getBearerToken: getBearerToken2,
+          isProjectAdminBearer,
+          verifyUserJwtHs256,
+          getEdgeClientAndUserIdFast,
+          getEdgeClientAndUserId,
+          getAccessContext
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
     }
+  }
+});
+
+// insforge-src/shared/public-sharing-core.js
+var require_public_sharing_core = __commonJS({
+  "insforge-src/shared/public-sharing-core.js"() {
+    "use strict";
+    var CORE_KEY = "__vibeusagePublicSharingCore";
+    var PUBLIC_USER_TOKEN_RE = /^pv1-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
+    function buildPublicShareToken(userId) {
+      if (typeof userId !== "string") return "";
+      const normalized = userId.trim().toLowerCase();
+      if (!normalized) return "";
+      return `pv1-${normalized}`;
+    }
+    function disabledState() {
+      return {
+        enabled: false,
+        updated_at: null,
+        share_token: null
+      };
+    }
+    function normalizeUpdatedAt(value) {
+      return typeof value === "string" ? value : null;
+    }
+    function normalizeToken(value) {
+      if (typeof value !== "string") return null;
+      const token = value.trim();
+      if (!token) return null;
+      if (token.length > 256) return null;
+      return token;
+    }
+    function normalizeShareToken(value) {
+      const token = normalizeToken(value);
+      if (!token) return null;
+      const normalized = token.toLowerCase();
+      if (token !== normalized) return null;
+      const publicUserMatch = normalized.match(PUBLIC_USER_TOKEN_RE);
+      if (publicUserMatch?.[1]) {
+        return { kind: "user", userId: publicUserMatch[1] };
+      }
+      return null;
+    }
+    function isPublicShareToken(value) {
+      return Boolean(normalizeShareToken(value));
+    }
+    async function resolvePublicUserId({ dbClient, token }) {
+      if (!dbClient || !token) return null;
+      const { data, error } = await dbClient.database.from("vibeusage_public_views").select("user_id").eq("user_id", token.userId).is("revoked_at", null).maybeSingle();
+      if (error || !data?.user_id) return null;
+      return data.user_id;
+    }
+    async function resolvePublicView({
+      baseUrl,
+      shareToken,
+      serviceRoleKey,
+      anonKey,
+      createServiceClient
+    } = {}) {
+      const token = normalizeShareToken(shareToken);
+      if (!token) {
+        return { ok: false, edgeClient: null, userId: null };
+      }
+      if (typeof serviceRoleKey !== "string" || serviceRoleKey.length === 0) {
+        return { ok: false, edgeClient: null, userId: null };
+      }
+      if (typeof createServiceClient !== "function") {
+        return { ok: false, edgeClient: null, userId: null };
+      }
+      const dbClient = await createServiceClient({
+        baseUrl,
+        anonKey: anonKey || serviceRoleKey,
+        edgeFunctionToken: serviceRoleKey
+      });
+      const resolvedUserId = await resolvePublicUserId({ dbClient, token });
+      if (!resolvedUserId) {
+        return { ok: false, edgeClient: null, userId: null };
+      }
+      const { data: settings, error: settingsErr } = await dbClient.database.from("vibeusage_user_settings").select("leaderboard_public").eq("user_id", resolvedUserId).maybeSingle();
+      if (settingsErr || settings?.leaderboard_public !== true) {
+        return { ok: false, edgeClient: null, userId: null };
+      }
+      return { ok: true, edgeClient: dbClient, userId: resolvedUserId };
+    }
+    async function getPublicVisibilityState({ edgeClient, userId }) {
+      if (!edgeClient || typeof userId !== "string" || userId.trim().length === 0) {
+        return disabledState();
+      }
+      try {
+        const { data, error } = await edgeClient.database.from("vibeusage_public_views").select("user_id,revoked_at,updated_at").eq("user_id", userId).maybeSingle();
+        if (error) return disabledState();
+        const enabled = Boolean(data && !data.revoked_at);
+        return {
+          enabled,
+          updated_at: normalizeUpdatedAt(data?.updated_at),
+          share_token: enabled ? buildPublicShareToken(userId) : null
+        };
+      } catch (_error) {
+        return disabledState();
+      }
+    }
+    async function setPublicVisibilityState({
+      edgeClient,
+      userId,
+      enabled,
+      nowIso,
+      sha256Hex: sha256Hex2
+    } = {}) {
+      if (!edgeClient) throw new TypeError("edgeClient is required");
+      if (typeof userId !== "string" || userId.trim().length === 0) {
+        throw new TypeError("userId is required");
+      }
+      if (typeof enabled !== "boolean") {
+        throw new TypeError("enabled must be boolean");
+      }
+      if (typeof sha256Hex2 !== "function") {
+        throw new TypeError("sha256Hex is required");
+      }
+      if (enabled) {
+        await enablePublicVisibility({ edgeClient, userId, nowIso, sha256Hex: sha256Hex2 });
+      } else {
+        await disablePublicVisibility({ edgeClient, userId, nowIso });
+      }
+      return getPublicVisibilityState({ edgeClient, userId });
+    }
+    async function enablePublicVisibility({ edgeClient, userId, nowIso, sha256Hex: sha256Hex2 }) {
+      const table = edgeClient.database.from("vibeusage_public_views");
+      const shareToken = buildPublicShareToken(userId);
+      const tokenHash = await sha256Hex2(shareToken);
+      const updatedAt = typeof nowIso === "string" && nowIso ? nowIso : (/* @__PURE__ */ new Date()).toISOString();
+      const nextRow = {
+        user_id: userId,
+        token_hash: tokenHash,
+        revoked_at: null,
+        updated_at: updatedAt
+      };
+      if (typeof table.upsert === "function") {
+        try {
+          const { error: upsertErr } = await table.upsert([nextRow], { onConflict: "user_id" });
+          if (!upsertErr) return;
+        } catch (_error) {
+        }
+      }
+      const { data: existing, error: selectErr } = await table.select("user_id").eq("user_id", userId).maybeSingle();
+      if (selectErr) throw new Error(selectErr.message || "Failed to select public visibility row");
+      if (existing?.user_id) {
+        const { error: updateErr } = await table.update({ token_hash: tokenHash, revoked_at: null, updated_at: updatedAt }).eq("user_id", userId);
+        if (updateErr) throw new Error(updateErr.message || "Failed to update public visibility row");
+        return;
+      }
+      const { error: insertErr } = await table.insert([nextRow]);
+      if (insertErr) throw new Error(insertErr.message || "Failed to insert public visibility row");
+    }
+    async function disablePublicVisibility({ edgeClient, userId, nowIso }) {
+      const updatedAt = typeof nowIso === "string" && nowIso ? nowIso : (/* @__PURE__ */ new Date()).toISOString();
+      const { error } = await edgeClient.database.from("vibeusage_public_views").update({ revoked_at: updatedAt, updated_at: updatedAt }).eq("user_id", userId);
+      if (error) throw new Error(error.message || "Failed to revoke public visibility row");
+    }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          buildPublicShareToken,
+          isPublicShareToken,
+          resolvePublicView,
+          getPublicVisibilityState,
+          setPublicVisibilityState
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
+// insforge-src/shared/public-view.js
+var require_public_view = __commonJS({
+  "insforge-src/shared/public-view.js"(exports2, module2) {
+    "use strict";
+    require_public_sharing_core();
+    var { getAnonKey: getAnonKey2, getServiceRoleKey: getServiceRoleKey2 } = require_env();
+    var publicSharingCore = globalThis.__vibeusagePublicSharingCore;
+    if (!publicSharingCore) throw new Error("public sharing core not initialized");
+    async function resolvePublicView({ baseUrl, shareToken }) {
+      return publicSharingCore.resolvePublicView({
+        baseUrl,
+        shareToken,
+        anonKey: getAnonKey2(),
+        serviceRoleKey: getServiceRoleKey2(),
+        createServiceClient: ({ baseUrl: baseUrl2, anonKey, edgeFunctionToken }) => createClient({
+          baseUrl: baseUrl2,
+          anonKey,
+          edgeFunctionToken
+        })
+      });
+    }
+    module2.exports = {
+      resolvePublicView,
+      isPublicShareToken: publicSharingCore.isPublicShareToken
+    };
+  }
+});
+
+// insforge-src/shared/auth.js
+var require_auth = __commonJS({
+  "insforge-src/shared/auth.js"(exports2, module2) {
+    "use strict";
+    require_auth_core();
+    var { getAnonKey: getAnonKey2, getJwtSecret } = require_env();
+    var { resolvePublicView, isPublicShareToken } = require_public_view();
+    var authCore = globalThis.__vibeusageAuthCore;
+    if (!authCore) throw new Error("auth core not initialized");
+    module2.exports = {
+      getBearerToken: authCore.getBearerToken,
+      getAccessContext: ({ baseUrl, bearer, allowPublic = false }) => authCore.getAccessContext({
+        baseUrl,
+        bearer,
+        allowPublic,
+        jwtSecret: getJwtSecret(),
+        createUserEdgeClient: ({ baseUrl: baseUrl2, bearer: bearer2 }) => createClient({
+          baseUrl: baseUrl2,
+          anonKey: getAnonKey2() || void 0,
+          edgeFunctionToken: bearer2
+        }),
+        isPublicShareToken,
+        resolvePublicView
+      }),
+      getEdgeClientAndUserId: ({ baseUrl, bearer }) => authCore.getEdgeClientAndUserId({
+        baseUrl,
+        bearer,
+        jwtSecret: getJwtSecret(),
+        createUserEdgeClient: ({ baseUrl: baseUrl2, bearer: bearer2 }) => createClient({
+          baseUrl: baseUrl2,
+          anonKey: getAnonKey2() || void 0,
+          edgeFunctionToken: bearer2
+        })
+      }),
+      getEdgeClientAndUserIdFast: ({ baseUrl, bearer }) => authCore.getEdgeClientAndUserIdFast({
+        baseUrl,
+        bearer,
+        jwtSecret: getJwtSecret(),
+        createUserEdgeClient: ({ baseUrl: baseUrl2, bearer: bearer2 }) => createClient({
+          baseUrl: baseUrl2,
+          anonKey: getAnonKey2() || void 0,
+          edgeFunctionToken: bearer2
+        })
+      }),
+      isProjectAdminBearer: authCore.isProjectAdminBearer,
+      verifyUserJwtHs256: ({ token }) => authCore.verifyUserJwtHs256({ token, jwtSecret: getJwtSecret() })
+    };
   }
 });
 

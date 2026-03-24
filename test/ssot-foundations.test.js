@@ -71,3 +71,23 @@ test("backend pricing and usage metrics semantics flow through shared cores", ()
     /shared\/usage-metrics-core\.mjs/,
   );
 });
+
+test("backend auth and public sharing semantics flow through shared cores", () => {
+  assert.equal(read("insforge-src/shared/auth-core.js"), read("insforge-src/shared/auth-core.mjs"));
+  assert.equal(
+    read("insforge-src/shared/public-sharing-core.js"),
+    read("insforge-src/shared/public-sharing-core.mjs"),
+  );
+  assert.match(read("insforge-src/shared/auth.js"), /auth-core/);
+  assert.match(read("insforge-src/shared/public-view.js"), /public-sharing-core/);
+  assert.match(read("insforge-src/shared/public-visibility.js"), /public-sharing-core/);
+  assert.match(read("insforge-src/functions-esm/shared/auth.js"), /shared\/auth-core\.mjs/);
+  assert.match(
+    read("insforge-src/functions-esm/shared/public-view.js"),
+    /shared\/public-sharing-core\.mjs/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/shared/public-visibility.js"),
+    /shared\/public-sharing-core\.mjs/,
+  );
+});

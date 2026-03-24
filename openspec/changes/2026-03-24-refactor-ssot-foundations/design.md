@@ -28,4 +28,6 @@ Pricing resolution, cost computation, billable-total resolution, shared totals h
 
 Runtime env parsing, request base URL resolution, numeric coercion, and source normalization now converge through `insforge-src/shared/env-core.js` and `insforge-src/shared/runtime-primitives-core.js`. CJS and ESM wrappers for `env`, `date`, `logging`, `numbers`, and `source` now consume those cores instead of carrying separate helper implementations.
 
+JWT parsing, HS256 verification, bearer-to-user resolution, and public access-context rules now converge through `insforge-src/shared/auth-core.js`. Public share token normalization, public profile resolution, and public visibility state transitions now converge through `insforge-src/shared/public-sharing-core.js`. CJS and ESM wrappers for `auth`, `public-view`, and `public-visibility` now provide only environment/client hashing adapters on top of those cores.
+
 The ESM edge layer still contains additional duplicated business logic beyond this slice. This change converts immediately reachable contract drift to shared modules and guardrails first, then continues function-by-function backend convergence without changing public slugs.
