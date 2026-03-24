@@ -1,5 +1,5 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
-import { applyCanaryFilter } from "./shared/canary.js";
+import { buildHourlyUsageQuery } from "./shared/db/usage-hourly.js";
 import {
   addDatePartsDays,
   getUsageMaxDays,
@@ -19,7 +19,6 @@ import { normalizeSource, getSourceParam } from "./shared/source.js";
 import "../shared/usage-pricing-core.mjs";
 import {
   addRowTotals,
-  applyUsageModelFilter,
   buildAliasTimeline,
   buildPricingBucketKey,
   createTotals,
@@ -94,23 +93,16 @@ export default withRequestLogging(
     const queryStartMs = Date.now();
     let rowCount = 0;
     const { error } = await forEachPage({
-      createQuery: () => {
-        let query = auth.edgeClient.database
-          .from("vibeusage_tracker_hourly")
-          .select(
+      createQuery: () =>
+        buildHourlyUsageQuery({
+          edgeClient: auth.edgeClient,
+          userId: auth.userId,
+          source: sourceFilter,
+          startIso,
+          endIso,
+          select:
             "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-          )
-          .eq("user_id", auth.userId);
-        if (sourceFilter) query = query.eq("source", sourceFilter);
-        query = applyCanaryFilter(query, { source: sourceFilter, model: null });
-        return query
-          .gte("hour_start", startIso)
-          .lt("hour_start", endIso)
-          .order("hour_start", { ascending: true })
-          .order("device_id", { ascending: true })
-          .order("source", { ascending: true })
-          .order("model", { ascending: true });
-      },
+        }),
       onPage: (rows) => {
         const pageRows = Array.isArray(rows) ? rows : [];
         rowCount += pageRows.length;

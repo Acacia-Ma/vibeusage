@@ -23,49 +23,62 @@ test("usage pagination uses deterministic ordering", () => {
     "order('day',{ascending:true}).order('source',{ascending:true}).order('model',{ascending:true})";
   const adminOrder =
     "order('hour_start',{ascending:true}).order('user_id',{ascending:true}).order('device_id',{ascending:true}).order('source',{ascending:true}).order('model',{ascending:true})";
+  const hourlyBuilderCall = "buildHourlyUsageQuery(";
 
   assert.ok(
     normalize(readFile("insforge-src/shared/usage-rollup-core.js")).includes(rollupOrder),
   );
+  assert.ok(
+    normalize(readFile("insforge-src/shared/usage-hourly-query-core.js")).includes(hourlyOrder),
+  );
   assert.equal(
     countOccurrences(
       normalize(readFile("insforge-src/functions-esm/vibeusage-usage-summary.js")),
-      hourlyOrder,
+      hourlyBuilderCall,
     ),
-    1,
+    3,
   );
   assert.equal(
     countOccurrences(
       normalize(readFile("insforge-src/functions-esm/vibeusage-usage-daily.js")),
-      hourlyOrder,
+      hourlyBuilderCall,
     ),
-    1,
+    2,
   );
   assert.equal(
     countOccurrences(
       normalize(readFile("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js")),
-      hourlyOrder,
+      hourlyBuilderCall,
     ),
     1,
   );
-  assert.ok(normalize(readFile("insforge-src/shared/db/usage-hourly.js")).includes(hourlyOrder));
+  assert.ok(
+    normalize(readFile("insforge-src/shared/db/usage-hourly.js")).includes(
+      "require('../usage-hourly-query-core')",
+    ),
+  );
+  assert.ok(
+    normalize(readFile("insforge-src/functions-esm/shared/db/usage-hourly.js")).includes(
+      "import'../../../shared/usage-hourly-query-core.mjs'",
+    ),
+  );
   assert.ok(
     countOccurrences(
       normalize(readFile("insforge-src/functions-esm/vibeusage-usage-monthly.js")),
-      hourlyOrder,
+      hourlyBuilderCall,
     ) === 1,
   );
   assert.equal(
     countOccurrences(
       normalize(readFile("insforge-src/functions-esm/vibeusage-usage-heatmap.js")),
-      hourlyOrder,
+      hourlyBuilderCall,
     ),
     2,
   );
   assert.equal(
     countOccurrences(
       normalize(readFile("insforge-src/functions-esm/vibeusage-usage-hourly.js")),
-      hourlyOrder,
+      hourlyBuilderCall,
     ),
     2,
   );

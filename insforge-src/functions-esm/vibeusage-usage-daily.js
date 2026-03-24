@@ -1,5 +1,5 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
-import { applyCanaryFilter } from "./shared/canary.js";
+import { buildHourlyUsageQuery } from "./shared/db/usage-hourly.js";
 import { applyDailyBucket, initDailyBuckets } from "./shared/core/usage-daily.js";
 import { shouldIncludeUsageRow } from "./shared/core/usage-filter.js";
 import {
@@ -23,7 +23,6 @@ import {
   addRowTotals,
   applyTotalsAndBillable,
   applyModelIdentity,
-  applyUsageModelFilter,
   buildAliasTimeline,
   buildPricingBucketKey,
   createTotals,
@@ -38,7 +37,6 @@ import {
   normalizeUsageModelKey,
   resolveBillableTotals,
   resolveDisplayName,
-  resolveIdentityAtDate,
   resolveModelIdentity,
   resolveUsageModelsForCanonical,
 } from "./shared/usage-summary-support.js";
@@ -165,24 +163,18 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
 
   const sumHourlyRange = async () => {
     const { error } = await forEachPage({
-      createQuery: () => {
-        let query = auth.edgeClient.database
-          .from("vibeusage_tracker_hourly")
-          .select(
+      createQuery: () =>
+        buildHourlyUsageQuery({
+          edgeClient: auth.edgeClient,
+          userId: auth.userId,
+          source,
+          usageModels,
+          canonicalModel,
+          startIso,
+          endIso,
+          select:
             "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-          )
-          .eq("user_id", auth.userId);
-        if (source) query = query.eq("source", source);
-        if (hasModelFilter) query = applyUsageModelFilter(query, usageModels);
-        query = applyCanaryFilter(query, { source, model: canonicalModel });
-        return query
-          .gte("hour_start", startIso)
-          .lt("hour_start", endIso)
-          .order("hour_start", { ascending: true })
-          .order("device_id", { ascending: true })
-          .order("source", { ascending: true })
-          .order("model", { ascending: true });
-      },
+        }),
       onPage: (rows) => {
         const pageRows = Array.isArray(rows) ? rows : [];
         rowCount += pageRows.length;
@@ -204,18 +196,16 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
   };
 
   const hasHourlyData = async (rangeStartIso, rangeEndIso) => {
-    let query = auth.edgeClient.database
-      .from("vibeusage_tracker_hourly")
-      .select("hour_start")
-      .eq("user_id", auth.userId);
-    if (source) query = query.eq("source", source);
-    if (hasModelFilter) query = applyUsageModelFilter(query, usageModels);
-    query = applyCanaryFilter(query, { source, model: canonicalModel });
-    const { data, error } = await query
-      .gte("hour_start", rangeStartIso)
-      .lt("hour_start", rangeEndIso)
-      .order("hour_start", { ascending: true })
-      .limit(1);
+    const { data, error } = await buildHourlyUsageQuery({
+      edgeClient: auth.edgeClient,
+      userId: auth.userId,
+      source,
+      usageModels,
+      canonicalModel,
+      startIso: rangeStartIso,
+      endIso: rangeEndIso,
+      select: "hour_start",
+    }).limit(1);
     if (error) return { ok: false, error };
     return { ok: true, hasRows: Array.isArray(data) && data.length > 0 };
   };

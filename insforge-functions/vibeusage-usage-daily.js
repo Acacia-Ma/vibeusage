@@ -1005,8 +1005,56 @@ if (!canaryCore) throw new Error("canary core not initialized");
 var isCanaryTag2 = canaryCore.isCanaryTag;
 var applyCanaryFilter2 = canaryCore.applyCanaryFilter;
 
+// insforge-src/shared/usage-hourly-query-core.mjs
+var CORE_KEY7 = "__vibeusageUsageHourlyQueryCore";
+var usageModelCore2 = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore2) throw new Error("usage-model core not initialized");
+var canaryCore2 = globalThis.__vibeusageCanaryCore;
+if (!canaryCore2) throw new Error("canary core not initialized");
+var { applyUsageModelFilter: applyUsageModelFilter2 } = usageModelCore2;
+var { applyCanaryFilter: applyCanaryFilter3 } = canaryCore2;
+function buildHourlyUsageQuery({
+  edgeClient,
+  userId,
+  source,
+  usageModels,
+  canonicalModel,
+  startIso,
+  endIso,
+  select
+} = {}) {
+  if (!edgeClient?.database?.from) {
+    throw new Error("edgeClient is required");
+  }
+  let query = edgeClient.database.from("vibeusage_tracker_hourly").select(select || "hour_start,source,model,total_tokens");
+  query = query.eq("user_id", userId);
+  if (source) query = query.eq("source", source);
+  if (Array.isArray(usageModels) && usageModels.length > 0) {
+    query = applyUsageModelFilter2(query, usageModels);
+  }
+  query = applyCanaryFilter3(query, { source, model: canonicalModel });
+  if (startIso) query = query.gte("hour_start", startIso);
+  if (endIso) query = query.lt("hour_start", endIso);
+  return query.order("hour_start", { ascending: true }).order("device_id", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
+}
+if (!globalThis[CORE_KEY7]) {
+  Object.defineProperty(globalThis, CORE_KEY7, {
+    value: {
+      buildHourlyUsageQuery
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/db/usage-hourly.js
+var usageHourlyQueryCore = globalThis.__vibeusageUsageHourlyQueryCore;
+if (!usageHourlyQueryCore) throw new Error("usage hourly query core not initialized");
+var buildHourlyUsageQuery2 = usageHourlyQueryCore.buildHourlyUsageQuery;
+
 // insforge-src/shared/date-core.mjs
-var CORE_KEY7 = "__vibeusageDateCore";
+var CORE_KEY8 = "__vibeusageDateCore";
 var envCore2 = globalThis.__vibeusageEnvCore;
 if (!envCore2) throw new Error("env core not initialized");
 var TIMEZONE_FORMATTERS = /* @__PURE__ */ new Map();
@@ -1251,8 +1299,8 @@ function listDateStrings(from, to) {
 function getUsageMaxDays3() {
   return envCore2.getUsageMaxDays();
 }
-if (!globalThis[CORE_KEY7]) {
-  Object.defineProperty(globalThis, CORE_KEY7, {
+if (!globalThis[CORE_KEY8]) {
+  Object.defineProperty(globalThis, CORE_KEY8, {
     value: {
       isDate,
       toUtcDay,
@@ -1316,7 +1364,7 @@ var toPositiveIntOrNull2 = runtimePrimitivesCore2.toPositiveIntOrNull;
 var toPositiveInt2 = runtimePrimitivesCore2.toPositiveInt;
 
 // insforge-src/shared/usage-daily-core.mjs
-var CORE_KEY8 = "__vibeusageUsageDailyCore";
+var CORE_KEY9 = "__vibeusageUsageDailyCore";
 var dateCore2 = globalThis.__vibeusageDateCore;
 if (!dateCore2) throw new Error("date core not initialized");
 var runtimePrimitivesCore3 = globalThis.__vibeusageRuntimePrimitivesCore;
@@ -1355,8 +1403,8 @@ function applyDailyBucket({ buckets, row, tzContext, billable }) {
   bucket.reasoning += toBigInt3(row?.reasoning_output_tokens);
   return true;
 }
-if (!globalThis[CORE_KEY8]) {
-  Object.defineProperty(globalThis, CORE_KEY8, {
+if (!globalThis[CORE_KEY9]) {
+  Object.defineProperty(globalThis, CORE_KEY9, {
     value: {
       initDailyBuckets,
       applyDailyBucket
@@ -1374,10 +1422,10 @@ var initDailyBuckets2 = usageDailyCore.initDailyBuckets;
 var applyDailyBucket2 = usageDailyCore.applyDailyBucket;
 
 // insforge-src/shared/usage-filter-core.mjs
-var CORE_KEY9 = "__vibeusageUsageFilterCore";
-var usageModelCore2 = globalThis.__vibeusageUsageModelCore;
-if (!usageModelCore2) throw new Error("usage-model core not initialized");
-var { extractDateKey: extractDateKey2, matchesCanonicalModelAtDate: matchesCanonicalModelAtDate2 } = usageModelCore2;
+var CORE_KEY10 = "__vibeusageUsageFilterCore";
+var usageModelCore3 = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore3) throw new Error("usage-model core not initialized");
+var { extractDateKey: extractDateKey2, matchesCanonicalModelAtDate: matchesCanonicalModelAtDate2 } = usageModelCore3;
 function shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to }) {
   if (!hasModelFilter) return true;
   const dateKey = extractDateKey2(row?.hour_start || row?.day) || to;
@@ -1388,8 +1436,8 @@ function shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimel
     timeline: aliasTimeline
   });
 }
-if (!globalThis[CORE_KEY9]) {
-  Object.defineProperty(globalThis, CORE_KEY9, {
+if (!globalThis[CORE_KEY10]) {
+  Object.defineProperty(globalThis, CORE_KEY10, {
     value: {
       shouldIncludeUsageRow
     },
@@ -1405,7 +1453,7 @@ if (!usageFilterCore) throw new Error("usage filter core not initialized");
 var shouldIncludeUsageRow2 = usageFilterCore.shouldIncludeUsageRow;
 
 // insforge-src/shared/debug-core.mjs
-var CORE_KEY10 = "__vibeusageDebugCore";
+var CORE_KEY11 = "__vibeusageDebugCore";
 var envCore3 = globalThis.__vibeusageEnvCore;
 if (!envCore3) throw new Error("env core not initialized");
 function isDebugEnabled(url) {
@@ -1447,8 +1495,8 @@ function withSlowQueryDebugPayload(body, options) {
     debug: buildSlowQueryDebugPayload(options)
   };
 }
-if (!globalThis[CORE_KEY10]) {
-  Object.defineProperty(globalThis, CORE_KEY10, {
+if (!globalThis[CORE_KEY11]) {
+  Object.defineProperty(globalThis, CORE_KEY11, {
     value: {
       isDebugEnabled,
       buildSlowQueryDebugPayload,
@@ -1468,7 +1516,7 @@ var buildSlowQueryDebugPayload2 = debugCore.buildSlowQueryDebugPayload;
 var withSlowQueryDebugPayload2 = debugCore.withSlowQueryDebugPayload;
 
 // insforge-src/shared/http-core.mjs
-var CORE_KEY11 = "__vibeusageHttpCore";
+var CORE_KEY12 = "__vibeusageHttpCore";
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -1505,8 +1553,8 @@ async function readJson(request) {
     return { error: "Invalid JSON", status: 400, data: null };
   }
 }
-if (!globalThis[CORE_KEY11]) {
-  Object.defineProperty(globalThis, CORE_KEY11, {
+if (!globalThis[CORE_KEY12]) {
+  Object.defineProperty(globalThis, CORE_KEY12, {
     value: {
       corsHeaders,
       handleOptions,
@@ -1530,7 +1578,7 @@ var requireMethod2 = httpCore.requireMethod;
 var readJson2 = httpCore.readJson;
 
 // insforge-src/shared/logging-core.mjs
-var CORE_KEY12 = "__vibeusageLoggingCore";
+var CORE_KEY13 = "__vibeusageLoggingCore";
 var envCore4 = globalThis.__vibeusageEnvCore;
 if (!envCore4) throw new Error("env core not initialized");
 function createRequestId() {
@@ -1628,8 +1676,8 @@ function logSlowQuery(logger, fields) {
 function getSlowQueryThresholdMs3() {
   return envCore4.getSlowQueryThresholdMs();
 }
-if (!globalThis[CORE_KEY12]) {
-  Object.defineProperty(globalThis, CORE_KEY12, {
+if (!globalThis[CORE_KEY13]) {
+  Object.defineProperty(globalThis, CORE_KEY13, {
     value: {
       createLogger,
       withRequestLogging,
@@ -1650,7 +1698,7 @@ var withRequestLogging2 = loggingCore.withRequestLogging;
 var logSlowQuery2 = loggingCore.logSlowQuery;
 
 // insforge-src/shared/pricing-core.mjs
-var CORE_KEY13 = "__vibeusagePricingCore";
+var CORE_KEY14 = "__vibeusagePricingCore";
 var MICROS_PER_DOLLAR = 1000000n;
 var TOKENS_PER_MILLION = 1000000n;
 var DEFAULT_PROFILE = {
@@ -1666,15 +1714,15 @@ var DEFAULT_PROFILE = {
 };
 var runtimePrimitivesCore4 = globalThis.__vibeusageRuntimePrimitivesCore;
 if (!runtimePrimitivesCore4) throw new Error("runtime primitives core not initialized");
-var usageModelCore3 = globalThis.__vibeusageUsageModelCore;
-if (!usageModelCore3) throw new Error("usage-model core not initialized");
+var usageModelCore4 = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore4) throw new Error("usage-model core not initialized");
 var envCore5 = globalThis.__vibeusageEnvCore;
 if (!envCore5) throw new Error("env core not initialized");
 function normalizeSource2(value) {
   return runtimePrimitivesCore4.normalizeSource(value);
 }
 function normalizeModelValue(value) {
-  const normalized = usageModelCore3.normalizeModel?.(value) || null;
+  const normalized = usageModelCore4.normalizeModel?.(value) || null;
   if (!normalized || normalized.toLowerCase() === "unknown") return null;
   return normalized;
 }
@@ -1811,8 +1859,8 @@ function normalizeProfile(profile) {
     }
   };
 }
-if (!globalThis[CORE_KEY13]) {
-  Object.defineProperty(globalThis, CORE_KEY13, {
+if (!globalThis[CORE_KEY14]) {
+  Object.defineProperty(globalThis, CORE_KEY14, {
     value: {
       getDefaultPricingProfile,
       getPricingDefaults: getPricingDefaults3,
@@ -1843,7 +1891,7 @@ var normalizeSource3 = runtimePrimitivesCore5.normalizeSource;
 var getSourceParam2 = runtimePrimitivesCore5.getSourceParam;
 
 // insforge-src/shared/usage-metrics-core.mjs
-var CORE_KEY14 = "__vibeusageUsageMetricsCore";
+var CORE_KEY15 = "__vibeusageUsageMetricsCore";
 var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
 var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
 var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
@@ -1939,8 +1987,8 @@ function parsePricingBucketKey(bucketKey, defaultDate) {
   }
   return { usageKey: bucketKey, dateKey: defaultDate };
 }
-if (!globalThis[CORE_KEY14]) {
-  Object.defineProperty(globalThis, CORE_KEY14, {
+if (!globalThis[CORE_KEY15]) {
+  Object.defineProperty(globalThis, CORE_KEY15, {
     value: {
       createTotals,
       addRowTotals,
@@ -1959,15 +2007,15 @@ if (!globalThis[CORE_KEY14]) {
 }
 
 // insforge-src/shared/usage-pricing-core.mjs
-var CORE_KEY15 = "__vibeusageUsagePricingCore";
+var CORE_KEY16 = "__vibeusageUsagePricingCore";
 var DEFAULT_MODEL2 = "unknown";
-var usageModelCore4 = globalThis.__vibeusageUsageModelCore;
-if (!usageModelCore4) throw new Error("usage-model core not initialized");
+var usageModelCore5 = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore5) throw new Error("usage-model core not initialized");
 var usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
 var pricingCore2 = globalThis.__vibeusagePricingCore;
 if (!pricingCore2) throw new Error("pricing core not initialized");
-var { fetchAliasRows: fetchAliasRows2, buildAliasTimeline: buildAliasTimeline2, resolveIdentityAtDate: resolveIdentityAtDate2 } = usageModelCore4;
+var { fetchAliasRows: fetchAliasRows2, buildAliasTimeline: buildAliasTimeline2, resolveIdentityAtDate: resolveIdentityAtDate2 } = usageModelCore5;
 var { buildPricingBucketKey: buildPricingBucketKey2, parsePricingBucketKey: parsePricingBucketKey2 } = usageMetricsCore;
 var { resolvePricingProfile: resolvePricingProfile3, computeUsageCost: computeUsageCost3 } = pricingCore2;
 async function resolveBucketedUsagePricing({
@@ -2048,8 +2096,8 @@ function resolveSummaryPricingMode({ pricingModes, overallPricingMode } = {}) {
   if (pricingModes.size === 1) return Array.from(pricingModes)[0];
   return "mixed";
 }
-if (!globalThis[CORE_KEY15]) {
-  Object.defineProperty(globalThis, CORE_KEY15, {
+if (!globalThis[CORE_KEY16]) {
+  Object.defineProperty(globalThis, CORE_KEY16, {
     value: {
       resolveBucketedUsagePricing,
       accumulateSourceCostMicros,
@@ -2063,7 +2111,7 @@ if (!globalThis[CORE_KEY15]) {
 }
 
 // insforge-src/shared/pagination-core.mjs
-var CORE_KEY16 = "__vibeusagePaginationCore";
+var CORE_KEY17 = "__vibeusagePaginationCore";
 var MAX_PAGE_SIZE = 1e3;
 function normalizePageSize(value) {
   const size = Number(value);
@@ -2097,8 +2145,8 @@ async function forEachPage({ createQuery, pageSize, onPage }) {
   }
   return { error: null };
 }
-if (!globalThis[CORE_KEY16]) {
-  Object.defineProperty(globalThis, CORE_KEY16, {
+if (!globalThis[CORE_KEY17]) {
+  Object.defineProperty(globalThis, CORE_KEY17, {
     value: {
       MAX_PAGE_SIZE,
       normalizePageSize,
@@ -2111,14 +2159,14 @@ if (!globalThis[CORE_KEY16]) {
 }
 
 // insforge-src/shared/usage-rollup-core.mjs
-var CORE_KEY17 = "__vibeusageUsageRollupCore";
-var canaryCore2 = globalThis.__vibeusageCanaryCore;
-if (!canaryCore2) throw new Error("canary core not initialized");
+var CORE_KEY18 = "__vibeusageUsageRollupCore";
+var canaryCore3 = globalThis.__vibeusageCanaryCore;
+if (!canaryCore3) throw new Error("canary core not initialized");
 var paginationCore = globalThis.__vibeusagePaginationCore;
 if (!paginationCore) throw new Error("pagination core not initialized");
 var usageMetricsCore2 = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore2) throw new Error("usage metrics core not initialized");
-var { applyCanaryFilter: applyCanaryFilter3 } = canaryCore2;
+var { applyCanaryFilter: applyCanaryFilter4 } = canaryCore3;
 var { forEachPage: forEachPage2 } = paginationCore;
 var { createTotals: createTotals2, addRowTotals: addRowTotals2 } = usageMetricsCore2;
 async function fetchRollupRows({ edgeClient, userId, fromDay, toDay, source, model }) {
@@ -2130,7 +2178,7 @@ async function fetchRollupRows({ edgeClient, userId, fromDay, toDay, source, mod
       ).eq("user_id", userId).gte("day", fromDay).lte("day", toDay);
       if (source) query = query.eq("source", source);
       if (model) query = query.eq("model", model);
-      query = applyCanaryFilter3(query, { source, model });
+      query = applyCanaryFilter4(query, { source, model });
       return query.order("day", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
     },
     onPage: (pageRows) => {
@@ -2151,8 +2199,8 @@ function sumRollupRows(rows) {
 function isRollupEnabled() {
   return false;
 }
-if (!globalThis[CORE_KEY17]) {
-  Object.defineProperty(globalThis, CORE_KEY17, {
+if (!globalThis[CORE_KEY18]) {
+  Object.defineProperty(globalThis, CORE_KEY18, {
     value: {
       fetchRollupRows,
       sumRollupRows,
@@ -2165,27 +2213,27 @@ if (!globalThis[CORE_KEY17]) {
 }
 
 // insforge-src/functions-esm/shared/usage-summary-support.js
-var usageModelCore5 = globalThis.__vibeusageUsageModelCore;
-if (!usageModelCore5) throw new Error("usage-model core not initialized");
+var usageModelCore6 = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore6) throw new Error("usage-model core not initialized");
 var usageMetricsCore3 = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore3) throw new Error("usage metrics core not initialized");
 var paginationCore2 = globalThis.__vibeusagePaginationCore;
 if (!paginationCore2) throw new Error("pagination core not initialized");
 var usageRollupCore = globalThis.__vibeusageUsageRollupCore;
 if (!usageRollupCore) throw new Error("usage rollup core not initialized");
-var normalizeModel2 = usageModelCore5.normalizeModel;
-var normalizeUsageModel2 = usageModelCore5.normalizeUsageModel;
-var applyUsageModelFilter2 = usageModelCore5.applyUsageModelFilter;
-var getModelParam2 = usageModelCore5.getModelParam;
-var normalizeUsageModelKey2 = usageModelCore5.normalizeUsageModelKey;
-var applyModelIdentity2 = usageModelCore5.applyModelIdentity;
-var resolveModelIdentity2 = usageModelCore5.resolveModelIdentity;
-var resolveUsageModelsForCanonical2 = usageModelCore5.resolveUsageModelsForCanonical;
-var extractDateKey3 = usageModelCore5.extractDateKey;
-var resolveIdentityAtDate3 = usageModelCore5.resolveIdentityAtDate;
-var matchesCanonicalModelAtDate3 = usageModelCore5.matchesCanonicalModelAtDate;
-var buildAliasTimeline3 = usageModelCore5.buildAliasTimeline;
-var fetchAliasRows3 = usageModelCore5.fetchAliasRows;
+var normalizeModel2 = usageModelCore6.normalizeModel;
+var normalizeUsageModel2 = usageModelCore6.normalizeUsageModel;
+var applyUsageModelFilter3 = usageModelCore6.applyUsageModelFilter;
+var getModelParam2 = usageModelCore6.getModelParam;
+var normalizeUsageModelKey2 = usageModelCore6.normalizeUsageModelKey;
+var applyModelIdentity2 = usageModelCore6.applyModelIdentity;
+var resolveModelIdentity2 = usageModelCore6.resolveModelIdentity;
+var resolveUsageModelsForCanonical2 = usageModelCore6.resolveUsageModelsForCanonical;
+var extractDateKey3 = usageModelCore6.extractDateKey;
+var resolveIdentityAtDate3 = usageModelCore6.resolveIdentityAtDate;
+var matchesCanonicalModelAtDate3 = usageModelCore6.matchesCanonicalModelAtDate;
+var buildAliasTimeline3 = usageModelCore6.buildAliasTimeline;
+var fetchAliasRows3 = usageModelCore6.fetchAliasRows;
 var createTotals3 = usageMetricsCore3.createTotals;
 var addRowTotals3 = usageMetricsCore3.addRowTotals;
 var resolveBillableTotals2 = usageMetricsCore3.resolveBillableTotals;
@@ -2305,15 +2353,16 @@ var vibeusage_usage_daily_default = withRequestLogging2("vibeusage-usage-daily",
   const rollupEnabled = isRollupEnabled2();
   const sumHourlyRange = async () => {
     const { error } = await forEachPage3({
-      createQuery: () => {
-        let query = auth.edgeClient.database.from("vibeusage_tracker_hourly").select(
-          "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens"
-        ).eq("user_id", auth.userId);
-        if (source) query = query.eq("source", source);
-        if (hasModelFilter) query = applyUsageModelFilter2(query, usageModels);
-        query = applyCanaryFilter2(query, { source, model: canonicalModel });
-        return query.gte("hour_start", startIso).lt("hour_start", endIso).order("hour_start", { ascending: true }).order("device_id", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
-      },
+      createQuery: () => buildHourlyUsageQuery2({
+        edgeClient: auth.edgeClient,
+        userId: auth.userId,
+        source,
+        usageModels,
+        canonicalModel,
+        startIso,
+        endIso,
+        select: "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens"
+      }),
       onPage: (rows2) => {
         const pageRows = Array.isArray(rows2) ? rows2 : [];
         rowCount += pageRows.length;
@@ -2334,11 +2383,16 @@ var vibeusage_usage_daily_default = withRequestLogging2("vibeusage-usage-daily",
     return { ok: true };
   };
   const hasHourlyData = async (rangeStartIso, rangeEndIso) => {
-    let query = auth.edgeClient.database.from("vibeusage_tracker_hourly").select("hour_start").eq("user_id", auth.userId);
-    if (source) query = query.eq("source", source);
-    if (hasModelFilter) query = applyUsageModelFilter2(query, usageModels);
-    query = applyCanaryFilter2(query, { source, model: canonicalModel });
-    const { data, error } = await query.gte("hour_start", rangeStartIso).lt("hour_start", rangeEndIso).order("hour_start", { ascending: true }).limit(1);
+    const { data, error } = await buildHourlyUsageQuery2({
+      edgeClient: auth.edgeClient,
+      userId: auth.userId,
+      source,
+      usageModels,
+      canonicalModel,
+      startIso: rangeStartIso,
+      endIso: rangeEndIso,
+      select: "hour_start"
+    }).limit(1);
     if (error) return { ok: false, error };
     return { ok: true, hasRows: Array.isArray(data) && data.length > 0 };
   };

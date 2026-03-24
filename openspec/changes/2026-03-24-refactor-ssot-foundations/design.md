@@ -46,4 +46,6 @@ Alias-timeline canonical-model matching for range-filtered usage queries now con
 
 Row-level canonical-model filtering for aggregate usage endpoints now converges through `insforge-src/shared/usage-filter-core.js`. The shared `usage-monthly-core` and the ESM `vibeusage-usage-summary` function now reuse `shouldIncludeUsageRow` instead of each re-implementing `resolveIdentityAtDate` comparisons, which keeps alias-timeline effective-date filtering aligned across daily, monthly, and summary aggregation paths.
 
+Raw hourly usage query construction now converges through `insforge-src/shared/usage-hourly-query-core.js`. The existing CJS `shared/db/usage-hourly.js` builder is now just a wrapper over that core, and ESM usage endpoints (`vibeusage-usage-summary`, `vibeusage-usage-daily`, `vibeusage-usage-monthly`, `vibeusage-usage-hourly`, `vibeusage-usage-heatmap`, and `vibeusage-usage-model-breakdown`) now all reuse the same `buildHourlyUsageQuery` helper for `vibeusage_tracker_hourly` reads instead of carrying duplicate `source/model/canary/range/order` query assembly logic in each function.
+
 The ESM edge layer still contains additional duplicated business logic beyond this slice. This change converts immediately reachable contract drift to shared modules and guardrails first, then continues function-by-function backend convergence without changing public slugs.

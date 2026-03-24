@@ -1,5 +1,6 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
 import { applyCanaryFilter } from "./shared/canary.js";
+import { buildHourlyUsageQuery } from "./shared/db/usage-hourly.js";
 import {
   addDatePartsDays,
   addUtcDays,
@@ -184,24 +185,18 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
     const queryStartMs = Date.now();
     let rowCount = 0;
     const { error } = await forEachPage({
-      createQuery: () => {
-        let query = auth.edgeClient.database
-          .from("vibeusage_tracker_hourly")
-          .select(
+      createQuery: () =>
+        buildHourlyUsageQuery({
+          edgeClient: auth.edgeClient,
+          userId: auth.userId,
+          source,
+          usageModels,
+          canonicalModel,
+          startIso,
+          endIso,
+          select:
             "hour_start,model,source,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-          )
-          .eq("user_id", auth.userId);
-        if (source) query = query.eq("source", source);
-        if (hasModelFilter) query = applyUsageModelFilter(query, usageModels);
-        query = applyCanaryFilter(query, { source, model: canonicalModel });
-        return query
-          .gte("hour_start", startIso)
-          .lt("hour_start", endIso)
-          .order("hour_start", { ascending: true })
-          .order("device_id", { ascending: true })
-          .order("source", { ascending: true })
-          .order("model", { ascending: true });
-      },
+        }),
       onPage: (rows) => {
         const pageRows = Array.isArray(rows) ? rows : [];
         rowCount += pageRows.length;
@@ -307,24 +302,18 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
   const queryStartMs = Date.now();
   let rowCount = 0;
   const { error } = await forEachPage({
-    createQuery: () => {
-      let query = auth.edgeClient.database
-        .from("vibeusage_tracker_hourly")
-        .select(
+    createQuery: () =>
+      buildHourlyUsageQuery({
+        edgeClient: auth.edgeClient,
+        userId: auth.userId,
+        source,
+        usageModels,
+        canonicalModel,
+        startIso,
+        endIso,
+        select:
           "hour_start,model,source,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-        )
-        .eq("user_id", auth.userId);
-      if (source) query = query.eq("source", source);
-      if (hasModelFilter) query = applyUsageModelFilter(query, usageModels);
-      query = applyCanaryFilter(query, { source, model: canonicalModel });
-      return query
-        .gte("hour_start", startIso)
-        .lt("hour_start", endIso)
-        .order("hour_start", { ascending: true })
-        .order("device_id", { ascending: true })
-        .order("source", { ascending: true })
-        .order("model", { ascending: true });
-    },
+      }),
     onPage: (rows) => {
       const pageRows = Array.isArray(rows) ? rows : [];
       rowCount += pageRows.length;
