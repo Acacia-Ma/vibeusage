@@ -58,8 +58,6 @@ test("backend pricing and usage metrics semantics flow through shared cores", ()
   assert.match(read("insforge-src/functions-esm/shared/source.js"), /runtime-primitives-core\.mjs/);
   assert.match(read("insforge-src/shared/env.js"), /env-core/);
   assert.match(read("insforge-src/functions-esm/shared/env.js"), /env-core\.mjs/);
-  assert.match(read("insforge-src/shared/date.js"), /require\("\.\/env"\)/);
-  assert.match(read("insforge-src/shared/logging.js"), /require\("\.\/env"\)/);
   assert.match(read("insforge-src/shared/pricing.js"), /pricing-core/);
   assert.match(read("insforge-src/shared/usage-billable.js"), /usage-metrics-core/);
   assert.match(read("insforge-src/shared/usage-aggregate.js"), /usage-metrics-core/);
@@ -123,4 +121,16 @@ test("backend canary debug and crypto helpers flow through shared cores", () => 
   assert.match(read("insforge-src/functions-esm/shared/debug.js"), /shared\/debug-core\.mjs/);
   assert.match(read("insforge-src/shared/crypto.js"), /crypto-core/);
   assert.match(read("insforge-src/functions-esm/shared/crypto.js"), /shared\/crypto-core\.mjs/);
+});
+
+test("backend date and logging helpers flow through shared cores", () => {
+  assert.equal(read("insforge-src/shared/date-core.js"), read("insforge-src/shared/date-core.mjs"));
+  assert.equal(
+    read("insforge-src/shared/logging-core.js"),
+    read("insforge-src/shared/logging-core.mjs"),
+  );
+  assert.match(read("insforge-src/shared/date.js"), /date-core/);
+  assert.match(read("insforge-src/functions-esm/shared/date.js"), /shared\/date-core\.mjs/);
+  assert.match(read("insforge-src/shared/logging.js"), /logging-core/);
+  assert.match(read("insforge-src/functions-esm/shared/logging.js"), /shared\/logging-core\.mjs/);
 });

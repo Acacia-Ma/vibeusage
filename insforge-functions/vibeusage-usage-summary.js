@@ -993,7 +993,10 @@ if (!canaryCore) throw new Error("canary core not initialized");
 var isCanaryTag2 = canaryCore.isCanaryTag;
 var applyCanaryFilter2 = canaryCore.applyCanaryFilter;
 
-// insforge-src/functions-esm/shared/date.js
+// insforge-src/shared/date-core.mjs
+var CORE_KEY7 = "__vibeusageDateCore";
+var envCore2 = globalThis.__vibeusageEnvCore;
+if (!envCore2) throw new Error("env core not initialized");
 var TIMEZONE_FORMATTERS = /* @__PURE__ */ new Map();
 function isDate(value) {
   return typeof value === "string" && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value);
@@ -1004,8 +1007,48 @@ function toUtcDay(date) {
 function formatDateUTC(date) {
   return toUtcDay(date).toISOString().slice(0, 10);
 }
+function normalizeDateRange(fromRaw, toRaw) {
+  const today = /* @__PURE__ */ new Date();
+  const toDefault = formatDateUTC(today);
+  const fromDefault = formatDateUTC(
+    new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 29))
+  );
+  const from = isDate(fromRaw) ? fromRaw : fromDefault;
+  const to = isDate(toRaw) ? toRaw : toDefault;
+  return { from, to };
+}
+function parseUtcDateString(value) {
+  if (!isDate(value)) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (!Number.isFinite(date.getTime())) return null;
+  return formatDateUTC(date) === value ? date : null;
+}
 function addUtcDays(date, days) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days));
+}
+function computeHeatmapWindowUtc({ weeks, weekStartsOn, to }) {
+  const end = parseUtcDateString(to) || /* @__PURE__ */ new Date();
+  const desired = weekStartsOn === "mon" ? 1 : 0;
+  const endDow = end.getUTCDay();
+  const endWeekStart = addUtcDays(end, -((endDow - desired + 7) % 7));
+  const gridStart = addUtcDays(endWeekStart, -7 * (weeks - 1));
+  return { from: formatDateUTC(gridStart), gridStart, end };
+}
+function getTimeZoneFormatter(timeZone) {
+  if (TIMEZONE_FORMATTERS.has(timeZone)) return TIMEZONE_FORMATTERS.get(timeZone);
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+  TIMEZONE_FORMATTERS.set(timeZone, formatter);
+  return formatter;
 }
 function parseDateParts(value) {
   if (!isDate(value)) return null;
@@ -1047,6 +1090,19 @@ function addDatePartsDays(parts, days) {
   if (!base) return null;
   return datePartsFromDateUTC(addUtcDays(base, days));
 }
+function addDatePartsMonths(parts, months) {
+  if (!parts) return null;
+  const year = Number(parts.year);
+  const month = Number(parts.month) - 1 + Number(months || 0);
+  const day = Number(parts.day || 1);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  const dt = new Date(Date.UTC(year, month, day));
+  return {
+    year: dt.getUTCFullYear(),
+    month: dt.getUTCMonth() + 1,
+    day: dt.getUTCDate()
+  };
+}
 function parseOffsetMinutes(raw) {
   if (raw == null || raw === "") return null;
   const value = String(raw).trim();
@@ -1054,21 +1110,6 @@ function parseOffsetMinutes(raw) {
   const offset = Number(value);
   if (!Number.isFinite(offset) || offset < -840 || offset > 840) return null;
   return Math.trunc(offset);
-}
-function getTimeZoneFormatter(timeZone) {
-  if (TIMEZONE_FORMATTERS.has(timeZone)) return TIMEZONE_FORMATTERS.get(timeZone);
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hour12: false,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  });
-  TIMEZONE_FORMATTERS.set(timeZone, formatter);
-  return formatter;
 }
 function normalizeTimeZone(tzRaw, offsetRaw) {
   const timeZoneValue = typeof tzRaw === "string" ? tzRaw.trim() : "";
@@ -1160,7 +1201,9 @@ function localDatePartsToUtc(parts, tzContext) {
     let offset = getTimeZoneOffsetMinutes(new Date(baseUtc), tzContext.timeZone);
     let utc = baseUtc - offset * 6e4;
     const offset2 = getTimeZoneOffsetMinutes(new Date(utc), tzContext.timeZone);
-    if (offset2 !== offset) utc = baseUtc - offset2 * 6e4;
+    if (offset2 !== offset) {
+      utc = baseUtc - offset2 * 6e4;
+    }
     return new Date(utc);
   }
   const offsetMinutes = Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : 0;
@@ -1194,13 +1237,69 @@ function listDateStrings(from, to) {
   return days;
 }
 function getUsageMaxDays3() {
-  return getUsageMaxDays2();
+  return envCore2.getUsageMaxDays();
+}
+if (!globalThis[CORE_KEY7]) {
+  Object.defineProperty(globalThis, CORE_KEY7, {
+    value: {
+      isDate,
+      toUtcDay,
+      formatDateUTC,
+      normalizeDateRange,
+      parseUtcDateString,
+      addUtcDays,
+      computeHeatmapWindowUtc,
+      parseDateParts,
+      formatDateParts,
+      dateFromPartsUTC,
+      datePartsFromDateUTC,
+      addDatePartsDays,
+      addDatePartsMonths,
+      normalizeTimeZone,
+      getUsageTimeZoneContext,
+      isUtcTimeZone,
+      getTimeZoneOffsetMinutes,
+      getLocalParts,
+      formatLocalDateKey,
+      localDatePartsToUtc,
+      normalizeDateRangeLocal,
+      listDateStrings,
+      getUsageMaxDays: getUsageMaxDays3
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
 }
 
+// insforge-src/functions-esm/shared/date.js
+var dateCore = globalThis.__vibeusageDateCore;
+if (!dateCore) throw new Error("date core not initialized");
+var isDate2 = dateCore.isDate;
+var toUtcDay2 = dateCore.toUtcDay;
+var formatDateUTC2 = dateCore.formatDateUTC;
+var parseUtcDateString2 = dateCore.parseUtcDateString;
+var addUtcDays2 = dateCore.addUtcDays;
+var computeHeatmapWindowUtc2 = dateCore.computeHeatmapWindowUtc;
+var parseDateParts2 = dateCore.parseDateParts;
+var formatDateParts2 = dateCore.formatDateParts;
+var dateFromPartsUTC2 = dateCore.dateFromPartsUTC;
+var addDatePartsDays2 = dateCore.addDatePartsDays;
+var addDatePartsMonths2 = dateCore.addDatePartsMonths;
+var getUsageTimeZoneContext2 = dateCore.getUsageTimeZoneContext;
+var isUtcTimeZone2 = dateCore.isUtcTimeZone;
+var getTimeZoneOffsetMinutes2 = dateCore.getTimeZoneOffsetMinutes;
+var getLocalParts2 = dateCore.getLocalParts;
+var formatLocalDateKey2 = dateCore.formatLocalDateKey;
+var localDatePartsToUtc2 = dateCore.localDatePartsToUtc;
+var normalizeDateRangeLocal2 = dateCore.normalizeDateRangeLocal;
+var listDateStrings2 = dateCore.listDateStrings;
+var getUsageMaxDays4 = dateCore.getUsageMaxDays;
+
 // insforge-src/shared/debug-core.mjs
-var CORE_KEY7 = "__vibeusageDebugCore";
-var envCore2 = globalThis.__vibeusageEnvCore;
-if (!envCore2) throw new Error("env core not initialized");
+var CORE_KEY8 = "__vibeusageDebugCore";
+var envCore3 = globalThis.__vibeusageEnvCore;
+if (!envCore3) throw new Error("env core not initialized");
 function isDebugEnabled(url) {
   if (!url) return false;
   if (typeof url === "string") {
@@ -1215,7 +1314,7 @@ function isDebugEnabled(url) {
 }
 function buildSlowQueryDebugPayload({ logger, durationMs, status } = {}) {
   const safeDuration = Number.isFinite(durationMs) ? Math.max(0, Math.round(durationMs)) : 0;
-  const thresholdMs = envCore2.getSlowQueryThresholdMs();
+  const thresholdMs = envCore3.getSlowQueryThresholdMs();
   if (logger?.log) {
     logger.log({
       stage: "debug_payload",
@@ -1240,8 +1339,8 @@ function withSlowQueryDebugPayload(body, options) {
     debug: buildSlowQueryDebugPayload(options)
   };
 }
-if (!globalThis[CORE_KEY7]) {
-  Object.defineProperty(globalThis, CORE_KEY7, {
+if (!globalThis[CORE_KEY8]) {
+  Object.defineProperty(globalThis, CORE_KEY8, {
     value: {
       isDebugEnabled,
       buildSlowQueryDebugPayload,
@@ -1261,7 +1360,7 @@ var buildSlowQueryDebugPayload2 = debugCore.buildSlowQueryDebugPayload;
 var withSlowQueryDebugPayload2 = debugCore.withSlowQueryDebugPayload;
 
 // insforge-src/shared/http-core.mjs
-var CORE_KEY8 = "__vibeusageHttpCore";
+var CORE_KEY9 = "__vibeusageHttpCore";
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -1298,8 +1397,8 @@ async function readJson(request) {
     return { error: "Invalid JSON", status: 400, data: null };
   }
 }
-if (!globalThis[CORE_KEY8]) {
-  Object.defineProperty(globalThis, CORE_KEY8, {
+if (!globalThis[CORE_KEY9]) {
+  Object.defineProperty(globalThis, CORE_KEY9, {
     value: {
       corsHeaders,
       handleOptions,
@@ -1322,7 +1421,10 @@ var json2 = httpCore.json;
 var requireMethod2 = httpCore.requireMethod;
 var readJson2 = httpCore.readJson;
 
-// insforge-src/functions-esm/shared/logging.js
+// insforge-src/shared/logging-core.mjs
+var CORE_KEY10 = "__vibeusageLoggingCore";
+var envCore4 = globalThis.__vibeusageEnvCore;
+if (!envCore4) throw new Error("env core not initialized");
 function createRequestId() {
   if (globalThis?.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -1406,7 +1508,7 @@ function logSlowQuery(logger, fields) {
   if (!logger || typeof logger.log !== "function") return;
   const durationMs = Number(fields?.duration_ms ?? fields?.durationMs);
   if (!Number.isFinite(durationMs)) return;
-  const thresholdMs = getSlowQueryThresholdMs2();
+  const thresholdMs = envCore4.getSlowQueryThresholdMs();
   if (durationMs < thresholdMs) return;
   logger.log({
     stage: "slow_query",
@@ -1415,6 +1517,29 @@ function logSlowQuery(logger, fields) {
     duration_ms: Math.round(durationMs)
   });
 }
+function getSlowQueryThresholdMs3() {
+  return envCore4.getSlowQueryThresholdMs();
+}
+if (!globalThis[CORE_KEY10]) {
+  Object.defineProperty(globalThis, CORE_KEY10, {
+    value: {
+      createLogger,
+      withRequestLogging,
+      logSlowQuery,
+      getSlowQueryThresholdMs: getSlowQueryThresholdMs3
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/logging.js
+var loggingCore = globalThis.__vibeusageLoggingCore;
+if (!loggingCore) throw new Error("logging core not initialized");
+var createLogger2 = loggingCore.createLogger;
+var withRequestLogging2 = loggingCore.withRequestLogging;
+var logSlowQuery2 = loggingCore.logSlowQuery;
 
 // insforge-src/functions-esm/shared/numbers.js
 var runtimePrimitivesCore2 = globalThis.__vibeusageRuntimePrimitivesCore;
@@ -1424,7 +1549,7 @@ var toPositiveIntOrNull2 = runtimePrimitivesCore2.toPositiveIntOrNull;
 var toPositiveInt2 = runtimePrimitivesCore2.toPositiveInt;
 
 // insforge-src/shared/pricing-core.mjs
-var CORE_KEY9 = "__vibeusagePricingCore";
+var CORE_KEY11 = "__vibeusagePricingCore";
 var MICROS_PER_DOLLAR = 1000000n;
 var TOKENS_PER_MILLION = 1000000n;
 var DEFAULT_PROFILE = {
@@ -1442,8 +1567,8 @@ var runtimePrimitivesCore3 = globalThis.__vibeusageRuntimePrimitivesCore;
 if (!runtimePrimitivesCore3) throw new Error("runtime primitives core not initialized");
 var usageModelCore2 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore2) throw new Error("usage-model core not initialized");
-var envCore3 = globalThis.__vibeusageEnvCore;
-if (!envCore3) throw new Error("env core not initialized");
+var envCore5 = globalThis.__vibeusageEnvCore;
+if (!envCore5) throw new Error("env core not initialized");
 function normalizeSource2(value) {
   return runtimePrimitivesCore3.normalizeSource(value);
 }
@@ -1461,7 +1586,7 @@ function getDefaultPricingProfile() {
   };
 }
 function getPricingDefaults3() {
-  return envCore3.getPricingDefaults();
+  return envCore5.getPricingDefaults();
 }
 async function resolvePricingProfile({ edgeClient, effectiveDate, model, source } = {}) {
   const fallback = getDefaultPricingProfile();
@@ -1585,8 +1710,8 @@ function normalizeProfile(profile) {
     }
   };
 }
-if (!globalThis[CORE_KEY9]) {
-  Object.defineProperty(globalThis, CORE_KEY9, {
+if (!globalThis[CORE_KEY11]) {
+  Object.defineProperty(globalThis, CORE_KEY11, {
     value: {
       getDefaultPricingProfile,
       getPricingDefaults: getPricingDefaults3,
@@ -1610,7 +1735,7 @@ var buildPricingMetadata2 = pricingCore.buildPricingMetadata;
 var formatUsdFromMicros2 = pricingCore.formatUsdFromMicros;
 
 // insforge-src/shared/usage-metrics-core.mjs
-var CORE_KEY10 = "__vibeusageUsageMetricsCore";
+var CORE_KEY12 = "__vibeusageUsageMetricsCore";
 var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
 var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
 var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
@@ -1706,8 +1831,8 @@ function parsePricingBucketKey(bucketKey, defaultDate) {
   }
   return { usageKey: bucketKey, dateKey: defaultDate };
 }
-if (!globalThis[CORE_KEY10]) {
-  Object.defineProperty(globalThis, CORE_KEY10, {
+if (!globalThis[CORE_KEY12]) {
+  Object.defineProperty(globalThis, CORE_KEY12, {
     value: {
       createTotals,
       addRowTotals,
@@ -1805,7 +1930,7 @@ function isRollupEnabled() {
 // insforge-src/functions-esm/vibeusage-usage-summary.js
 var DEFAULT_SOURCE = "codex";
 var DEFAULT_MODEL2 = "unknown";
-var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summary", async function(request, logger) {
+var vibeusage_usage_summary_default = withRequestLogging2("vibeusage-usage-summary", async function(request, logger) {
   const opt = handleOptions2(request);
   if (opt) return opt;
   const url = new URL(request.url);
@@ -1817,7 +1942,7 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
   if (request.method !== "GET") return respond({ error: "Method not allowed" }, 405, 0);
   const bearer = getBearerToken2(request.headers.get("Authorization"));
   if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
-  const tzContext = getUsageTimeZoneContext(url);
+  const tzContext = getUsageTimeZoneContext2(url);
   const rollingEnabled = url.searchParams.get("rolling") === "1";
   const sourceResult = getSourceParam2(url);
   if (!sourceResult.ok) return respond({ error: sourceResult.error }, 400, 0);
@@ -1826,18 +1951,18 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
   if (!modelResult.ok) return respond({ error: modelResult.error }, 400, 0);
   const model = modelResult.model;
   const hasModelParam = model != null;
-  const { from, to } = normalizeDateRangeLocal(
+  const { from, to } = normalizeDateRangeLocal2(
     url.searchParams.get("from"),
     url.searchParams.get("to"),
     tzContext
   );
-  const dayKeys = listDateStrings(from, to);
-  const maxDays = getUsageMaxDays3();
+  const dayKeys = listDateStrings2(from, to);
+  const maxDays = getUsageMaxDays4();
   if (dayKeys.length > maxDays) {
     return respond({ error: `Date range too large (max ${maxDays} days)` }, 400, 0);
   }
-  const startParts = parseDateParts(from);
-  const endParts = parseDateParts(to);
+  const startParts = parseDateParts2(from);
+  const endParts = parseDateParts2(to);
   if (!startParts || !endParts) return respond({ error: "Invalid date range" }, 400, 0);
   const auth = await getAccessContext2({
     baseUrl: getBaseUrl2(),
@@ -1845,8 +1970,8 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
     allowPublic: true
   });
   if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
-  const startUtc = localDatePartsToUtc(startParts, tzContext);
-  const endUtc = localDatePartsToUtc(addDatePartsDays(endParts, 1), tzContext);
+  const startUtc = localDatePartsToUtc2(startParts, tzContext);
+  const endUtc = localDatePartsToUtc2(addDatePartsDays2(endParts, 1), tzContext);
   const startIso = startUtc.toISOString();
   const endIso = endUtc.toISOString();
   const modelFilter = await resolveUsageModelsForCanonical2({
@@ -2055,8 +2180,8 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
       const hourlyRes = await sumHourlyRangeInto(rangeStartIso, rangeEndIso, onRow);
       if (!hourlyRes.ok) hourlyError = hourlyRes.error;
     } else {
-      const rollupStartDate = startIsBoundary2 ? rangeStartDayUtc : addUtcDays(rangeStartDayUtc, 1);
-      const rollupEndDate = addUtcDays(rangeEndDayUtc, -1);
+      const rollupStartDate = startIsBoundary2 ? rangeStartDayUtc : addUtcDays2(rangeStartDayUtc, 1);
+      const rollupEndDate = addUtcDays2(rangeEndDayUtc, -1);
       if (!startIsBoundary2) {
         const hourlyRes = await sumHourlyRangeInto(rangeStartIso, rollupStartDate.toISOString(), onRow);
         if (!hourlyRes.ok) hourlyError = hourlyRes.error;
@@ -2067,8 +2192,8 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
       }
       if (!hourlyError && rollupStartDate.getTime() <= rollupEndDate.getTime()) {
         const rollupRes = await sumRollupRangeInto(
-          formatDateUTC(rollupStartDate),
-          formatDateUTC(rollupEndDate),
+          formatDateUTC2(rollupStartDate),
+          formatDateUTC2(rollupEndDate),
           onRow
         );
         if (!rollupRes.ok) {
@@ -2090,11 +2215,11 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
     return { ok: true };
   };
   const buildRollingWindow = async ({ fromDay, toDay }) => {
-    const rangeStartParts = parseDateParts(fromDay);
-    const rangeEndParts = parseDateParts(toDay);
+    const rangeStartParts = parseDateParts2(fromDay);
+    const rangeEndParts = parseDateParts2(toDay);
     if (!rangeStartParts || !rangeEndParts) return { ok: false, error: new Error("Invalid rolling range") };
-    const rangeStartUtc = localDatePartsToUtc(rangeStartParts, tzContext);
-    const rangeEndUtc = localDatePartsToUtc(addDatePartsDays(rangeEndParts, 1), tzContext);
+    const rangeStartUtc = localDatePartsToUtc2(rangeStartParts, tzContext);
+    const rangeEndUtc = localDatePartsToUtc2(addDatePartsDays2(rangeEndParts, 1), tzContext);
     if (!Number.isFinite(rangeStartUtc.getTime()) || !Number.isFinite(rangeEndUtc.getTime())) {
       return { ok: false, error: new Error("Invalid rolling range") };
     }
@@ -2102,7 +2227,7 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
     const rangeEndIso = rangeEndUtc.toISOString();
     const rollingTotals = createTotals2();
     const activeByDay = /* @__PURE__ */ new Map();
-    const shouldUseHourlyForActiveDays = rollupEnabled && !isUtcTimeZone(tzContext);
+    const shouldUseHourlyForActiveDays = rollupEnabled && !isUtcTimeZone2(tzContext);
     const resetRollingAggregation = () => {
       rollingTotals.total_tokens = 0n;
       rollingTotals.billable_total_tokens = 0n;
@@ -2115,10 +2240,10 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
     const updateActiveByDay = ({ row, billable, hasStoredBillable }) => {
       let dayKey = null;
       if (row?.hour_start) {
-        dayKey = formatLocalDateKey(new Date(row.hour_start), tzContext);
+        dayKey = formatLocalDateKey2(new Date(row.hour_start), tzContext);
       } else if (row?.day) {
-        const dayParts = parseDateParts(row.day);
-        if (dayParts) dayKey = formatLocalDateKey(dateFromPartsUTC(dayParts), tzContext);
+        const dayParts = parseDateParts2(row.day);
+        if (dayParts) dayKey = formatLocalDateKey2(dateFromPartsUTC2(dayParts), tzContext);
       }
       if (!dayKey) return;
       const billableTokens = hasStoredBillable ? toBigInt2(row?.billable_total_tokens) : billable;
@@ -2154,7 +2279,7 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
       });
       if (!activeRes.ok) return activeRes;
     }
-    const windowDays = listDateStrings(fromDay, toDay).length;
+    const windowDays = listDateStrings2(fromDay, toDay).length;
     const activeDays = Array.from(activeByDay.values()).filter((value) => value > 0n).length;
     const avg = activeDays > 0 ? rollingTotals.billable_total_tokens / BigInt(activeDays) : 0n;
     const avgPerDay = windowDays > 0 ? rollingTotals.billable_total_tokens / BigInt(windowDays) : 0n;
@@ -2186,8 +2311,8 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
       const hourlyRes = await sumHourlyRange(startIso, endIso);
       if (!hourlyRes.ok) hourlyError = hourlyRes.error;
     } else {
-      const rollupStartDate = startIsBoundary ? startDayUtc : addUtcDays(startDayUtc, 1);
-      const rollupEndDate = addUtcDays(endDayUtc, -1);
+      const rollupStartDate = startIsBoundary ? startDayUtc : addUtcDays2(startDayUtc, 1);
+      const rollupEndDate = addUtcDays2(endDayUtc, -1);
       if (!startIsBoundary) {
         const hourlyRes = await sumHourlyRange(startIso, rollupStartDate.toISOString());
         if (!hourlyRes.ok) hourlyError = hourlyRes.error;
@@ -2198,8 +2323,8 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
       }
       if (!hourlyError && rollupStartDate.getTime() <= rollupEndDate.getTime()) {
         const rollupRes = await sumRollupRange(
-          formatDateUTC(rollupStartDate),
-          formatDateUTC(rollupEndDate)
+          formatDateUTC2(rollupStartDate),
+          formatDateUTC2(rollupEndDate)
         );
         if (!rollupRes.ok) {
           hourlyError = rollupRes.error;
@@ -2221,13 +2346,13 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
   }
   let rollingPayload = null;
   if (rollingEnabled) {
-    const localTodayParts = getLocalParts(/* @__PURE__ */ new Date(), tzContext);
-    const localYesterday = formatDateParts(addDatePartsDays(localTodayParts, -1));
+    const localTodayParts = getLocalParts2(/* @__PURE__ */ new Date(), tzContext);
+    const localYesterday = formatDateParts2(addDatePartsDays2(localTodayParts, -1));
     const rollingToDay = to < localYesterday ? to : localYesterday;
-    const rollingEndParts = parseDateParts(rollingToDay);
+    const rollingEndParts = parseDateParts2(rollingToDay);
     if (!rollingEndParts) return respond({ error: "Invalid rolling range" }, 400, 0);
-    const last7From = formatDateParts(addDatePartsDays(rollingEndParts, -6));
-    const last30From = formatDateParts(addDatePartsDays(rollingEndParts, -29));
+    const last7From = formatDateParts2(addDatePartsDays2(rollingEndParts, -6));
+    const last30From = formatDateParts2(addDatePartsDays2(rollingEndParts, -29));
     if (!last7From || !last30From) return respond({ error: "Invalid rolling range" }, 400, 0);
     const last7Res = await buildRollingWindow({ fromDay: last7From, toDay: rollingToDay });
     if (!last7Res.ok) return respond({ error: last7Res.error.message }, 500, Date.now() - queryStartMs);
@@ -2236,7 +2361,7 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
     rollingPayload = { last_7d: last7Res.payload, last_30d: last30Res.payload };
   }
   const queryDurationMs = Date.now() - queryStartMs;
-  logSlowQuery(logger, {
+  logSlowQuery2(logger, {
     query_label: "usage_summary",
     duration_ms: queryDurationMs,
     row_count: rowCount,

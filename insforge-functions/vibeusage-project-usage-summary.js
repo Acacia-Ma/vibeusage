@@ -1118,7 +1118,10 @@ var json2 = httpCore.json;
 var requireMethod2 = httpCore.requireMethod;
 var readJson2 = httpCore.readJson;
 
-// insforge-src/functions-esm/shared/logging.js
+// insforge-src/shared/logging-core.mjs
+var CORE_KEY9 = "__vibeusageLoggingCore";
+var envCore3 = globalThis.__vibeusageEnvCore;
+if (!envCore3) throw new Error("env core not initialized");
 function createRequestId() {
   if (globalThis?.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -1202,7 +1205,7 @@ function logSlowQuery(logger, fields) {
   if (!logger || typeof logger.log !== "function") return;
   const durationMs = Number(fields?.duration_ms ?? fields?.durationMs);
   if (!Number.isFinite(durationMs)) return;
-  const thresholdMs = getSlowQueryThresholdMs2();
+  const thresholdMs = envCore3.getSlowQueryThresholdMs();
   if (durationMs < thresholdMs) return;
   logger.log({
     stage: "slow_query",
@@ -1211,6 +1214,29 @@ function logSlowQuery(logger, fields) {
     duration_ms: Math.round(durationMs)
   });
 }
+function getSlowQueryThresholdMs3() {
+  return envCore3.getSlowQueryThresholdMs();
+}
+if (!globalThis[CORE_KEY9]) {
+  Object.defineProperty(globalThis, CORE_KEY9, {
+    value: {
+      createLogger,
+      withRequestLogging,
+      logSlowQuery,
+      getSlowQueryThresholdMs: getSlowQueryThresholdMs3
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/logging.js
+var loggingCore = globalThis.__vibeusageLoggingCore;
+if (!loggingCore) throw new Error("logging core not initialized");
+var createLogger2 = loggingCore.createLogger;
+var withRequestLogging2 = loggingCore.withRequestLogging;
+var logSlowQuery2 = loggingCore.logSlowQuery;
 
 // insforge-src/functions-esm/shared/numbers.js
 var runtimePrimitivesCore2 = globalThis.__vibeusageRuntimePrimitivesCore;
@@ -1229,7 +1255,7 @@ var getSourceParam2 = runtimePrimitivesCore3.getSourceParam;
 // insforge-src/functions-esm/vibeusage-project-usage-summary.js
 var DEFAULT_LIMIT = 3;
 var MAX_LIMIT = 10;
-var vibeusage_project_usage_summary_default = withRequestLogging(
+var vibeusage_project_usage_summary_default = withRequestLogging2(
   "vibeusage-project-usage-summary",
   async function(request, logger) {
     const opt = handleOptions2(request);
@@ -1291,7 +1317,7 @@ var vibeusage_project_usage_summary_default = withRequestLogging(
       }).filter((row) => row.project_key && row.project_ref);
     }
     const queryDurationMs = Date.now() - queryStartMs;
-    logSlowQuery(logger, {
+    logSlowQuery2(logger, {
       query_label: "project_usage_summary",
       duration_ms: queryDurationMs,
       row_count: entries.length,

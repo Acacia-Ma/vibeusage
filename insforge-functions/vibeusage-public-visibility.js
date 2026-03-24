@@ -1050,7 +1050,10 @@ var setPublicVisibilityState2 = ({ edgeClient, userId, enabled, nowIso }) => pub
   sha256Hex: sha256Hex2
 });
 
-// insforge-src/functions-esm/shared/logging.js
+// insforge-src/shared/logging-core.mjs
+var CORE_KEY8 = "__vibeusageLoggingCore";
+var envCore2 = globalThis.__vibeusageEnvCore;
+if (!envCore2) throw new Error("env core not initialized");
 function createRequestId() {
   if (globalThis?.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -1130,9 +1133,45 @@ function withRequestLogging(functionName, handler) {
     }
   };
 }
+function logSlowQuery(logger, fields) {
+  if (!logger || typeof logger.log !== "function") return;
+  const durationMs = Number(fields?.duration_ms ?? fields?.durationMs);
+  if (!Number.isFinite(durationMs)) return;
+  const thresholdMs = envCore2.getSlowQueryThresholdMs();
+  if (durationMs < thresholdMs) return;
+  logger.log({
+    stage: "slow_query",
+    status: 200,
+    ...fields || {},
+    duration_ms: Math.round(durationMs)
+  });
+}
+function getSlowQueryThresholdMs3() {
+  return envCore2.getSlowQueryThresholdMs();
+}
+if (!globalThis[CORE_KEY8]) {
+  Object.defineProperty(globalThis, CORE_KEY8, {
+    value: {
+      createLogger,
+      withRequestLogging,
+      logSlowQuery,
+      getSlowQueryThresholdMs: getSlowQueryThresholdMs3
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/logging.js
+var loggingCore = globalThis.__vibeusageLoggingCore;
+if (!loggingCore) throw new Error("logging core not initialized");
+var createLogger2 = loggingCore.createLogger;
+var withRequestLogging2 = loggingCore.withRequestLogging;
+var logSlowQuery2 = loggingCore.logSlowQuery;
 
 // insforge-src/functions-esm/vibeusage-public-visibility.js
-var vibeusage_public_visibility_default = withRequestLogging("vibeusage-public-visibility", async function(request) {
+var vibeusage_public_visibility_default = withRequestLogging2("vibeusage-public-visibility", async function(request) {
   const opt = handleOptions2(request);
   if (opt) return opt;
   if (request.method !== "GET" && request.method !== "POST") {

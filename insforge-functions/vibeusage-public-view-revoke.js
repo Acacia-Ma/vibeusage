@@ -562,11 +562,13 @@ var require_env = __commonJS({
   }
 });
 
-// insforge-src/shared/logging.js
-var require_logging = __commonJS({
-  "insforge-src/shared/logging.js"(exports2, module2) {
+// insforge-src/shared/logging-core.js
+var require_logging_core = __commonJS({
+  "insforge-src/shared/logging-core.js"() {
     "use strict";
-    var env = require_env();
+    var CORE_KEY = "__vibeusageLoggingCore";
+    var envCore = globalThis.__vibeusageEnvCore;
+    if (!envCore) throw new Error("env core not initialized");
     function createRequestId() {
       if (globalThis?.crypto?.randomUUID) return globalThis.crypto.randomUUID();
       return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -576,6 +578,21 @@ var require_logging = __commonJS({
       if (status >= 500) return "SERVER_ERROR";
       if (status >= 400) return "CLIENT_ERROR";
       return null;
+    }
+    function getResponseStatus(response) {
+      if (response && typeof response.status === "number") return response.status;
+      return null;
+    }
+    function resolveFunctionName(functionName, request) {
+      if (request && typeof request.url === "string") {
+        try {
+          const url = new URL(request.url);
+          const match = url.pathname.match(/\/functions\/([^/?#]+)/);
+          if (match && match[1]) return match[1];
+        } catch (_error) {
+        }
+      }
+      return functionName;
     }
     function createLogger({ functionName }) {
       const requestId = createRequestId();
@@ -592,9 +609,9 @@ var require_logging = __commonJS({
           const res = await fetch(url, init);
           recordUpstream(res.status, Date.now() - upstreamStart);
           return res;
-        } catch (err) {
+        } catch (error) {
           recordUpstream(null, Date.now() - upstreamStart);
-          throw err;
+          throw error;
         }
       }
       function log({ stage, status, errorCode, ...extra }) {
@@ -617,46 +634,25 @@ var require_logging = __commonJS({
         fetch: fetchWithUpstream
       };
     }
-    function getResponseStatus(response) {
-      if (response && typeof response.status === "number") return response.status;
-      return null;
-    }
-    function resolveFunctionName(functionName, request) {
-      if (request && typeof request.url === "string") {
-        try {
-          const url = new URL(request.url);
-          const match = url.pathname.match(/\/functions\/([^/?#]+)/);
-          if (match && match[1]) return match[1];
-        } catch (_e) {
-        }
-      }
-      return functionName;
-    }
     function withRequestLogging2(functionName, handler) {
       return async function(request) {
         const resolvedName = resolveFunctionName(functionName, request);
         const logger = createLogger({ functionName: resolvedName });
         try {
           const response = await handler(request, logger);
-          const status = getResponseStatus(response);
-          logger.log({ stage: "response", status });
+          logger.log({ stage: "response", status: getResponseStatus(response) });
           return response;
-        } catch (err) {
+        } catch (error) {
           logger.log({ stage: "exception", status: 500, errorCode: "UNHANDLED_EXCEPTION" });
-          throw err;
+          throw error;
         }
       };
     }
-    module2.exports = {
-      withRequestLogging: withRequestLogging2,
-      logSlowQuery,
-      getSlowQueryThresholdMs: env.getSlowQueryThresholdMs
-    };
     function logSlowQuery(logger, fields) {
       if (!logger || typeof logger.log !== "function") return;
       const durationMs = Number(fields?.duration_ms ?? fields?.durationMs);
       if (!Number.isFinite(durationMs)) return;
-      const thresholdMs = env.getSlowQueryThresholdMs();
+      const thresholdMs = envCore.getSlowQueryThresholdMs();
       if (durationMs < thresholdMs) return;
       logger.log({
         stage: "slow_query",
@@ -665,6 +661,38 @@ var require_logging = __commonJS({
         duration_ms: Math.round(durationMs)
       });
     }
+    function getSlowQueryThresholdMs() {
+      return envCore.getSlowQueryThresholdMs();
+    }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          createLogger,
+          withRequestLogging: withRequestLogging2,
+          logSlowQuery,
+          getSlowQueryThresholdMs
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
+// insforge-src/shared/logging.js
+var require_logging = __commonJS({
+  "insforge-src/shared/logging.js"(exports2, module2) {
+    "use strict";
+    require_env();
+    require_logging_core();
+    var loggingCore = globalThis.__vibeusageLoggingCore;
+    if (!loggingCore) throw new Error("logging core not initialized");
+    module2.exports = {
+      withRequestLogging: loggingCore.withRequestLogging,
+      logSlowQuery: loggingCore.logSlowQuery,
+      getSlowQueryThresholdMs: loggingCore.getSlowQueryThresholdMs
+    };
   }
 });
 

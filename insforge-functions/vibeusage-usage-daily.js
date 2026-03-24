@@ -993,7 +993,10 @@ if (!canaryCore) throw new Error("canary core not initialized");
 var isCanaryTag2 = canaryCore.isCanaryTag;
 var applyCanaryFilter2 = canaryCore.applyCanaryFilter;
 
-// insforge-src/functions-esm/shared/date.js
+// insforge-src/shared/date-core.mjs
+var CORE_KEY7 = "__vibeusageDateCore";
+var envCore2 = globalThis.__vibeusageEnvCore;
+if (!envCore2) throw new Error("env core not initialized");
 var TIMEZONE_FORMATTERS = /* @__PURE__ */ new Map();
 function isDate(value) {
   return typeof value === "string" && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value);
@@ -1004,8 +1007,48 @@ function toUtcDay(date) {
 function formatDateUTC(date) {
   return toUtcDay(date).toISOString().slice(0, 10);
 }
+function normalizeDateRange(fromRaw, toRaw) {
+  const today = /* @__PURE__ */ new Date();
+  const toDefault = formatDateUTC(today);
+  const fromDefault = formatDateUTC(
+    new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 29))
+  );
+  const from = isDate(fromRaw) ? fromRaw : fromDefault;
+  const to = isDate(toRaw) ? toRaw : toDefault;
+  return { from, to };
+}
+function parseUtcDateString(value) {
+  if (!isDate(value)) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (!Number.isFinite(date.getTime())) return null;
+  return formatDateUTC(date) === value ? date : null;
+}
 function addUtcDays(date, days) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days));
+}
+function computeHeatmapWindowUtc({ weeks, weekStartsOn, to }) {
+  const end = parseUtcDateString(to) || /* @__PURE__ */ new Date();
+  const desired = weekStartsOn === "mon" ? 1 : 0;
+  const endDow = end.getUTCDay();
+  const endWeekStart = addUtcDays(end, -((endDow - desired + 7) % 7));
+  const gridStart = addUtcDays(endWeekStart, -7 * (weeks - 1));
+  return { from: formatDateUTC(gridStart), gridStart, end };
+}
+function getTimeZoneFormatter(timeZone) {
+  if (TIMEZONE_FORMATTERS.has(timeZone)) return TIMEZONE_FORMATTERS.get(timeZone);
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+  TIMEZONE_FORMATTERS.set(timeZone, formatter);
+  return formatter;
 }
 function parseDateParts(value) {
   if (!isDate(value)) return null;
@@ -1047,6 +1090,19 @@ function addDatePartsDays(parts, days) {
   if (!base) return null;
   return datePartsFromDateUTC(addUtcDays(base, days));
 }
+function addDatePartsMonths(parts, months) {
+  if (!parts) return null;
+  const year = Number(parts.year);
+  const month = Number(parts.month) - 1 + Number(months || 0);
+  const day = Number(parts.day || 1);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  const dt = new Date(Date.UTC(year, month, day));
+  return {
+    year: dt.getUTCFullYear(),
+    month: dt.getUTCMonth() + 1,
+    day: dt.getUTCDate()
+  };
+}
 function parseOffsetMinutes(raw) {
   if (raw == null || raw === "") return null;
   const value = String(raw).trim();
@@ -1054,21 +1110,6 @@ function parseOffsetMinutes(raw) {
   const offset = Number(value);
   if (!Number.isFinite(offset) || offset < -840 || offset > 840) return null;
   return Math.trunc(offset);
-}
-function getTimeZoneFormatter(timeZone) {
-  if (TIMEZONE_FORMATTERS.has(timeZone)) return TIMEZONE_FORMATTERS.get(timeZone);
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hour12: false,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  });
-  TIMEZONE_FORMATTERS.set(timeZone, formatter);
-  return formatter;
 }
 function normalizeTimeZone(tzRaw, offsetRaw) {
   const timeZoneValue = typeof tzRaw === "string" ? tzRaw.trim() : "";
@@ -1160,7 +1201,9 @@ function localDatePartsToUtc(parts, tzContext) {
     let offset = getTimeZoneOffsetMinutes(new Date(baseUtc), tzContext.timeZone);
     let utc = baseUtc - offset * 6e4;
     const offset2 = getTimeZoneOffsetMinutes(new Date(utc), tzContext.timeZone);
-    if (offset2 !== offset) utc = baseUtc - offset2 * 6e4;
+    if (offset2 !== offset) {
+      utc = baseUtc - offset2 * 6e4;
+    }
     return new Date(utc);
   }
   const offsetMinutes = Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : 0;
@@ -1194,8 +1237,64 @@ function listDateStrings(from, to) {
   return days;
 }
 function getUsageMaxDays3() {
-  return getUsageMaxDays2();
+  return envCore2.getUsageMaxDays();
 }
+if (!globalThis[CORE_KEY7]) {
+  Object.defineProperty(globalThis, CORE_KEY7, {
+    value: {
+      isDate,
+      toUtcDay,
+      formatDateUTC,
+      normalizeDateRange,
+      parseUtcDateString,
+      addUtcDays,
+      computeHeatmapWindowUtc,
+      parseDateParts,
+      formatDateParts,
+      dateFromPartsUTC,
+      datePartsFromDateUTC,
+      addDatePartsDays,
+      addDatePartsMonths,
+      normalizeTimeZone,
+      getUsageTimeZoneContext,
+      isUtcTimeZone,
+      getTimeZoneOffsetMinutes,
+      getLocalParts,
+      formatLocalDateKey,
+      localDatePartsToUtc,
+      normalizeDateRangeLocal,
+      listDateStrings,
+      getUsageMaxDays: getUsageMaxDays3
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/date.js
+var dateCore = globalThis.__vibeusageDateCore;
+if (!dateCore) throw new Error("date core not initialized");
+var isDate2 = dateCore.isDate;
+var toUtcDay2 = dateCore.toUtcDay;
+var formatDateUTC2 = dateCore.formatDateUTC;
+var parseUtcDateString2 = dateCore.parseUtcDateString;
+var addUtcDays2 = dateCore.addUtcDays;
+var computeHeatmapWindowUtc2 = dateCore.computeHeatmapWindowUtc;
+var parseDateParts2 = dateCore.parseDateParts;
+var formatDateParts2 = dateCore.formatDateParts;
+var dateFromPartsUTC2 = dateCore.dateFromPartsUTC;
+var addDatePartsDays2 = dateCore.addDatePartsDays;
+var addDatePartsMonths2 = dateCore.addDatePartsMonths;
+var getUsageTimeZoneContext2 = dateCore.getUsageTimeZoneContext;
+var isUtcTimeZone2 = dateCore.isUtcTimeZone;
+var getTimeZoneOffsetMinutes2 = dateCore.getTimeZoneOffsetMinutes;
+var getLocalParts2 = dateCore.getLocalParts;
+var formatLocalDateKey2 = dateCore.formatLocalDateKey;
+var localDatePartsToUtc2 = dateCore.localDatePartsToUtc;
+var normalizeDateRangeLocal2 = dateCore.normalizeDateRangeLocal;
+var listDateStrings2 = dateCore.listDateStrings;
+var getUsageMaxDays4 = dateCore.getUsageMaxDays;
 
 // insforge-src/functions-esm/shared/numbers.js
 var runtimePrimitivesCore2 = globalThis.__vibeusageRuntimePrimitivesCore;
@@ -1226,7 +1325,7 @@ function applyDailyBucket({ buckets, row, tzContext, billable }) {
   if (!ts) return false;
   const dt = new Date(ts);
   if (!Number.isFinite(dt.getTime())) return false;
-  const day = formatLocalDateKey(dt, tzContext);
+  const day = formatLocalDateKey2(dt, tzContext);
   const bucket = buckets?.get?.(day) || null;
   if (!bucket) return false;
   bucket.total += toBigInt2(row?.total_tokens);
@@ -1239,7 +1338,7 @@ function applyDailyBucket({ buckets, row, tzContext, billable }) {
 }
 
 // insforge-src/shared/usage-metrics-core.mjs
-var CORE_KEY7 = "__vibeusageUsageMetricsCore";
+var CORE_KEY8 = "__vibeusageUsageMetricsCore";
 var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
 var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
 var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
@@ -1335,8 +1434,8 @@ function parsePricingBucketKey(bucketKey, defaultDate) {
   }
   return { usageKey: bucketKey, dateKey: defaultDate };
 }
-if (!globalThis[CORE_KEY7]) {
-  Object.defineProperty(globalThis, CORE_KEY7, {
+if (!globalThis[CORE_KEY8]) {
+  Object.defineProperty(globalThis, CORE_KEY8, {
     value: {
       createTotals,
       addRowTotals,
@@ -1447,9 +1546,9 @@ function shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimel
 }
 
 // insforge-src/shared/debug-core.mjs
-var CORE_KEY8 = "__vibeusageDebugCore";
-var envCore2 = globalThis.__vibeusageEnvCore;
-if (!envCore2) throw new Error("env core not initialized");
+var CORE_KEY9 = "__vibeusageDebugCore";
+var envCore3 = globalThis.__vibeusageEnvCore;
+if (!envCore3) throw new Error("env core not initialized");
 function isDebugEnabled(url) {
   if (!url) return false;
   if (typeof url === "string") {
@@ -1464,7 +1563,7 @@ function isDebugEnabled(url) {
 }
 function buildSlowQueryDebugPayload({ logger, durationMs, status } = {}) {
   const safeDuration = Number.isFinite(durationMs) ? Math.max(0, Math.round(durationMs)) : 0;
-  const thresholdMs = envCore2.getSlowQueryThresholdMs();
+  const thresholdMs = envCore3.getSlowQueryThresholdMs();
   if (logger?.log) {
     logger.log({
       stage: "debug_payload",
@@ -1489,8 +1588,8 @@ function withSlowQueryDebugPayload(body, options) {
     debug: buildSlowQueryDebugPayload(options)
   };
 }
-if (!globalThis[CORE_KEY8]) {
-  Object.defineProperty(globalThis, CORE_KEY8, {
+if (!globalThis[CORE_KEY9]) {
+  Object.defineProperty(globalThis, CORE_KEY9, {
     value: {
       isDebugEnabled,
       buildSlowQueryDebugPayload,
@@ -1510,7 +1609,7 @@ var buildSlowQueryDebugPayload2 = debugCore.buildSlowQueryDebugPayload;
 var withSlowQueryDebugPayload2 = debugCore.withSlowQueryDebugPayload;
 
 // insforge-src/shared/http-core.mjs
-var CORE_KEY9 = "__vibeusageHttpCore";
+var CORE_KEY10 = "__vibeusageHttpCore";
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -1547,8 +1646,8 @@ async function readJson(request) {
     return { error: "Invalid JSON", status: 400, data: null };
   }
 }
-if (!globalThis[CORE_KEY9]) {
-  Object.defineProperty(globalThis, CORE_KEY9, {
+if (!globalThis[CORE_KEY10]) {
+  Object.defineProperty(globalThis, CORE_KEY10, {
     value: {
       corsHeaders,
       handleOptions,
@@ -1571,7 +1670,10 @@ var json2 = httpCore.json;
 var requireMethod2 = httpCore.requireMethod;
 var readJson2 = httpCore.readJson;
 
-// insforge-src/functions-esm/shared/logging.js
+// insforge-src/shared/logging-core.mjs
+var CORE_KEY11 = "__vibeusageLoggingCore";
+var envCore4 = globalThis.__vibeusageEnvCore;
+if (!envCore4) throw new Error("env core not initialized");
 function createRequestId() {
   if (globalThis?.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -1655,7 +1757,7 @@ function logSlowQuery(logger, fields) {
   if (!logger || typeof logger.log !== "function") return;
   const durationMs = Number(fields?.duration_ms ?? fields?.durationMs);
   if (!Number.isFinite(durationMs)) return;
-  const thresholdMs = getSlowQueryThresholdMs2();
+  const thresholdMs = envCore4.getSlowQueryThresholdMs();
   if (durationMs < thresholdMs) return;
   logger.log({
     stage: "slow_query",
@@ -1664,9 +1766,32 @@ function logSlowQuery(logger, fields) {
     duration_ms: Math.round(durationMs)
   });
 }
+function getSlowQueryThresholdMs3() {
+  return envCore4.getSlowQueryThresholdMs();
+}
+if (!globalThis[CORE_KEY11]) {
+  Object.defineProperty(globalThis, CORE_KEY11, {
+    value: {
+      createLogger,
+      withRequestLogging,
+      logSlowQuery,
+      getSlowQueryThresholdMs: getSlowQueryThresholdMs3
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/logging.js
+var loggingCore = globalThis.__vibeusageLoggingCore;
+if (!loggingCore) throw new Error("logging core not initialized");
+var createLogger2 = loggingCore.createLogger;
+var withRequestLogging2 = loggingCore.withRequestLogging;
+var logSlowQuery2 = loggingCore.logSlowQuery;
 
 // insforge-src/shared/pricing-core.mjs
-var CORE_KEY10 = "__vibeusagePricingCore";
+var CORE_KEY12 = "__vibeusagePricingCore";
 var MICROS_PER_DOLLAR = 1000000n;
 var TOKENS_PER_MILLION = 1000000n;
 var DEFAULT_PROFILE = {
@@ -1684,8 +1809,8 @@ var runtimePrimitivesCore4 = globalThis.__vibeusageRuntimePrimitivesCore;
 if (!runtimePrimitivesCore4) throw new Error("runtime primitives core not initialized");
 var usageModelCore3 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore3) throw new Error("usage-model core not initialized");
-var envCore3 = globalThis.__vibeusageEnvCore;
-if (!envCore3) throw new Error("env core not initialized");
+var envCore5 = globalThis.__vibeusageEnvCore;
+if (!envCore5) throw new Error("env core not initialized");
 function normalizeSource2(value) {
   return runtimePrimitivesCore4.normalizeSource(value);
 }
@@ -1703,7 +1828,7 @@ function getDefaultPricingProfile() {
   };
 }
 function getPricingDefaults3() {
-  return envCore3.getPricingDefaults();
+  return envCore5.getPricingDefaults();
 }
 async function resolvePricingProfile({ edgeClient, effectiveDate, model, source } = {}) {
   const fallback = getDefaultPricingProfile();
@@ -1827,8 +1952,8 @@ function normalizeProfile(profile) {
     }
   };
 }
-if (!globalThis[CORE_KEY10]) {
-  Object.defineProperty(globalThis, CORE_KEY10, {
+if (!globalThis[CORE_KEY12]) {
+  Object.defineProperty(globalThis, CORE_KEY12, {
     value: {
       getDefaultPricingProfile,
       getPricingDefaults: getPricingDefaults3,
@@ -1860,7 +1985,7 @@ var getSourceParam2 = runtimePrimitivesCore5.getSourceParam;
 
 // insforge-src/functions-esm/vibeusage-usage-daily.js
 var DEFAULT_MODEL2 = "unknown";
-var vibeusage_usage_daily_default = withRequestLogging("vibeusage-usage-daily", async function(request, logger) {
+var vibeusage_usage_daily_default = withRequestLogging2("vibeusage-usage-daily", async function(request, logger) {
   const opt = handleOptions2(request);
   if (opt) return opt;
   const url = new URL(request.url);
@@ -1872,7 +1997,7 @@ var vibeusage_usage_daily_default = withRequestLogging("vibeusage-usage-daily", 
   if (request.method !== "GET") return respond({ error: "Method not allowed" }, 405, 0);
   const bearer = getBearerToken2(request.headers.get("Authorization"));
   if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
-  const tzContext = getUsageTimeZoneContext(url);
+  const tzContext = getUsageTimeZoneContext2(url);
   const sourceResult = getSourceParam2(url);
   if (!sourceResult.ok) return respond({ error: sourceResult.error }, 400, 0);
   const source = sourceResult.source;
@@ -1880,23 +2005,23 @@ var vibeusage_usage_daily_default = withRequestLogging("vibeusage-usage-daily", 
   if (!modelResult.ok) return respond({ error: modelResult.error }, 400, 0);
   const model = modelResult.model;
   const hasModelParam = model != null;
-  const { from, to } = normalizeDateRangeLocal(
+  const { from, to } = normalizeDateRangeLocal2(
     url.searchParams.get("from"),
     url.searchParams.get("to"),
     tzContext
   );
-  const dayKeys = listDateStrings(from, to);
-  const maxDays = getUsageMaxDays3();
+  const dayKeys = listDateStrings2(from, to);
+  const maxDays = getUsageMaxDays4();
   if (dayKeys.length > maxDays) {
     return respond({ error: `Date range too large (max ${maxDays} days)` }, 400, 0);
   }
-  const startParts = parseDateParts(from);
-  const endParts = parseDateParts(to);
+  const startParts = parseDateParts2(from);
+  const endParts = parseDateParts2(to);
   if (!startParts || !endParts) return respond({ error: "Invalid date range" }, 400, 0);
   const auth = await getAccessContext2({ baseUrl: getBaseUrl2(), bearer, allowPublic: true });
   if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
-  const startUtc = localDatePartsToUtc(startParts, tzContext);
-  const endUtc = localDatePartsToUtc(addDatePartsDays(endParts, 1), tzContext);
+  const startUtc = localDatePartsToUtc2(startParts, tzContext);
+  const endUtc = localDatePartsToUtc2(addDatePartsDays2(endParts, 1), tzContext);
   const startIso = startUtc.toISOString();
   const endIso = endUtc.toISOString();
   const modelFilter = await resolveUsageModelsForCanonical2({
@@ -1994,7 +2119,7 @@ var vibeusage_usage_daily_default = withRequestLogging("vibeusage-usage-daily", 
     if (error) return { ok: false, error };
     return { ok: true, hasRows: Array.isArray(data) && data.length > 0 };
   };
-  if (rollupEnabled && isUtcTimeZone(tzContext)) {
+  if (rollupEnabled && isUtcTimeZone2(tzContext)) {
     const rollupRes = await fetchRollupRows({
       edgeClient: auth.edgeClient,
       userId: auth.userId,
@@ -2039,7 +2164,7 @@ var vibeusage_usage_daily_default = withRequestLogging("vibeusage-usage-daily", 
     if (!hourlyRes.ok) hourlyError = hourlyRes.error;
   }
   const queryDurationMs = Date.now() - queryStartMs;
-  logSlowQuery(logger, {
+  logSlowQuery2(logger, {
     query_label: "usage_daily",
     duration_ms: queryDurationMs,
     row_count: rowCount,

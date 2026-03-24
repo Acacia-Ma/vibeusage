@@ -34,4 +34,6 @@ Registration-cutoff and entitlement-based pro status resolution now converge thr
 
 Canary model filtering, slow-query debug payload construction, and SHA-256 hashing semantics now converge through `insforge-src/shared/canary-core.js`, `insforge-src/shared/debug-core.js`, and `insforge-src/shared/crypto-core.js`. CJS and ESM wrappers for `canary`, `debug`, and `crypto` are now thin export layers over those cores, and nullish hashing inputs are normalized identically across both runtimes.
 
+UTC/local date-window normalization, timezone parsing, local date-key formatting, and usage max-days lookup now converge through `insforge-src/shared/date-core.js`. Request-id generation, function-name resolution, request/upstream logging, and slow-query threshold handling now converge through `insforge-src/shared/logging-core.js`. CJS and ESM wrappers for `date` and `logging` now provide only export-surface adaptation on top of those cores.
+
 The ESM edge layer still contains additional duplicated business logic beyond this slice. This change converts immediately reachable contract drift to shared modules and guardrails first, then continues function-by-function backend convergence without changing public slugs.
