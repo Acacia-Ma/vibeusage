@@ -1,19 +1,7 @@
-import {
-  extractDateKey,
-  normalizeUsageModel,
-  resolveIdentityAtDate,
-} from "../usage-summary-support.js";
+import "../../../shared/usage-model-core.mjs";
+import "../../../shared/usage-filter-core.mjs";
 
-export function shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to }) {
-  if (!hasModelFilter) return true;
-  const rawModel = normalizeUsageModel(row?.model);
-  const dateKey = extractDateKey(row?.hour_start || row?.day) || to;
-  const identity = resolveIdentityAtDate({ rawModel, dateKey, timeline: aliasTimeline });
-  const filterIdentity = resolveIdentityAtDate({
-    rawModel: canonicalModel,
-    usageKey: canonicalModel,
-    dateKey,
-    timeline: aliasTimeline,
-  });
-  return identity.model_id === filterIdentity.model_id;
-}
+const usageFilterCore = globalThis.__vibeusageUsageFilterCore;
+if (!usageFilterCore) throw new Error("usage filter core not initialized");
+
+export const shouldIncludeUsageRow = usageFilterCore.shouldIncludeUsageRow;

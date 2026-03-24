@@ -1850,35 +1850,21 @@ if (!globalThis[CORE_KEY12]) {
   });
 }
 
-// insforge-src/functions-esm/shared/usage-summary-support.js
+// insforge-src/shared/pagination-core.mjs
+var CORE_KEY13 = "__vibeusagePaginationCore";
 var MAX_PAGE_SIZE = 1e3;
-var usageModelCore3 = globalThis.__vibeusageUsageModelCore;
-if (!usageModelCore3) throw new Error("usage-model core not initialized");
-var usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
-if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
-var normalizeModel2 = usageModelCore3.normalizeModel;
-var normalizeUsageModel2 = usageModelCore3.normalizeUsageModel;
-var applyUsageModelFilter2 = usageModelCore3.applyUsageModelFilter;
-var getModelParam2 = usageModelCore3.getModelParam;
-var normalizeUsageModelKey2 = usageModelCore3.normalizeUsageModelKey;
-var applyModelIdentity2 = usageModelCore3.applyModelIdentity;
-var resolveModelIdentity2 = usageModelCore3.resolveModelIdentity;
-var resolveUsageModelsForCanonical2 = usageModelCore3.resolveUsageModelsForCanonical;
-var extractDateKey2 = usageModelCore3.extractDateKey;
-var resolveIdentityAtDate2 = usageModelCore3.resolveIdentityAtDate;
-var buildAliasTimeline2 = usageModelCore3.buildAliasTimeline;
-var fetchAliasRows2 = usageModelCore3.fetchAliasRows;
-var createTotals2 = usageMetricsCore.createTotals;
-var addRowTotals2 = usageMetricsCore.addRowTotals;
-var resolveBillableTotals2 = usageMetricsCore.resolveBillableTotals;
-var applyTotalsAndBillable2 = usageMetricsCore.applyTotalsAndBillable;
-var getSourceEntry2 = usageMetricsCore.getSourceEntry;
-var resolveDisplayName2 = usageMetricsCore.resolveDisplayName;
-var buildPricingBucketKey2 = usageMetricsCore.buildPricingBucketKey;
-var parsePricingBucketKey2 = usageMetricsCore.parsePricingBucketKey;
+function normalizePageSize(value) {
+  const size = Number(value);
+  if (!Number.isFinite(size) || size <= 0) return MAX_PAGE_SIZE;
+  return Math.min(MAX_PAGE_SIZE, Math.floor(size));
+}
 async function forEachPage({ createQuery, pageSize, onPage }) {
-  if (typeof createQuery !== "function") throw new Error("createQuery must be a function");
-  if (typeof onPage !== "function") throw new Error("onPage must be a function");
+  if (typeof createQuery !== "function") {
+    throw new Error("createQuery must be a function");
+  }
+  if (typeof onPage !== "function") {
+    throw new Error("onPage must be a function");
+  }
   const size = normalizePageSize(pageSize);
   let offset = 0;
   while (true) {
@@ -1899,33 +1885,105 @@ async function forEachPage({ createQuery, pageSize, onPage }) {
   }
   return { error: null };
 }
-function normalizePageSize(value) {
-  const size = Number(value);
-  if (!Number.isFinite(size) || size <= 0) return MAX_PAGE_SIZE;
-  return Math.min(MAX_PAGE_SIZE, Math.floor(size));
+if (!globalThis[CORE_KEY13]) {
+  Object.defineProperty(globalThis, CORE_KEY13, {
+    value: {
+      MAX_PAGE_SIZE,
+      normalizePageSize,
+      forEachPage
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
 }
+
+// insforge-src/shared/usage-rollup-core.mjs
+var CORE_KEY14 = "__vibeusageUsageRollupCore";
+var canaryCore2 = globalThis.__vibeusageCanaryCore;
+if (!canaryCore2) throw new Error("canary core not initialized");
+var paginationCore = globalThis.__vibeusagePaginationCore;
+if (!paginationCore) throw new Error("pagination core not initialized");
+var usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
+if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
+var { applyCanaryFilter: applyCanaryFilter3 } = canaryCore2;
+var { forEachPage: forEachPage2 } = paginationCore;
+var { createTotals: createTotals2, addRowTotals: addRowTotals2 } = usageMetricsCore;
 async function fetchRollupRows({ edgeClient, userId, fromDay, toDay, source, model }) {
   const rows = [];
-  const { error } = await forEachPage({
+  const { error } = await forEachPage2({
     createQuery: () => {
       let query = edgeClient.database.from("vibeusage_tracker_daily_rollup").select(
         "day,source,model,total_tokens,billable_total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens"
       ).eq("user_id", userId).gte("day", fromDay).lte("day", toDay);
       if (source) query = query.eq("source", source);
       if (model) query = query.eq("model", model);
-      query = applyCanaryFilter2(query, { source, model });
+      query = applyCanaryFilter3(query, { source, model });
       return query.order("day", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
     },
     onPage: (pageRows) => {
-      if (Array.isArray(pageRows) && pageRows.length > 0) rows.push(...pageRows);
+      if (!Array.isArray(pageRows) || pageRows.length === 0) return;
+      rows.push(...pageRows);
     }
   });
   if (error) return { ok: false, error };
   return { ok: true, rows };
 }
+function sumRollupRows(rows) {
+  const totals = createTotals2();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    addRowTotals2(totals, row);
+  }
+  return totals;
+}
 function isRollupEnabled() {
   return false;
 }
+if (!globalThis[CORE_KEY14]) {
+  Object.defineProperty(globalThis, CORE_KEY14, {
+    value: {
+      fetchRollupRows,
+      sumRollupRows,
+      isRollupEnabled
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/usage-summary-support.js
+var usageModelCore3 = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore3) throw new Error("usage-model core not initialized");
+var usageMetricsCore2 = globalThis.__vibeusageUsageMetricsCore;
+if (!usageMetricsCore2) throw new Error("usage metrics core not initialized");
+var paginationCore2 = globalThis.__vibeusagePaginationCore;
+if (!paginationCore2) throw new Error("pagination core not initialized");
+var usageRollupCore = globalThis.__vibeusageUsageRollupCore;
+if (!usageRollupCore) throw new Error("usage rollup core not initialized");
+var normalizeModel2 = usageModelCore3.normalizeModel;
+var normalizeUsageModel2 = usageModelCore3.normalizeUsageModel;
+var applyUsageModelFilter2 = usageModelCore3.applyUsageModelFilter;
+var getModelParam2 = usageModelCore3.getModelParam;
+var normalizeUsageModelKey2 = usageModelCore3.normalizeUsageModelKey;
+var applyModelIdentity2 = usageModelCore3.applyModelIdentity;
+var resolveModelIdentity2 = usageModelCore3.resolveModelIdentity;
+var resolveUsageModelsForCanonical2 = usageModelCore3.resolveUsageModelsForCanonical;
+var extractDateKey2 = usageModelCore3.extractDateKey;
+var resolveIdentityAtDate2 = usageModelCore3.resolveIdentityAtDate;
+var buildAliasTimeline2 = usageModelCore3.buildAliasTimeline;
+var fetchAliasRows2 = usageModelCore3.fetchAliasRows;
+var createTotals3 = usageMetricsCore2.createTotals;
+var addRowTotals3 = usageMetricsCore2.addRowTotals;
+var resolveBillableTotals2 = usageMetricsCore2.resolveBillableTotals;
+var applyTotalsAndBillable2 = usageMetricsCore2.applyTotalsAndBillable;
+var getSourceEntry2 = usageMetricsCore2.getSourceEntry;
+var resolveDisplayName2 = usageMetricsCore2.resolveDisplayName;
+var buildPricingBucketKey2 = usageMetricsCore2.buildPricingBucketKey;
+var parsePricingBucketKey2 = usageMetricsCore2.parsePricingBucketKey;
+var forEachPage3 = paginationCore2.forEachPage;
+var fetchRollupRows2 = usageRollupCore.fetchRollupRows;
+var isRollupEnabled2 = usageRollupCore.isRollupEnabled;
 
 // insforge-src/functions-esm/vibeusage-usage-summary.js
 var DEFAULT_SOURCE = "codex";
@@ -1991,7 +2049,7 @@ var vibeusage_usage_summary_default = withRequestLogging2("vibeusage-usage-summa
     });
     aliasTimeline = buildAliasTimeline2({ usageModels, aliasRows });
   }
-  let totals = createTotals2();
+  let totals = createTotals3();
   let sourcesMap = /* @__PURE__ */ new Map();
   let distinctModels = /* @__PURE__ */ new Set();
   const distinctUsageModels = /* @__PURE__ */ new Set();
@@ -1999,9 +2057,9 @@ var vibeusage_usage_summary_default = withRequestLogging2("vibeusage-usage-summa
   const queryStartMs = Date.now();
   let rowCount = 0;
   let rollupHit = false;
-  const rollupEnabled = isRollupEnabled();
+  const rollupEnabled = isRollupEnabled2();
   const resetAggregation = () => {
-    totals = createTotals2();
+    totals = createTotals3();
     sourcesMap = /* @__PURE__ */ new Map();
     distinctModels = /* @__PURE__ */ new Set();
     rowCount = 0;
@@ -2034,15 +2092,15 @@ var vibeusage_usage_summary_default = withRequestLogging2("vibeusage-usage-summa
       const usageKey = normalizeUsageModelKey2(normalizedModel) || DEFAULT_MODEL2;
       const dateKey = extractDateKey2(row?.hour_start || row?.day) || to;
       const bucketKey = buildPricingBucketKey2(sourceKey, usageKey, dateKey);
-      const bucket = pricingBuckets.get(bucketKey) || createTotals2();
-      addRowTotals3(bucket, row);
+      const bucket = pricingBuckets.get(bucketKey) || createTotals3();
+      addRowTotals4(bucket, row);
       pricingBuckets.set(bucketKey, bucket);
       distinctUsageModels.add(usageKey);
     }
   };
   const applyHourlyOrdering = (query) => query.order("hour_start", { ascending: true }).order("device_id", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
   const sumHourlyRange = async (rangeStartIso, rangeEndIso) => {
-    const { error } = await forEachPage({
+    const { error } = await forEachPage3({
       createQuery: () => {
         let query = auth.edgeClient.database.from("vibeusage_tracker_hourly").select(
           "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens"
@@ -2075,7 +2133,7 @@ var vibeusage_usage_summary_default = withRequestLogging2("vibeusage-usage-summa
     let rows = [];
     if (hasModelFilter && Array.isArray(usageModels) && usageModels.length > 0) {
       for (const usageModel of usageModels) {
-        const rollupRes = await fetchRollupRows({
+        const rollupRes = await fetchRollupRows2({
           edgeClient: auth.edgeClient,
           userId: auth.userId,
           fromDay,
@@ -2087,7 +2145,7 @@ var vibeusage_usage_summary_default = withRequestLogging2("vibeusage-usage-summa
         rows = rows.concat(Array.isArray(rollupRes.rows) ? rollupRes.rows : []);
       }
     } else {
-      const rollupRes = await fetchRollupRows({
+      const rollupRes = await fetchRollupRows2({
         edgeClient: auth.edgeClient,
         userId: auth.userId,
         fromDay,
@@ -2104,7 +2162,7 @@ var vibeusage_usage_summary_default = withRequestLogging2("vibeusage-usage-summa
     return { ok: true, rowsCount: rows.length };
   };
   const sumHourlyRangeInto = async (rangeStartIso, rangeEndIso, onRow) => {
-    const { error } = await forEachPage({
+    const { error } = await forEachPage3({
       createQuery: () => {
         let query = auth.edgeClient.database.from("vibeusage_tracker_hourly").select(
           "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens"
@@ -2126,7 +2184,7 @@ var vibeusage_usage_summary_default = withRequestLogging2("vibeusage-usage-summa
     let rows = [];
     if (hasModelFilter && Array.isArray(usageModels) && usageModels.length > 0) {
       for (const usageModel of usageModels) {
-        const rollupRes = await fetchRollupRows({
+        const rollupRes = await fetchRollupRows2({
           edgeClient: auth.edgeClient,
           userId: auth.userId,
           fromDay,
@@ -2138,7 +2196,7 @@ var vibeusage_usage_summary_default = withRequestLogging2("vibeusage-usage-summa
         rows = rows.concat(Array.isArray(rollupRes.rows) ? rollupRes.rows : []);
       }
     } else {
-      const rollupRes = await fetchRollupRows({
+      const rollupRes = await fetchRollupRows2({
         edgeClient: auth.edgeClient,
         userId: auth.userId,
         fromDay,
@@ -2225,7 +2283,7 @@ var vibeusage_usage_summary_default = withRequestLogging2("vibeusage-usage-summa
     }
     const rangeStartIso = rangeStartUtc.toISOString();
     const rangeEndIso = rangeEndUtc.toISOString();
-    const rollingTotals = createTotals2();
+    const rollingTotals = createTotals3();
     const activeByDay = /* @__PURE__ */ new Map();
     const shouldUseHourlyForActiveDays = rollupEnabled && !isUtcTimeZone2(tzContext);
     const resetRollingAggregation = () => {
@@ -2491,7 +2549,7 @@ function normalizeSource3(value) {
   const normalized = value.trim().toLowerCase();
   return normalized || null;
 }
-function addRowTotals3(target, row) {
+function addRowTotals4(target, row) {
   if (!target || !row) return;
   target.total_tokens += toBigInt2(row?.total_tokens);
   target.billable_total_tokens += toBigInt2(row?.billable_total_tokens);

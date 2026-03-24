@@ -134,3 +134,51 @@ test("backend date and logging helpers flow through shared cores", () => {
   assert.match(read("insforge-src/shared/logging.js"), /logging-core/);
   assert.match(read("insforge-src/functions-esm/shared/logging.js"), /shared\/logging-core\.mjs/);
 });
+
+test("backend usage rollup and bucket helpers flow through shared cores", () => {
+  assert.equal(
+    read("insforge-src/shared/pagination-core.js"),
+    read("insforge-src/shared/pagination-core.mjs"),
+  );
+  assert.equal(
+    read("insforge-src/shared/usage-rollup-core.js"),
+    read("insforge-src/shared/usage-rollup-core.mjs"),
+  );
+  assert.equal(
+    read("insforge-src/shared/usage-daily-core.js"),
+    read("insforge-src/shared/usage-daily-core.mjs"),
+  );
+  assert.equal(
+    read("insforge-src/shared/usage-filter-core.js"),
+    read("insforge-src/shared/usage-filter-core.mjs"),
+  );
+  assert.equal(
+    read("insforge-src/shared/usage-monthly-core.js"),
+    read("insforge-src/shared/usage-monthly-core.mjs"),
+  );
+  assert.match(read("insforge-src/shared/pagination.js"), /pagination-core/);
+  assert.match(read("insforge-src/shared/usage-rollup.js"), /usage-rollup-core/);
+  assert.match(read("insforge-src/shared/core/usage-daily.js"), /usage-daily-core/);
+  assert.match(read("insforge-src/shared/core/usage-filter.js"), /usage-filter-core/);
+  assert.match(read("insforge-src/shared/core/usage-monthly.js"), /usage-monthly-core/);
+  assert.match(
+    read("insforge-src/functions-esm/shared/usage-summary-support.js"),
+    /shared\/pagination-core\.mjs/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/shared/usage-summary-support.js"),
+    /shared\/usage-rollup-core\.mjs/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/shared/core/usage-daily.js"),
+    /shared\/usage-daily-core\.mjs/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/shared/core/usage-filter.js"),
+    /shared\/usage-filter-core\.mjs/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/shared/core/usage-monthly.js"),
+    /shared\/usage-monthly-core\.mjs/,
+  );
+});

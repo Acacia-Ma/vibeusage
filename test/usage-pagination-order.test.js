@@ -25,9 +25,7 @@ test("usage pagination uses deterministic ordering", () => {
     "order('hour_start',{ascending:true}).order('user_id',{ascending:true}).order('device_id',{ascending:true}).order('source',{ascending:true}).order('model',{ascending:true})";
 
   assert.ok(
-    normalize(readFile("insforge-src/functions-esm/shared/usage-summary-support.js")).includes(
-      rollupOrder,
-    ),
+    normalize(readFile("insforge-src/shared/usage-rollup-core.js")).includes(rollupOrder),
   );
   assert.equal(
     countOccurrences(

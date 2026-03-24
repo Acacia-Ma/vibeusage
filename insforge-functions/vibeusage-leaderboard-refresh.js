@@ -1413,10 +1413,11 @@ var require_date = __commonJS({
   }
 });
 
-// insforge-src/shared/pagination.js
-var require_pagination = __commonJS({
-  "insforge-src/shared/pagination.js"(exports2, module2) {
+// insforge-src/shared/pagination-core.js
+var require_pagination_core = __commonJS({
+  "insforge-src/shared/pagination-core.js"() {
     "use strict";
+    var CORE_KEY = "__vibeusagePaginationCore";
     var MAX_PAGE_SIZE = 1e3;
     function normalizePageSize(value) {
       const size = Number(value);
@@ -1450,7 +1451,29 @@ var require_pagination = __commonJS({
       }
       return { error: null };
     }
-    module2.exports = { forEachPage: forEachPage2 };
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          MAX_PAGE_SIZE,
+          normalizePageSize,
+          forEachPage: forEachPage2
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
+// insforge-src/shared/pagination.js
+var require_pagination = __commonJS({
+  "insforge-src/shared/pagination.js"(exports2, module2) {
+    "use strict";
+    require_pagination_core();
+    var paginationCore = globalThis.__vibeusagePaginationCore;
+    if (!paginationCore) throw new Error("pagination core not initialized");
+    module2.exports = { forEachPage: paginationCore.forEachPage };
   }
 });
 
