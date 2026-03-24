@@ -26,17 +26,21 @@ async function resolveBucketedUsagePricing({
   usageModels,
   effectiveDate,
   defaultModel = DEFAULT_MODEL,
+  onBucketCost,
 } = {}) {
   const totalCostMicros = 0n;
   const pricingModes = new Set();
   const canonicalModels = new Set();
   const usageModelList = Array.isArray(usageModels) ? usageModels.filter(Boolean) : [];
 
-  if (!(pricingBuckets instanceof Map) || pricingBuckets.size === 0 || usageModelList.length === 0) {
+  if (!(pricingBuckets instanceof Map) || pricingBuckets.size === 0) {
     return { totalCostMicros, pricingModes, canonicalModels };
   }
 
-  const aliasRows = await fetchAliasRows({ edgeClient, usageModels: usageModelList, effectiveDate });
+  const aliasRows =
+    usageModelList.length > 0
+      ? await fetchAliasRows({ edgeClient, usageModels: usageModelList, effectiveDate })
+      : [];
   const timeline = buildAliasTimeline({ usageModels: usageModelList, aliasRows });
   const profileCache = new Map();
   let aggregatedCostMicros = 0n;
@@ -53,7 +57,10 @@ async function resolveBucketedUsagePricing({
     return profile;
   };
 
-  for (const [bucketKey, bucketTotals] of pricingBuckets.entries()) {
+  for (const [bucketKey, bucketValue] of pricingBuckets.entries()) {
+    const bucket =
+      bucketValue && typeof bucketValue === "object" && bucketValue.totals ? bucketValue : null;
+    const bucketTotals = bucket?.totals || bucketValue;
     const { usageKey, dateKey } = parsePricingBucketKey(bucketKey, effectiveDate);
     const identity = resolveIdentityAtDate({ usageKey, dateKey, timeline });
     if (identity.model_id && identity.model_id !== defaultModel) {
@@ -63,6 +70,9 @@ async function resolveBucketedUsagePricing({
     const cost = computeUsageCost(bucketTotals, profile);
     aggregatedCostMicros += cost.cost_micros;
     pricingModes.add(cost.pricing_mode);
+    if (typeof onBucketCost === "function") {
+      onBucketCost({ bucketKey, bucket, bucketTotals, identity, profile, cost, usageKey, dateKey });
+    }
   }
 
   return {

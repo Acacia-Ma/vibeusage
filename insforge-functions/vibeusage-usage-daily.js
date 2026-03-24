@@ -1966,16 +1966,17 @@ async function resolveBucketedUsagePricing({
   pricingBuckets,
   usageModels,
   effectiveDate,
-  defaultModel = DEFAULT_MODEL2
+  defaultModel = DEFAULT_MODEL2,
+  onBucketCost
 } = {}) {
   const totalCostMicros = 0n;
   const pricingModes = /* @__PURE__ */ new Set();
   const canonicalModels = /* @__PURE__ */ new Set();
   const usageModelList = Array.isArray(usageModels) ? usageModels.filter(Boolean) : [];
-  if (!(pricingBuckets instanceof Map) || pricingBuckets.size === 0 || usageModelList.length === 0) {
+  if (!(pricingBuckets instanceof Map) || pricingBuckets.size === 0) {
     return { totalCostMicros, pricingModes, canonicalModels };
   }
-  const aliasRows = await fetchAliasRows2({ edgeClient, usageModels: usageModelList, effectiveDate });
+  const aliasRows = usageModelList.length > 0 ? await fetchAliasRows2({ edgeClient, usageModels: usageModelList, effectiveDate }) : [];
   const timeline = buildAliasTimeline2({ usageModels: usageModelList, aliasRows });
   const profileCache = /* @__PURE__ */ new Map();
   let aggregatedCostMicros = 0n;
@@ -1990,7 +1991,9 @@ async function resolveBucketedUsagePricing({
     profileCache.set(key, profile);
     return profile;
   };
-  for (const [bucketKey, bucketTotals] of pricingBuckets.entries()) {
+  for (const [bucketKey, bucketValue] of pricingBuckets.entries()) {
+    const bucket = bucketValue && typeof bucketValue === "object" && bucketValue.totals ? bucketValue : null;
+    const bucketTotals = bucket?.totals || bucketValue;
     const { usageKey, dateKey } = parsePricingBucketKey2(bucketKey, effectiveDate);
     const identity = resolveIdentityAtDate3({ usageKey, dateKey, timeline });
     if (identity.model_id && identity.model_id !== defaultModel) {
@@ -2000,6 +2003,9 @@ async function resolveBucketedUsagePricing({
     const cost = computeUsageCost3(bucketTotals, profile);
     aggregatedCostMicros += cost.cost_micros;
     pricingModes.add(cost.pricing_mode);
+    if (typeof onBucketCost === "function") {
+      onBucketCost({ bucketKey, bucket, bucketTotals, identity, profile, cost, usageKey, dateKey });
+    }
   }
   return {
     totalCostMicros: aggregatedCostMicros,

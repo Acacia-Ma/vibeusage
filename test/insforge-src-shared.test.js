@@ -18,6 +18,7 @@ require("../insforge-src/shared/env-core");
 require("../insforge-src/shared/usage-model-core");
 require("../insforge-src/shared/pricing-core");
 require("../insforge-src/shared/usage-metrics-core");
+const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
 require("../insforge-src/shared/usage-pricing-core");
 const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 
@@ -30,7 +31,7 @@ function createPricingEdgeClient({ aliasRows = [], profileRows = [] } = {}) {
     database: {
       from: (table) => {
         const rows =
-          table === "vibeusage_pricing_model_aliases"
+          table === "vibeusage_model_aliases" || table === "vibeusage_pricing_model_aliases"
             ? aliasRows
             : table === "vibeusage_pricing_profiles"
               ? profileRows
@@ -44,6 +45,14 @@ function createPricingEdgeClient({ aliasRows = [], profileRows = [] } = {}) {
             this.filters[field] = value;
             return this;
           },
+          in(field, value) {
+            this.filters[field] = Array.isArray(value) ? value : [value];
+            return this;
+          },
+          lt(field, value) {
+            this.filters.lt = { field, value };
+            return this;
+          },
           lte(field, value) {
             this.filters.lte = { field, value };
             return this;
@@ -53,9 +62,6 @@ function createPricingEdgeClient({ aliasRows = [], profileRows = [] } = {}) {
             return this;
           },
           order() {
-            return this;
-          },
-          limit() {
             let data = rows;
             if (this.filters.active !== undefined) {
               data = data.filter((row) => row.active === this.filters.active);
@@ -67,15 +73,28 @@ function createPricingEdgeClient({ aliasRows = [], profileRows = [] } = {}) {
               data = data.filter((row) => row.pricing_source === this.filters.pricing_source);
             }
             if (this.filters.usage_model) {
-              data = data.filter((row) => row.usage_model === this.filters.usage_model);
+              const allowed = Array.isArray(this.filters.usage_model)
+                ? this.filters.usage_model
+                : [this.filters.usage_model];
+              data = data.filter((row) => allowed.includes(row.usage_model));
             }
             if (this.filters.model) {
               data = data.filter((row) => row.model === this.filters.model);
+            }
+            if (this.filters.lt) {
+              const { field, value } = this.filters.lt;
+              data = data.filter((row) => String(row[field] || "") < String(value));
             }
             if (this.filters.lte) {
               const { field, value } = this.filters.lte;
               data = data.filter((row) => String(row[field] || "") <= String(value));
             }
+            this.data = data;
+            this.error = null;
+            return this;
+          },
+          limit() {
+            const data = Array.isArray(this.data) ? this.data : rows;
             return { data, error: null };
           },
         };
@@ -334,4 +353,73 @@ test("usage pricing core resolves implied models and summary pricing mode", () =
     }),
     "mixed",
   );
+});
+
+test("usage pricing core prices bucketed usage with callback attribution", async () => {
+  const edgeClient = createPricingEdgeClient({
+    aliasRows: [
+      {
+        usage_model: "gpt-foo",
+        canonical_model: "alpha",
+        display_name: "Alpha",
+        effective_from: "2025-02-01",
+        active: true,
+      },
+    ],
+    profileRows: [
+      {
+        model: "alpha",
+        source: "openrouter",
+        effective_from: "2025-02-01",
+        active: true,
+        input_rate_micro_per_million: 1000000,
+        cached_input_rate_micro_per_million: 0,
+        output_rate_micro_per_million: 1000000,
+        reasoning_output_rate_micro_per_million: 1000000,
+      },
+    ],
+  });
+
+  const pricingBuckets = new Map([
+    [
+      usageMetricsCore.buildPricingBucketKey("codex", "gpt-foo", "2025-02-15"),
+      {
+        source: "codex",
+        totals: {
+          total_tokens: 2000000n,
+          billable_total_tokens: 2000000n,
+          input_tokens: 1000000n,
+          cached_input_tokens: 0n,
+          output_tokens: 1000000n,
+          reasoning_output_tokens: 0n,
+        },
+      },
+    ],
+  ]);
+  const attributed = [];
+
+  const result = await usagePricingCore.resolveBucketedUsagePricing({
+    edgeClient,
+    pricingBuckets,
+    usageModels: ["gpt-foo"],
+    effectiveDate: "2025-02-15",
+    onBucketCost: ({ bucket, identity, cost }) => {
+      attributed.push({
+        source: bucket?.source,
+        model_id: identity?.model_id,
+        pricing_mode: cost?.pricing_mode,
+        cost_micros: cost?.cost_micros,
+      });
+    },
+  });
+
+  assert.equal(result.totalCostMicros, 2000000n);
+  assert.deepEqual(Array.from(result.canonicalModels.values()), ["alpha"]);
+  assert.equal(attributed.length, 1);
+  assert.deepEqual(attributed[0], {
+    source: "codex",
+    model_id: "alpha",
+    pricing_mode: "overlap",
+    cost_micros: 2000000n,
+  });
 });
