@@ -1227,10 +1227,11 @@ var require_logging = __commonJS({
   }
 });
 
-// insforge-src/shared/user-identity.js
-var require_user_identity = __commonJS({
-  "insforge-src/shared/user-identity.js"(exports2, module2) {
+// insforge-src/shared/user-identity-core.js
+var require_user_identity_core = __commonJS({
+  "insforge-src/shared/user-identity-core.js"() {
     "use strict";
+    var CORE_KEY = "__vibeusageUserIdentityCore";
     function resolveUserIdentity2(row) {
       return {
         displayName: resolveUserDisplayName(row),
@@ -1271,13 +1272,31 @@ var require_user_identity = __commonJS({
     function isObject(value) {
       return Boolean(value && typeof value === "object");
     }
-    module2.exports = {
-      resolveUserIdentity: resolveUserIdentity2,
-      resolveUserDisplayName,
-      resolveUserAvatarUrl,
-      sanitizeDisplayName,
-      sanitizeAvatarUrl
-    };
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          resolveUserIdentity: resolveUserIdentity2,
+          resolveUserDisplayName,
+          resolveUserAvatarUrl,
+          sanitizeDisplayName,
+          sanitizeAvatarUrl
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
+// insforge-src/shared/user-identity.js
+var require_user_identity = __commonJS({
+  "insforge-src/shared/user-identity.js"(exports2, module2) {
+    "use strict";
+    require_user_identity_core();
+    var userIdentityCore = globalThis.__vibeusageUserIdentityCore;
+    if (!userIdentityCore) throw new Error("user identity core not initialized");
+    module2.exports = userIdentityCore;
   }
 });
 

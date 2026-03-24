@@ -1336,11 +1336,148 @@ var toBigInt2 = runtimePrimitivesCore2.toBigInt;
 var toPositiveIntOrNull2 = runtimePrimitivesCore2.toPositiveIntOrNull;
 var toPositiveInt2 = runtimePrimitivesCore2.toPositiveInt;
 
+// insforge-src/shared/user-identity-core.mjs
+var CORE_KEY8 = "__vibeusageUserIdentityCore";
+function resolveUserIdentity(row) {
+  return {
+    displayName: resolveUserDisplayName(row),
+    avatarUrl: resolveUserAvatarUrl(row)
+  };
+}
+function resolveUserDisplayName(row) {
+  const profile = isObject(row?.profile) ? row.profile : null;
+  const metadata = isObject(row?.metadata) ? row.metadata : null;
+  return sanitizeDisplayName(row?.nickname) || sanitizeDisplayName(profile?.name) || sanitizeDisplayName(profile?.full_name) || sanitizeDisplayName(metadata?.full_name) || sanitizeDisplayName(metadata?.name) || null;
+}
+function resolveUserAvatarUrl(row) {
+  const profile = isObject(row?.profile) ? row.profile : null;
+  const metadata = isObject(row?.metadata) ? row.metadata : null;
+  return sanitizeAvatarUrl(row?.avatar_url) || sanitizeAvatarUrl(profile?.avatar_url) || sanitizeAvatarUrl(metadata?.avatar_url) || sanitizeAvatarUrl(metadata?.picture) || null;
+}
+function sanitizeDisplayName(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.includes("@")) return null;
+  if (trimmed.length > 128) return trimmed.slice(0, 128);
+  return trimmed;
+}
+function sanitizeAvatarUrl(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > 1024) return null;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return url.toString();
+  } catch (_error) {
+    return null;
+  }
+}
+function isObject(value) {
+  return Boolean(value && typeof value === "object");
+}
+if (!globalThis[CORE_KEY8]) {
+  Object.defineProperty(globalThis, CORE_KEY8, {
+    value: {
+      resolveUserIdentity,
+      resolveUserDisplayName,
+      resolveUserAvatarUrl,
+      sanitizeDisplayName,
+      sanitizeAvatarUrl
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/shared/leaderboard-core.mjs
+var CORE_KEY9 = "__vibeusageLeaderboardCore";
+var dateCore2 = globalThis.__vibeusageDateCore;
+if (!dateCore2) throw new Error("date core not initialized");
+var userIdentityCore = globalThis.__vibeusageUserIdentityCore;
+if (!userIdentityCore) throw new Error("user identity core not initialized");
+var { addUtcDays: addUtcDays3, formatDateUTC: formatDateUTC3, toUtcDay: toUtcDay3 } = dateCore2;
+var { sanitizeAvatarUrl: sanitizeAvatarUrl2 } = userIdentityCore;
+function normalizeLeaderboardPeriod(raw) {
+  if (typeof raw !== "string") return null;
+  const value = raw.trim().toLowerCase();
+  if (value === "week" || value === "month" || value === "total") return value;
+  return null;
+}
+function computeLeaderboardWindow({ period }) {
+  const normalized = normalizeLeaderboardPeriod(period);
+  if (normalized === "week") {
+    const today = toUtcDay3(/* @__PURE__ */ new Date());
+    const dow = today.getUTCDay();
+    const from = addUtcDays3(today, -dow);
+    const to = addUtcDays3(from, 6);
+    return { from: formatDateUTC3(from), to: formatDateUTC3(to) };
+  }
+  if (normalized === "month") {
+    const today = toUtcDay3(/* @__PURE__ */ new Date());
+    const from = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+    const to = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
+    return { from: formatDateUTC3(from), to: formatDateUTC3(to) };
+  }
+  if (normalized === "total") {
+    return { from: "1970-01-01", to: "9999-12-31" };
+  }
+  throw new Error(`Unsupported period: ${String(period)}`);
+}
+function resolveLeaderboardOtherTokens({ row, totalTokens, gptTokens, claudeTokens }) {
+  const explicit = row?.other_tokens;
+  if (explicit != null) return BigInt(explicit);
+  const derived = totalTokens - gptTokens - claudeTokens;
+  return derived > 0n ? derived : 0n;
+}
+function normalizeLeaderboardDisplayName(value) {
+  if (typeof value !== "string") return "Anonymous";
+  const trimmed = value.trim();
+  return trimmed || "Anonymous";
+}
+function normalizeLeaderboardAvatarUrl(value) {
+  return sanitizeAvatarUrl2(value);
+}
+function normalizeLeaderboardGeneratedAt(value) {
+  if (typeof value !== "string") return (/* @__PURE__ */ new Date()).toISOString();
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return (/* @__PURE__ */ new Date()).toISOString();
+  return date.toISOString();
+}
+if (!globalThis[CORE_KEY9]) {
+  Object.defineProperty(globalThis, CORE_KEY9, {
+    value: {
+      normalizeLeaderboardPeriod,
+      computeLeaderboardWindow,
+      resolveLeaderboardOtherTokens,
+      normalizeLeaderboardDisplayName,
+      normalizeLeaderboardAvatarUrl,
+      normalizeLeaderboardGeneratedAt
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
 // insforge-src/functions-esm/vibeusage-leaderboard.js
 var DEFAULT_LIMIT = 20;
 var MAX_LIMIT = 100;
 var DEFAULT_OFFSET = 0;
 var MAX_OFFSET = 1e4;
+var leaderboardCore = globalThis.__vibeusageLeaderboardCore;
+if (!leaderboardCore) throw new Error("leaderboard core not initialized");
+var {
+  normalizeLeaderboardPeriod: normalizeLeaderboardPeriod2,
+  computeLeaderboardWindow: computeLeaderboardWindow2,
+  resolveLeaderboardOtherTokens: resolveLeaderboardOtherTokens2,
+  normalizeLeaderboardDisplayName: normalizeLeaderboardDisplayName2,
+  normalizeLeaderboardAvatarUrl: normalizeLeaderboardAvatarUrl2,
+  normalizeLeaderboardGeneratedAt: normalizeLeaderboardGeneratedAt2
+} = leaderboardCore;
 async function vibeusage_leaderboard_default(request) {
   const opt = handleOptions2(request);
   if (opt) return opt;
@@ -1355,7 +1492,7 @@ async function vibeusage_leaderboard_default(request) {
   }
   const viewerUserId = auth.ok ? auth.userId : null;
   const url = new URL(request.url);
-  const period = normalizePeriod(url.searchParams.get("period"));
+  const period = normalizeLeaderboardPeriod2(url.searchParams.get("period"));
   if (!period) return json2({ error: "Invalid period" }, 400);
   const metric = normalizeMetric(url.searchParams.get("metric"));
   if (url.searchParams.has("metric") && !metric) return json2({ error: "Invalid metric" }, 400);
@@ -1365,7 +1502,7 @@ async function vibeusage_leaderboard_default(request) {
   let from;
   let to;
   try {
-    ({ from, to } = await computeWindow({ period }));
+    ({ from, to } = computeLeaderboardWindow2({ period }));
   } catch (error) {
     return json2({ error: String(error?.message || error) }, 500);
   }
@@ -1478,12 +1615,6 @@ function toSafeCount(value) {
   if (!Number.isFinite(n) || n < 0) return 0;
   return Math.floor(n);
 }
-function normalizePeriod(raw) {
-  if (typeof raw !== "string") return null;
-  const value = raw.trim().toLowerCase();
-  if (value === "week" || value === "month" || value === "total") return value;
-  return null;
-}
 function normalizeMetric(raw) {
   if (typeof raw !== "string") return "all";
   const value = raw.trim().toLowerCase();
@@ -1575,7 +1706,7 @@ async function loadSnapshot({ serviceClient, period, metric, from, to, userId, l
     return { ...normalized, rank: resolvedRank };
   });
   const me = userId ? normalizeMetricMe(meRow, metric) : null;
-  const generatedAt = normalizeGeneratedAt(entryRows, meRow);
+  const generatedAt = resolveGeneratedAt(entryRows, meRow);
   if (entries.length === 0 && !meRow) return { ok: false };
   return {
     ok: true,
@@ -1590,7 +1721,7 @@ function normalizeMetricMe(row, metric) {
   const gptTokens = toBigInt2(row?.gpt_tokens);
   const claudeTokens = toBigInt2(row?.claude_tokens);
   const totalTokens = toBigInt2(row?.total_tokens);
-  const otherTokens = resolveOtherTokens({ row, totalTokens, gptTokens, claudeTokens });
+  const otherTokens = resolveLeaderboardOtherTokens2({ row, totalTokens, gptTokens, claudeTokens });
   let rank = toPositiveIntOrNull2(row?.rank);
   if (metric === "gpt") {
     rank = gptTokens > 0n ? toPositiveIntOrNull2(row?.rank_gpt) : null;
@@ -1608,29 +1739,13 @@ function normalizeMetricMe(row, metric) {
     total_tokens: totalTokens.toString()
   };
 }
-async function computeWindow({ period }) {
-  const today = toUtcDay2(/* @__PURE__ */ new Date());
-  if (period === "week") {
-    const dow = today.getUTCDay();
-    const from = addUtcDays2(today, -dow);
-    const to = addUtcDays2(from, 6);
-    return { from: formatDateUTC2(from), to: formatDateUTC2(to) };
-  }
-  if (period === "month") {
-    const from = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
-    const to = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
-    return { from: formatDateUTC2(from), to: formatDateUTC2(to) };
-  }
-  if (period === "total") return { from: "1970-01-01", to: "9999-12-31" };
-  throw new Error(`Unsupported period: ${String(period)}`);
-}
 function normalizeEntry(row, options = {}) {
   const userId = typeof options?.userId === "string" ? options.userId : null;
   const publicUserSet = options?.publicUserSet;
   const gptTokens = toBigInt2(row?.gpt_tokens);
   const claudeTokens = toBigInt2(row?.claude_tokens);
   const totalTokens = toBigInt2(row?.total_tokens);
-  const otherTokens = resolveOtherTokens({ row, totalTokens, gptTokens, claudeTokens });
+  const otherTokens = resolveLeaderboardOtherTokens2({ row, totalTokens, gptTokens, claudeTokens });
   const rawUserId = typeof row?.user_id === "string" ? row.user_id : null;
   const isPublic = resolveIsPublic({ rawUserId, publicUserSet });
   const isMe = userId ? rawUserId ? rawUserId === userId : Boolean(row?.is_me) : false;
@@ -1638,8 +1753,8 @@ function normalizeEntry(row, options = {}) {
     user_id: isPublic ? rawUserId : null,
     rank: toPositiveInt2(row?.rank),
     is_me: isMe,
-    display_name: isPublic ? normalizeDisplayName(row?.display_name) : "Anonymous",
-    avatar_url: isPublic ? normalizeAvatarUrl(row?.avatar_url) : null,
+    display_name: isPublic ? normalizeLeaderboardDisplayName2(row?.display_name) : "Anonymous",
+    avatar_url: isPublic ? normalizeLeaderboardAvatarUrl2(row?.avatar_url) : null,
     gpt_tokens: gptTokens.toString(),
     claude_tokens: claudeTokens.toString(),
     other_tokens: otherTokens.toString(),
@@ -1652,7 +1767,7 @@ function normalizeMe(row) {
   const gptTokens = toBigInt2(row?.gpt_tokens);
   const claudeTokens = toBigInt2(row?.claude_tokens);
   const totalTokens = toBigInt2(row?.total_tokens);
-  const otherTokens = resolveOtherTokens({ row, totalTokens, gptTokens, claudeTokens });
+  const otherTokens = resolveLeaderboardOtherTokens2({ row, totalTokens, gptTokens, claudeTokens });
   return {
     rank,
     gpt_tokens: gptTokens.toString(),
@@ -1660,12 +1775,6 @@ function normalizeMe(row) {
     other_tokens: otherTokens.toString(),
     total_tokens: totalTokens.toString()
   };
-}
-function resolveOtherTokens({ row, totalTokens, gptTokens, claudeTokens }) {
-  const explicit = row?.other_tokens;
-  if (explicit != null) return toBigInt2(explicit);
-  const derived = totalTokens - gptTokens - claudeTokens;
-  return derived > 0n ? derived : 0n;
 }
 function resolveIsPublic({ rawUserId, publicUserSet }) {
   if (!(publicUserSet instanceof Set) || !rawUserId) return false;
@@ -1684,26 +1793,9 @@ async function loadActivePublicUserIds({ serviceClient, rows }) {
   if (error) return null;
   return new Set((data || []).map((row) => row?.user_id).filter(Boolean));
 }
-function normalizeGeneratedAt(entryRows, meRow) {
+function resolveGeneratedAt(entryRows, meRow) {
   const candidate = entryRows?.[0]?.generated_at || meRow?.generated_at;
-  return typeof candidate === "string" && candidate ? candidate : (/* @__PURE__ */ new Date()).toISOString();
-}
-function normalizeDisplayName(value) {
-  if (typeof value !== "string") return "Anonymous";
-  const trimmed = value.trim();
-  return trimmed || "Anonymous";
-}
-function normalizeAvatarUrl(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  if (trimmed.length > 1024) return null;
-  try {
-    const url = new URL(trimmed);
-    if (url.protocol === "http:" || url.protocol === "https:") return trimmed;
-  } catch (_error) {
-  }
-  return null;
+  return normalizeLeaderboardGeneratedAt2(candidate);
 }
 export {
   vibeusage_leaderboard_default as default

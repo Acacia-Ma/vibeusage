@@ -1104,16 +1104,16 @@ var require_date_core = __commonJS({
     function isDate(value) {
       return typeof value === "string" && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value);
     }
-    function toUtcDay2(date) {
+    function toUtcDay(date) {
       return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
     }
-    function formatDateUTC2(date) {
-      return toUtcDay2(date).toISOString().slice(0, 10);
+    function formatDateUTC(date) {
+      return toUtcDay(date).toISOString().slice(0, 10);
     }
     function normalizeDateRange(fromRaw, toRaw) {
       const today = /* @__PURE__ */ new Date();
-      const toDefault = formatDateUTC2(today);
-      const fromDefault = formatDateUTC2(
+      const toDefault = formatDateUTC(today);
+      const fromDefault = formatDateUTC(
         new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 29))
       );
       const from = isDate(fromRaw) ? fromRaw : fromDefault;
@@ -1125,18 +1125,18 @@ var require_date_core = __commonJS({
       const [year, month, day] = value.split("-").map(Number);
       const date = new Date(Date.UTC(year, month - 1, day));
       if (!Number.isFinite(date.getTime())) return null;
-      return formatDateUTC2(date) === value ? date : null;
+      return formatDateUTC(date) === value ? date : null;
     }
-    function addUtcDays2(date, days) {
+    function addUtcDays(date, days) {
       return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days));
     }
     function computeHeatmapWindowUtc({ weeks, weekStartsOn, to }) {
       const end = parseUtcDateString(to) || /* @__PURE__ */ new Date();
       const desired = weekStartsOn === "mon" ? 1 : 0;
       const endDow = end.getUTCDay();
-      const endWeekStart = addUtcDays2(end, -((endDow - desired + 7) % 7));
-      const gridStart = addUtcDays2(endWeekStart, -7 * (weeks - 1));
-      return { from: formatDateUTC2(gridStart), gridStart, end };
+      const endWeekStart = addUtcDays(end, -((endDow - desired + 7) % 7));
+      const gridStart = addUtcDays(endWeekStart, -7 * (weeks - 1));
+      return { from: formatDateUTC(gridStart), gridStart, end };
     }
     function getTimeZoneFormatter(timeZone) {
       if (TIMEZONE_FORMATTERS.has(timeZone)) return TIMEZONE_FORMATTERS.get(timeZone);
@@ -1191,7 +1191,7 @@ var require_date_core = __commonJS({
     function addDatePartsDays(parts, days) {
       const base = dateFromPartsUTC(parts);
       if (!base) return null;
-      return datePartsFromDateUTC(addUtcDays2(base, days));
+      return datePartsFromDateUTC(addUtcDays(base, days));
     }
     function addDatePartsMonths(parts, months) {
       if (!parts) return null;
@@ -1334,8 +1334,8 @@ var require_date_core = __commonJS({
       const end = dateFromPartsUTC(endParts);
       if (!start || !end || end < start) return [];
       const days = [];
-      for (let cursor = start; cursor <= end; cursor = addUtcDays2(cursor, 1)) {
-        days.push(formatDateUTC2(cursor));
+      for (let cursor = start; cursor <= end; cursor = addUtcDays(cursor, 1)) {
+        days.push(formatDateUTC(cursor));
       }
       return days;
     }
@@ -1346,11 +1346,11 @@ var require_date_core = __commonJS({
       Object.defineProperty(globalThis, CORE_KEY, {
         value: {
           isDate,
-          toUtcDay: toUtcDay2,
-          formatDateUTC: formatDateUTC2,
+          toUtcDay,
+          formatDateUTC,
           normalizeDateRange,
           parseUtcDateString,
-          addUtcDays: addUtcDays2,
+          addUtcDays,
           computeHeatmapWindowUtc,
           parseDateParts,
           formatDateParts,
@@ -1413,6 +1413,143 @@ var require_date = __commonJS({
   }
 });
 
+// insforge-src/shared/user-identity-core.js
+var require_user_identity_core = __commonJS({
+  "insforge-src/shared/user-identity-core.js"() {
+    "use strict";
+    var CORE_KEY = "__vibeusageUserIdentityCore";
+    function resolveUserIdentity(row) {
+      return {
+        displayName: resolveUserDisplayName(row),
+        avatarUrl: resolveUserAvatarUrl(row)
+      };
+    }
+    function resolveUserDisplayName(row) {
+      const profile = isObject(row?.profile) ? row.profile : null;
+      const metadata = isObject(row?.metadata) ? row.metadata : null;
+      return sanitizeDisplayName(row?.nickname) || sanitizeDisplayName(profile?.name) || sanitizeDisplayName(profile?.full_name) || sanitizeDisplayName(metadata?.full_name) || sanitizeDisplayName(metadata?.name) || null;
+    }
+    function resolveUserAvatarUrl(row) {
+      const profile = isObject(row?.profile) ? row.profile : null;
+      const metadata = isObject(row?.metadata) ? row.metadata : null;
+      return sanitizeAvatarUrl(row?.avatar_url) || sanitizeAvatarUrl(profile?.avatar_url) || sanitizeAvatarUrl(metadata?.avatar_url) || sanitizeAvatarUrl(metadata?.picture) || null;
+    }
+    function sanitizeDisplayName(value) {
+      if (typeof value !== "string") return null;
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      if (trimmed.includes("@")) return null;
+      if (trimmed.length > 128) return trimmed.slice(0, 128);
+      return trimmed;
+    }
+    function sanitizeAvatarUrl(value) {
+      if (typeof value !== "string") return null;
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      if (trimmed.length > 1024) return null;
+      try {
+        const url = new URL(trimmed);
+        if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+        return url.toString();
+      } catch (_error) {
+        return null;
+      }
+    }
+    function isObject(value) {
+      return Boolean(value && typeof value === "object");
+    }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          resolveUserIdentity,
+          resolveUserDisplayName,
+          resolveUserAvatarUrl,
+          sanitizeDisplayName,
+          sanitizeAvatarUrl
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
+// insforge-src/shared/leaderboard-core.js
+var require_leaderboard_core = __commonJS({
+  "insforge-src/shared/leaderboard-core.js"() {
+    "use strict";
+    var CORE_KEY = "__vibeusageLeaderboardCore";
+    var dateCore = globalThis.__vibeusageDateCore;
+    if (!dateCore) throw new Error("date core not initialized");
+    var userIdentityCore = globalThis.__vibeusageUserIdentityCore;
+    if (!userIdentityCore) throw new Error("user identity core not initialized");
+    var { addUtcDays, formatDateUTC, toUtcDay } = dateCore;
+    var { sanitizeAvatarUrl } = userIdentityCore;
+    function normalizeLeaderboardPeriod2(raw) {
+      if (typeof raw !== "string") return null;
+      const value = raw.trim().toLowerCase();
+      if (value === "week" || value === "month" || value === "total") return value;
+      return null;
+    }
+    function computeLeaderboardWindow2({ period }) {
+      const normalized = normalizeLeaderboardPeriod2(period);
+      if (normalized === "week") {
+        const today = toUtcDay(/* @__PURE__ */ new Date());
+        const dow = today.getUTCDay();
+        const from = addUtcDays(today, -dow);
+        const to = addUtcDays(from, 6);
+        return { from: formatDateUTC(from), to: formatDateUTC(to) };
+      }
+      if (normalized === "month") {
+        const today = toUtcDay(/* @__PURE__ */ new Date());
+        const from = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+        const to = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
+        return { from: formatDateUTC(from), to: formatDateUTC(to) };
+      }
+      if (normalized === "total") {
+        return { from: "1970-01-01", to: "9999-12-31" };
+      }
+      throw new Error(`Unsupported period: ${String(period)}`);
+    }
+    function resolveLeaderboardOtherTokens2({ row, totalTokens, gptTokens, claudeTokens }) {
+      const explicit = row?.other_tokens;
+      if (explicit != null) return BigInt(explicit);
+      const derived = totalTokens - gptTokens - claudeTokens;
+      return derived > 0n ? derived : 0n;
+    }
+    function normalizeLeaderboardDisplayName2(value) {
+      if (typeof value !== "string") return "Anonymous";
+      const trimmed = value.trim();
+      return trimmed || "Anonymous";
+    }
+    function normalizeLeaderboardAvatarUrl2(value) {
+      return sanitizeAvatarUrl(value);
+    }
+    function normalizeLeaderboardGeneratedAt2(value) {
+      if (typeof value !== "string") return (/* @__PURE__ */ new Date()).toISOString();
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return (/* @__PURE__ */ new Date()).toISOString();
+      return date.toISOString();
+    }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          normalizeLeaderboardPeriod: normalizeLeaderboardPeriod2,
+          computeLeaderboardWindow: computeLeaderboardWindow2,
+          resolveLeaderboardOtherTokens: resolveLeaderboardOtherTokens2,
+          normalizeLeaderboardDisplayName: normalizeLeaderboardDisplayName2,
+          normalizeLeaderboardAvatarUrl: normalizeLeaderboardAvatarUrl2,
+          normalizeLeaderboardGeneratedAt: normalizeLeaderboardGeneratedAt2
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
 // insforge-src/shared/numbers.js
 var require_numbers = __commonJS({
   "insforge-src/shared/numbers.js"(exports2, module2) {
@@ -1432,9 +1569,21 @@ var require_numbers = __commonJS({
 var { handleOptions, json, requireMethod } = require_http();
 var { getBearerToken, getEdgeClientAndUserId } = require_auth();
 var { getAnonKey, getBaseUrl, getServiceRoleKey } = require_env();
-var { toUtcDay, addUtcDays, formatDateUTC } = require_date();
+require_date();
+require_user_identity_core();
+require_leaderboard_core();
 var { toBigInt, toPositiveIntOrNull } = require_numbers();
 var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+var leaderboardCore = globalThis.__vibeusageLeaderboardCore;
+if (!leaderboardCore) throw new Error("leaderboard core not initialized");
+var {
+  normalizeLeaderboardPeriod,
+  computeLeaderboardWindow,
+  resolveLeaderboardOtherTokens,
+  normalizeLeaderboardDisplayName,
+  normalizeLeaderboardAvatarUrl,
+  normalizeLeaderboardGeneratedAt
+} = leaderboardCore;
 module.exports = async function(request) {
   const opt = handleOptions(request);
   if (opt) return opt;
@@ -1449,10 +1598,10 @@ module.exports = async function(request) {
   }
   const viewerUserId = auth.ok ? auth.userId : null;
   const url = new URL(request.url);
-  const period = normalizePeriod(url.searchParams.get("period")) || "week";
+  const period = normalizeLeaderboardPeriod(url.searchParams.get("period")) || "week";
   const requestedUserId = normalizeUserId(url.searchParams.get("user_id"));
   if (!requestedUserId) return json({ error: "user_id is required" }, 400);
-  const { from, to } = computeWindow({ period });
+  const { from, to } = computeLeaderboardWindow({ period });
   const serviceRoleKey = getServiceRoleKey();
   if (!serviceRoleKey) return json({ error: "Service unavailable" }, 503);
   const anonKey = getAnonKey();
@@ -1479,20 +1628,12 @@ module.exports = async function(request) {
       period,
       from,
       to,
-      generated_at: normalizeGeneratedAt(snapshot.generated_at),
+      generated_at: normalizeLeaderboardGeneratedAt(snapshot.generated_at),
       entry: normalizeSnapshotEntry(snapshot)
     },
     200
   );
 };
-function normalizePeriod(raw) {
-  if (typeof raw !== "string") return null;
-  const v = raw.trim().toLowerCase();
-  if (v === "week") return v;
-  if (v === "month") return v;
-  if (v === "total") return v;
-  return null;
-}
 function normalizeUserId(value) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim().toLowerCase();
@@ -1501,38 +1642,13 @@ function normalizeUserId(value) {
   if (!UUID_RE.test(trimmed)) return null;
   return trimmed;
 }
-function computeWindow({ period }) {
-  const now = /* @__PURE__ */ new Date();
-  const today = toUtcDay(now);
-  if (period === "week") {
-    const dow = today.getUTCDay();
-    const from = addUtcDays(today, -dow);
-    const to = addUtcDays(from, 6);
-    return { from: formatDateUTC(from), to: formatDateUTC(to) };
-  }
-  if (period === "month") {
-    const from = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
-    const to = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
-    return { from: formatDateUTC(from), to: formatDateUTC(to) };
-  }
-  if (period === "total") {
-    return { from: "1970-01-01", to: "9999-12-31" };
-  }
-  return computeWindow({ period: "week" });
-}
-function normalizeGeneratedAt(value) {
-  if (typeof value !== "string") return (/* @__PURE__ */ new Date()).toISOString();
-  const dt = new Date(value);
-  if (Number.isNaN(dt.getTime())) return (/* @__PURE__ */ new Date()).toISOString();
-  return dt.toISOString();
-}
 function normalizeSnapshotEntry(row) {
-  const displayName = normalizeDisplayName(row?.display_name);
-  const avatarUrl = normalizeAvatarUrl(row?.avatar_url);
+  const displayName = normalizeLeaderboardDisplayName(row?.display_name);
+  const avatarUrl = normalizeLeaderboardAvatarUrl(row?.avatar_url);
   const gptTokens = toBigInt(row?.gpt_tokens);
   const claudeTokens = toBigInt(row?.claude_tokens);
   const totalTokens = toBigInt(row?.total_tokens);
-  const otherTokens = resolveOtherTokens({
+  const otherTokens = resolveLeaderboardOtherTokens({
     row,
     totalTokens,
     gptTokens,
@@ -1548,20 +1664,4 @@ function normalizeSnapshotEntry(row) {
     other_tokens: otherTokens.toString(),
     total_tokens: totalTokens.toString()
   };
-}
-function resolveOtherTokens({ row, totalTokens, gptTokens, claudeTokens }) {
-  const explicit = row?.other_tokens;
-  if (explicit != null) return toBigInt(explicit);
-  const derived = totalTokens - gptTokens - claudeTokens;
-  return derived > 0n ? derived : 0n;
-}
-function normalizeDisplayName(value) {
-  if (typeof value !== "string") return "Anonymous";
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : "Anonymous";
-}
-function normalizeAvatarUrl(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
 }

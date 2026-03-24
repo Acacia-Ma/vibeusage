@@ -9,6 +9,10 @@ const { sha256Hex } = require("../insforge-src/shared/crypto");
 const { normalizeUsageModel, applyUsageModelFilter } = require("../insforge-src/shared/model");
 const { resolveIdentityAtDate } = require("../insforge-src/shared/model-alias-timeline");
 const pricing = require("../insforge-src/shared/pricing");
+require("../insforge-src/shared/date-core");
+require("../insforge-src/shared/user-identity-core");
+require("../insforge-src/shared/leaderboard-core");
+const leaderboardCore = globalThis.__vibeusageLeaderboardCore;
 
 if (!globalThis.crypto) {
   globalThis.crypto = webcrypto;
@@ -253,4 +257,28 @@ test("resolveIdentityAtDate does not infer suffix aliases for prefixed models", 
 test("sha256Hex normalizes nullish inputs to empty string", async () => {
   assert.equal(await sha256Hex(undefined), await sha256Hex(""));
   assert.equal(await sha256Hex(null), await sha256Hex(""));
+});
+
+test("leaderboard core normalizes avatar urls and derives other tokens", () => {
+  assert.equal(leaderboardCore.normalizeLeaderboardAvatarUrl("https://example.com/avatar.png"), "https://example.com/avatar.png");
+  assert.equal(leaderboardCore.normalizeLeaderboardAvatarUrl("javascript:alert(1)"), null);
+
+  assert.equal(
+    leaderboardCore.resolveLeaderboardOtherTokens({
+      row: { other_tokens: null },
+      totalTokens: 20n,
+      gptTokens: 7n,
+      claudeTokens: 5n,
+    }),
+    8n,
+  );
+  assert.equal(
+    leaderboardCore.resolveLeaderboardOtherTokens({
+      row: { other_tokens: null },
+      totalTokens: 10n,
+      gptTokens: 7n,
+      claudeTokens: 9n,
+    }),
+    0n,
+  );
 });

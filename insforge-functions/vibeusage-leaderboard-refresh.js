@@ -1104,16 +1104,16 @@ var require_date_core = __commonJS({
     function isDate(value) {
       return typeof value === "string" && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value);
     }
-    function toUtcDay2(date) {
+    function toUtcDay(date) {
       return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
     }
-    function formatDateUTC2(date) {
-      return toUtcDay2(date).toISOString().slice(0, 10);
+    function formatDateUTC(date) {
+      return toUtcDay(date).toISOString().slice(0, 10);
     }
     function normalizeDateRange(fromRaw, toRaw) {
       const today = /* @__PURE__ */ new Date();
-      const toDefault = formatDateUTC2(today);
-      const fromDefault = formatDateUTC2(
+      const toDefault = formatDateUTC(today);
+      const fromDefault = formatDateUTC(
         new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 29))
       );
       const from = isDate(fromRaw) ? fromRaw : fromDefault;
@@ -1125,18 +1125,18 @@ var require_date_core = __commonJS({
       const [year, month, day] = value.split("-").map(Number);
       const date = new Date(Date.UTC(year, month - 1, day));
       if (!Number.isFinite(date.getTime())) return null;
-      return formatDateUTC2(date) === value ? date : null;
+      return formatDateUTC(date) === value ? date : null;
     }
-    function addUtcDays2(date, days) {
+    function addUtcDays(date, days) {
       return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days));
     }
     function computeHeatmapWindowUtc({ weeks, weekStartsOn, to }) {
       const end = parseUtcDateString(to) || /* @__PURE__ */ new Date();
       const desired = weekStartsOn === "mon" ? 1 : 0;
       const endDow = end.getUTCDay();
-      const endWeekStart = addUtcDays2(end, -((endDow - desired + 7) % 7));
-      const gridStart = addUtcDays2(endWeekStart, -7 * (weeks - 1));
-      return { from: formatDateUTC2(gridStart), gridStart, end };
+      const endWeekStart = addUtcDays(end, -((endDow - desired + 7) % 7));
+      const gridStart = addUtcDays(endWeekStart, -7 * (weeks - 1));
+      return { from: formatDateUTC(gridStart), gridStart, end };
     }
     function getTimeZoneFormatter(timeZone) {
       if (TIMEZONE_FORMATTERS.has(timeZone)) return TIMEZONE_FORMATTERS.get(timeZone);
@@ -1191,7 +1191,7 @@ var require_date_core = __commonJS({
     function addDatePartsDays(parts, days) {
       const base = dateFromPartsUTC(parts);
       if (!base) return null;
-      return datePartsFromDateUTC(addUtcDays2(base, days));
+      return datePartsFromDateUTC(addUtcDays(base, days));
     }
     function addDatePartsMonths(parts, months) {
       if (!parts) return null;
@@ -1334,8 +1334,8 @@ var require_date_core = __commonJS({
       const end = dateFromPartsUTC(endParts);
       if (!start || !end || end < start) return [];
       const days = [];
-      for (let cursor = start; cursor <= end; cursor = addUtcDays2(cursor, 1)) {
-        days.push(formatDateUTC2(cursor));
+      for (let cursor = start; cursor <= end; cursor = addUtcDays(cursor, 1)) {
+        days.push(formatDateUTC(cursor));
       }
       return days;
     }
@@ -1346,11 +1346,11 @@ var require_date_core = __commonJS({
       Object.defineProperty(globalThis, CORE_KEY, {
         value: {
           isDate,
-          toUtcDay: toUtcDay2,
-          formatDateUTC: formatDateUTC2,
+          toUtcDay,
+          formatDateUTC,
           normalizeDateRange,
           parseUtcDateString,
-          addUtcDays: addUtcDays2,
+          addUtcDays,
           computeHeatmapWindowUtc,
           parseDateParts,
           formatDateParts,
@@ -1477,25 +1477,11 @@ var require_pagination = __commonJS({
   }
 });
 
-// insforge-src/shared/numbers.js
-var require_numbers = __commonJS({
-  "insforge-src/shared/numbers.js"(exports2, module2) {
+// insforge-src/shared/user-identity-core.js
+var require_user_identity_core = __commonJS({
+  "insforge-src/shared/user-identity-core.js"() {
     "use strict";
-    require_runtime_primitives_core();
-    var runtimePrimitivesCore = globalThis.__vibeusageRuntimePrimitivesCore;
-    if (!runtimePrimitivesCore) throw new Error("runtime primitives core not initialized");
-    module2.exports = {
-      toBigInt: runtimePrimitivesCore.toBigInt,
-      toPositiveInt: runtimePrimitivesCore.toPositiveInt,
-      toPositiveIntOrNull: runtimePrimitivesCore.toPositiveIntOrNull
-    };
-  }
-});
-
-// insforge-src/shared/user-identity.js
-var require_user_identity = __commonJS({
-  "insforge-src/shared/user-identity.js"(exports2, module2) {
-    "use strict";
+    var CORE_KEY = "__vibeusageUserIdentityCore";
     function resolveUserIdentity2(row) {
       return {
         displayName: resolveUserDisplayName(row),
@@ -1536,13 +1522,121 @@ var require_user_identity = __commonJS({
     function isObject(value) {
       return Boolean(value && typeof value === "object");
     }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          resolveUserIdentity: resolveUserIdentity2,
+          resolveUserDisplayName,
+          resolveUserAvatarUrl,
+          sanitizeDisplayName,
+          sanitizeAvatarUrl
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
+// insforge-src/shared/leaderboard-core.js
+var require_leaderboard_core = __commonJS({
+  "insforge-src/shared/leaderboard-core.js"() {
+    "use strict";
+    var CORE_KEY = "__vibeusageLeaderboardCore";
+    var dateCore = globalThis.__vibeusageDateCore;
+    if (!dateCore) throw new Error("date core not initialized");
+    var userIdentityCore = globalThis.__vibeusageUserIdentityCore;
+    if (!userIdentityCore) throw new Error("user identity core not initialized");
+    var { addUtcDays, formatDateUTC, toUtcDay } = dateCore;
+    var { sanitizeAvatarUrl } = userIdentityCore;
+    function normalizeLeaderboardPeriod2(raw) {
+      if (typeof raw !== "string") return null;
+      const value = raw.trim().toLowerCase();
+      if (value === "week" || value === "month" || value === "total") return value;
+      return null;
+    }
+    function computeLeaderboardWindow2({ period }) {
+      const normalized = normalizeLeaderboardPeriod2(period);
+      if (normalized === "week") {
+        const today = toUtcDay(/* @__PURE__ */ new Date());
+        const dow = today.getUTCDay();
+        const from = addUtcDays(today, -dow);
+        const to = addUtcDays(from, 6);
+        return { from: formatDateUTC(from), to: formatDateUTC(to) };
+      }
+      if (normalized === "month") {
+        const today = toUtcDay(/* @__PURE__ */ new Date());
+        const from = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+        const to = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
+        return { from: formatDateUTC(from), to: formatDateUTC(to) };
+      }
+      if (normalized === "total") {
+        return { from: "1970-01-01", to: "9999-12-31" };
+      }
+      throw new Error(`Unsupported period: ${String(period)}`);
+    }
+    function resolveLeaderboardOtherTokens2({ row, totalTokens, gptTokens, claudeTokens }) {
+      const explicit = row?.other_tokens;
+      if (explicit != null) return BigInt(explicit);
+      const derived = totalTokens - gptTokens - claudeTokens;
+      return derived > 0n ? derived : 0n;
+    }
+    function normalizeLeaderboardDisplayName2(value) {
+      if (typeof value !== "string") return "Anonymous";
+      const trimmed = value.trim();
+      return trimmed || "Anonymous";
+    }
+    function normalizeLeaderboardAvatarUrl2(value) {
+      return sanitizeAvatarUrl(value);
+    }
+    function normalizeLeaderboardGeneratedAt(value) {
+      if (typeof value !== "string") return (/* @__PURE__ */ new Date()).toISOString();
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return (/* @__PURE__ */ new Date()).toISOString();
+      return date.toISOString();
+    }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          normalizeLeaderboardPeriod: normalizeLeaderboardPeriod2,
+          computeLeaderboardWindow: computeLeaderboardWindow2,
+          resolveLeaderboardOtherTokens: resolveLeaderboardOtherTokens2,
+          normalizeLeaderboardDisplayName: normalizeLeaderboardDisplayName2,
+          normalizeLeaderboardAvatarUrl: normalizeLeaderboardAvatarUrl2,
+          normalizeLeaderboardGeneratedAt
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
+// insforge-src/shared/numbers.js
+var require_numbers = __commonJS({
+  "insforge-src/shared/numbers.js"(exports2, module2) {
+    "use strict";
+    require_runtime_primitives_core();
+    var runtimePrimitivesCore = globalThis.__vibeusageRuntimePrimitivesCore;
+    if (!runtimePrimitivesCore) throw new Error("runtime primitives core not initialized");
     module2.exports = {
-      resolveUserIdentity: resolveUserIdentity2,
-      resolveUserDisplayName,
-      resolveUserAvatarUrl,
-      sanitizeDisplayName,
-      sanitizeAvatarUrl
+      toBigInt: runtimePrimitivesCore.toBigInt,
+      toPositiveInt: runtimePrimitivesCore.toPositiveInt,
+      toPositiveIntOrNull: runtimePrimitivesCore.toPositiveIntOrNull
     };
+  }
+});
+
+// insforge-src/shared/user-identity.js
+var require_user_identity = __commonJS({
+  "insforge-src/shared/user-identity.js"(exports2, module2) {
+    "use strict";
+    require_user_identity_core();
+    var userIdentityCore = globalThis.__vibeusageUserIdentityCore;
+    if (!userIdentityCore) throw new Error("user identity core not initialized");
+    module2.exports = userIdentityCore;
   }
 });
 
@@ -1550,13 +1644,24 @@ var require_user_identity = __commonJS({
 var { handleOptions, json, requireMethod } = require_http();
 var { getBearerToken } = require_auth();
 var { getAnonKey, getBaseUrl, getServiceRoleKey } = require_env();
-var { toUtcDay, addUtcDays, formatDateUTC } = require_date();
+require_date();
 var { forEachPage } = require_pagination();
+require_user_identity_core();
+require_leaderboard_core();
 var { toBigInt, toPositiveInt } = require_numbers();
 var { resolveUserIdentity } = require_user_identity();
 var PERIODS = ["week", "month"];
 var SOURCE_PAGE_SIZE = 1e3;
 var INSERT_BATCH_SIZE = 500;
+var leaderboardCore = globalThis.__vibeusageLeaderboardCore;
+if (!leaderboardCore) throw new Error("leaderboard core not initialized");
+var {
+  normalizeLeaderboardPeriod,
+  computeLeaderboardWindow,
+  resolveLeaderboardOtherTokens,
+  normalizeLeaderboardDisplayName,
+  normalizeLeaderboardAvatarUrl
+} = leaderboardCore;
 module.exports = async function(request) {
   const opt = handleOptions(request);
   if (opt) return opt;
@@ -1567,7 +1672,7 @@ module.exports = async function(request) {
   const bearer = getBearerToken(request.headers.get("Authorization"));
   if (!bearer || bearer !== serviceRoleKey) return json({ error: "Unauthorized" }, 401);
   const url = new URL(request.url);
-  const requested = normalizePeriod(url.searchParams.get("period"));
+  const requested = normalizeLeaderboardPeriod(url.searchParams.get("period"));
   if (url.searchParams.has("period") && !requested) return json({ error: "Invalid period" }, 400);
   const baseUrl = getBaseUrl();
   const anonKey = getAnonKey();
@@ -1581,9 +1686,7 @@ module.exports = async function(request) {
   const results = [];
   try {
     for (const period of targetPeriods) {
-      const window = await computeWindow({ period });
-      if (!window.ok) return json({ error: window.error }, 500);
-      const { from, to } = window;
+      const { from, to } = computeLeaderboardWindow({ period });
       const { inserted } = await refreshPeriod({
         serviceClient,
         period,
@@ -1598,33 +1701,6 @@ module.exports = async function(request) {
   }
   return json({ success: true, generated_at: generatedAt, results }, 200);
 };
-function normalizePeriod(raw) {
-  if (typeof raw !== "string") return null;
-  const v = raw.trim().toLowerCase();
-  if (v === "week") return v;
-  if (v === "month") return v;
-  if (v === "total") return v;
-  return null;
-}
-async function computeWindow({ period }) {
-  const now = /* @__PURE__ */ new Date();
-  const today = toUtcDay(now);
-  if (period === "week") {
-    const dow = today.getUTCDay();
-    const from = addUtcDays(today, -dow);
-    const to = addUtcDays(from, 6);
-    return { ok: true, from: formatDateUTC(from), to: formatDateUTC(to) };
-  }
-  if (period === "month") {
-    const from = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
-    const to = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
-    return { ok: true, from: formatDateUTC(from), to: formatDateUTC(to) };
-  }
-  if (period === "total") {
-    return { ok: true, from: "1970-01-01", to: "9999-12-31" };
-  }
-  return { ok: false, error: `Invalid period: ${String(period)}` };
-}
 async function refreshPeriod({ serviceClient, period, from, to, generatedAt }) {
   const deleteRes = await serviceClient.database.from("vibeusage_leaderboard_snapshots").delete().eq("period", period).eq("from_day", from).eq("to_day", to);
   if (deleteRes.error) {
@@ -1717,7 +1793,7 @@ function normalizeSnapshotRow({ row, period, from, to, generatedAt, publicProfil
   const gptTokensBigInt = toBigInt(row.gpt_tokens);
   const claudeTokensBigInt = toBigInt(row.claude_tokens);
   const totalTokensBigInt = toBigInt(row.total_tokens);
-  const otherTokensBigInt = resolveOtherTokens({
+  const otherTokensBigInt = resolveLeaderboardOtherTokens({
     row,
     totalTokens: totalTokensBigInt,
     gptTokens: gptTokensBigInt,
@@ -1727,9 +1803,9 @@ function normalizeSnapshotRow({ row, period, from, to, generatedAt, publicProfil
   const claudeTokens = claudeTokensBigInt.toString();
   const otherTokens = otherTokensBigInt.toString();
   const totalTokens = totalTokensBigInt.toString();
-  const fallbackDisplayName = normalizeDisplayName(row.display_name);
-  const fallbackAvatarUrl = normalizeAvatarUrl(row.avatar_url);
-  const displayName = publicProfile?.displayName || fallbackDisplayName || "Anonymous";
+  const fallbackDisplayName = normalizeLeaderboardDisplayName(row.display_name);
+  const fallbackAvatarUrl = normalizeLeaderboardAvatarUrl(row.avatar_url);
+  const displayName = publicProfile?.displayName || fallbackDisplayName;
   const avatarUrl = publicProfile?.avatarUrl || fallbackAvatarUrl;
   const isPublic = publicProfile?.isPublic || false;
   return {
@@ -1750,22 +1826,6 @@ function normalizeSnapshotRow({ row, period, from, to, generatedAt, publicProfil
     is_public: isPublic,
     generated_at: generatedAt
   };
-}
-function resolveOtherTokens({ row, totalTokens, gptTokens, claudeTokens }) {
-  const explicit = row?.other_tokens;
-  if (explicit != null) return toBigInt(explicit);
-  const derived = totalTokens - gptTokens - claudeTokens;
-  return derived > 0n ? derived : 0n;
-}
-function normalizeDisplayName(value) {
-  if (typeof value !== "string") return "Anonymous";
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : "Anonymous";
-}
-function normalizeAvatarUrl(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
 }
 function chunkRows(rows, size) {
   if (!Array.isArray(rows) || rows.length === 0) return [];

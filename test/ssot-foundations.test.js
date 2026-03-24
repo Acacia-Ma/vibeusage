@@ -182,3 +182,21 @@ test("backend usage rollup and bucket helpers flow through shared cores", () => 
     /shared\/usage-monthly-core\.mjs/,
   );
 });
+
+test("backend leaderboard and user identity semantics flow through shared cores", () => {
+  assert.equal(
+    read("insforge-src/shared/user-identity-core.js"),
+    read("insforge-src/shared/user-identity-core.mjs"),
+  );
+  assert.equal(
+    read("insforge-src/shared/leaderboard-core.js"),
+    read("insforge-src/shared/leaderboard-core.mjs"),
+  );
+  assert.match(read("insforge-src/shared/user-identity.js"), /user-identity-core/);
+  assert.match(read("insforge-src/functions/vibeusage-leaderboard-refresh.js"), /leaderboard-core/);
+  assert.match(read("insforge-src/functions/vibeusage-leaderboard-profile.js"), /leaderboard-core/);
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-leaderboard.js"),
+    /shared\/leaderboard-core\.mjs/,
+  );
+});
