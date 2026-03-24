@@ -439,6 +439,23 @@ test("shouldIncludeUsageRow returns true when model filter disabled", () => {
   assert.equal(ok, true);
 });
 
+test("shouldIncludeUsageRow matches canonical alias rows via effective timeline", () => {
+  const ok = usageFilter.shouldIncludeUsageRow({
+    row: { hour_start: "2026-01-25T00:00:00.000Z", model: "gpt-4o-mini" },
+    canonicalModel: "gpt-4o",
+    hasModelFilter: true,
+    aliasTimeline: new Map([
+      [
+        "gpt-4o-mini",
+        [{ model_id: "gpt-4o", model: "GPT-4o", effective_from: "2026-01-01" }],
+      ],
+      ["gpt-4o", [{ model_id: "gpt-4o", model: "GPT-4o", effective_from: "2026-01-01" }]],
+    ]),
+    to: "2026-01-25",
+  });
+  assert.equal(ok, true);
+});
+
 test("initDailyBuckets creates zeroed daily buckets", () => {
   const { buckets } = usageDailyCore.initDailyBuckets(["2026-01-25"]);
   const bucket = buckets.get("2026-01-25");

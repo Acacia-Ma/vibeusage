@@ -1377,19 +1377,16 @@ var applyDailyBucket2 = usageDailyCore.applyDailyBucket;
 var CORE_KEY9 = "__vibeusageUsageFilterCore";
 var usageModelCore2 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore2) throw new Error("usage-model core not initialized");
-var { normalizeUsageModel: normalizeUsageModel2, extractDateKey: extractDateKey2, resolveIdentityAtDate: resolveIdentityAtDate2 } = usageModelCore2;
+var { extractDateKey: extractDateKey2, matchesCanonicalModelAtDate: matchesCanonicalModelAtDate2 } = usageModelCore2;
 function shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to }) {
   if (!hasModelFilter) return true;
-  const rawModel = normalizeUsageModel2(row?.model);
   const dateKey = extractDateKey2(row?.hour_start || row?.day) || to;
-  const identity = resolveIdentityAtDate2({ rawModel, dateKey, timeline: aliasTimeline });
-  const filterIdentity = resolveIdentityAtDate2({
-    rawModel: canonicalModel,
-    usageKey: canonicalModel,
+  return matchesCanonicalModelAtDate2({
+    rawModel: row?.model,
+    canonicalModel,
     dateKey,
     timeline: aliasTimeline
   });
-  return identity.model_id === filterIdentity.model_id;
 }
 if (!globalThis[CORE_KEY9]) {
   Object.defineProperty(globalThis, CORE_KEY9, {
@@ -1970,7 +1967,7 @@ var usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
 var pricingCore2 = globalThis.__vibeusagePricingCore;
 if (!pricingCore2) throw new Error("pricing core not initialized");
-var { fetchAliasRows: fetchAliasRows2, buildAliasTimeline: buildAliasTimeline2, resolveIdentityAtDate: resolveIdentityAtDate3 } = usageModelCore4;
+var { fetchAliasRows: fetchAliasRows2, buildAliasTimeline: buildAliasTimeline2, resolveIdentityAtDate: resolveIdentityAtDate2 } = usageModelCore4;
 var { buildPricingBucketKey: buildPricingBucketKey2, parsePricingBucketKey: parsePricingBucketKey2 } = usageMetricsCore;
 var { resolvePricingProfile: resolvePricingProfile3, computeUsageCost: computeUsageCost3 } = pricingCore2;
 async function resolveBucketedUsagePricing({
@@ -2007,7 +2004,7 @@ async function resolveBucketedUsagePricing({
     const bucket = bucketValue && typeof bucketValue === "object" && bucketValue.totals ? bucketValue : null;
     const bucketTotals = bucket?.totals || bucketValue;
     const { usageKey, dateKey } = parsePricingBucketKey2(bucketKey, effectiveDate);
-    const identity = resolveIdentityAtDate3({ usageKey, dateKey, timeline });
+    const identity = resolveIdentityAtDate2({ usageKey, dateKey, timeline });
     if (identity.model_id && identity.model_id !== defaultModel) {
       canonicalModels.add(identity.model_id);
     }
@@ -2177,7 +2174,7 @@ if (!paginationCore2) throw new Error("pagination core not initialized");
 var usageRollupCore = globalThis.__vibeusageUsageRollupCore;
 if (!usageRollupCore) throw new Error("usage rollup core not initialized");
 var normalizeModel2 = usageModelCore5.normalizeModel;
-var normalizeUsageModel3 = usageModelCore5.normalizeUsageModel;
+var normalizeUsageModel2 = usageModelCore5.normalizeUsageModel;
 var applyUsageModelFilter2 = usageModelCore5.applyUsageModelFilter;
 var getModelParam2 = usageModelCore5.getModelParam;
 var normalizeUsageModelKey2 = usageModelCore5.normalizeUsageModelKey;
@@ -2185,8 +2182,8 @@ var applyModelIdentity2 = usageModelCore5.applyModelIdentity;
 var resolveModelIdentity2 = usageModelCore5.resolveModelIdentity;
 var resolveUsageModelsForCanonical2 = usageModelCore5.resolveUsageModelsForCanonical;
 var extractDateKey3 = usageModelCore5.extractDateKey;
-var resolveIdentityAtDate4 = usageModelCore5.resolveIdentityAtDate;
-var matchesCanonicalModelAtDate2 = usageModelCore5.matchesCanonicalModelAtDate;
+var resolveIdentityAtDate3 = usageModelCore5.resolveIdentityAtDate;
+var matchesCanonicalModelAtDate3 = usageModelCore5.matchesCanonicalModelAtDate;
 var buildAliasTimeline3 = usageModelCore5.buildAliasTimeline;
 var fetchAliasRows3 = usageModelCore5.fetchAliasRows;
 var createTotals3 = usageMetricsCore3.createTotals;
@@ -2286,7 +2283,7 @@ var vibeusage_usage_daily_default = withRequestLogging2("vibeusage-usage-daily",
     applyTotalsAndBillable2({ totals, row, billable, hasStoredBillable });
     const sourceEntry = getSourceEntry2(sourcesMap, sourceKey);
     applyTotalsAndBillable2({ totals: sourceEntry.totals, row, billable, hasStoredBillable });
-    const normalizedModel = normalizeUsageModel3(row?.model);
+    const normalizedModel = normalizeUsageModel2(row?.model);
     if (normalizedModel && normalizedModel !== "unknown") {
       distinctModels.add(normalizedModel);
     }

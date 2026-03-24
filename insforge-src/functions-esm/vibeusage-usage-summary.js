@@ -1,5 +1,6 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
 import { applyCanaryFilter } from "./shared/canary.js";
+import { shouldIncludeUsageRow } from "./shared/core/usage-filter.js";
 import {
   addDatePartsDays,
   addUtcDays,
@@ -43,7 +44,6 @@ import {
   normalizeUsageModelKey,
   resolveBillableTotals,
   resolveDisplayName,
-  resolveIdentityAtDate,
   resolveModelIdentity,
   resolveUsageModelsForCanonical,
 } from "./shared/usage-summary-support.js";
@@ -149,23 +149,8 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
     rollupHit = false;
   };
 
-  const shouldIncludeRow = (row) => {
-    if (!hasModelFilter) return true;
-    const rawModel = normalizeUsageModel(row?.model);
-    const usageKey = normalizeUsageModelKey(rawModel);
-    const dateKey = extractDateKey(row?.hour_start || row?.day) || to;
-    const identity = resolveIdentityAtDate({ rawModel, usageKey, dateKey, timeline: aliasTimeline });
-    const filterIdentity = resolveIdentityAtDate({
-      rawModel: canonicalModel,
-      usageKey: canonicalModel,
-      dateKey,
-      timeline: aliasTimeline,
-    });
-    return identity.model_id === filterIdentity.model_id;
-  };
-
   const ingestRow = (row) => {
-    if (!shouldIncludeRow(row)) return;
+    if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) return;
     const sourceKey = normalizeSource(row?.source) || DEFAULT_SOURCE;
     const { billable, hasStoredBillable } = resolveBillableTotals({ row, source: sourceKey });
     applyTotalsAndBillable({ totals, row, billable, hasStoredBillable });
@@ -427,7 +412,7 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
       activeByDay.set(dayKey, prev + billableTokens);
     };
     const ingestRollingRow = (row) => {
-      if (!shouldIncludeRow(row)) return;
+      if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) return;
       const sourceKey = normalizeSource(row?.source) || DEFAULT_SOURCE;
       const { billable, hasStoredBillable } = resolveBillableTotals({ row, source: sourceKey });
       applyTotalsAndBillable({ totals: rollingTotals, row, billable, hasStoredBillable });
@@ -449,7 +434,7 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
     if (shouldUseHourlyForActiveDays) {
       activeByDay.clear();
       const activeRes = await sumHourlyRangeInto(rangeStartIso, rangeEndIso, (row) => {
-        if (!shouldIncludeRow(row)) return;
+        if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) return;
         const sourceKey = normalizeSource(row?.source) || DEFAULT_SOURCE;
         const { billable, hasStoredBillable } = resolveBillableTotals({ row, source: sourceKey });
         updateActiveByDay({ row, billable, hasStoredBillable });

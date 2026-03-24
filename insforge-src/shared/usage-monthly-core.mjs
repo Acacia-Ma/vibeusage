@@ -5,15 +5,15 @@ const dateCore = globalThis.__vibeusageDateCore;
 if (!dateCore) throw new Error("date core not initialized");
 const runtimePrimitivesCore = globalThis.__vibeusageRuntimePrimitivesCore;
 if (!runtimePrimitivesCore) throw new Error("runtime primitives core not initialized");
-const usageModelCore = globalThis.__vibeusageUsageModelCore;
-if (!usageModelCore) throw new Error("usage-model core not initialized");
 const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
+const usageFilterCore = globalThis.__vibeusageUsageFilterCore;
+if (!usageFilterCore) throw new Error("usage filter core not initialized");
 
 const { addDatePartsMonths, getLocalParts } = dateCore;
 const { toBigInt } = runtimePrimitivesCore;
-const { normalizeUsageModel, extractDateKey, resolveIdentityAtDate } = usageModelCore;
 const { resolveBillableTotals } = usageMetricsCore;
+const { shouldIncludeUsageRow } = usageFilterCore;
 
 function initMonthlyBuckets({ startMonthParts, months } = {}) {
   const monthKeys = [];
@@ -50,18 +50,7 @@ function ingestMonthlyRow({
   const dt = new Date(ts);
   if (!Number.isFinite(dt.getTime())) return false;
 
-  if (hasModelFilter) {
-    const rawModel = normalizeUsageModel(row?.model);
-    const dateKey = extractDateKey(ts) || to;
-    const identity = resolveIdentityAtDate({ rawModel, dateKey, timeline: aliasTimeline });
-    const filterIdentity = resolveIdentityAtDate({
-      rawModel: canonicalModel,
-      usageKey: canonicalModel,
-      dateKey,
-      timeline: aliasTimeline,
-    });
-    if (identity.model_id !== filterIdentity.model_id) return false;
-  }
+  if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) return false;
 
   const localParts = getLocalParts(dt, tzContext);
   const key = `${localParts.year}-${String(localParts.month).padStart(2, "0")}`;

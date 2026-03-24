@@ -200,6 +200,9 @@ test("backend usage rollup and bucket helpers flow through shared cores", () => 
     read("insforge-src/functions-esm/shared/core/usage-monthly.js"),
     /shared\/usage-monthly-core\.mjs/,
   );
+  assert.match(read("insforge-src/shared/usage-filter-core.js"), /matchesCanonicalModelAtDate/);
+  assert.match(read("insforge-src/shared/usage-monthly-core.js"), /shouldIncludeUsageRow/);
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /shouldIncludeUsageRow/);
 });
 
 test("backend leaderboard and user identity semantics flow through shared cores", () => {

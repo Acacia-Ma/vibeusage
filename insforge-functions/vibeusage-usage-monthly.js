@@ -1567,20 +1567,51 @@ var forEachPage3 = paginationCore2.forEachPage;
 var fetchRollupRows2 = usageRollupCore.fetchRollupRows;
 var isRollupEnabled2 = usageRollupCore.isRollupEnabled;
 
+// insforge-src/shared/usage-filter-core.mjs
+var CORE_KEY11 = "__vibeusageUsageFilterCore";
+var usageModelCore3 = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore3) throw new Error("usage-model core not initialized");
+var { extractDateKey: extractDateKey3, matchesCanonicalModelAtDate: matchesCanonicalModelAtDate3 } = usageModelCore3;
+function shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to }) {
+  if (!hasModelFilter) return true;
+  const dateKey = extractDateKey3(row?.hour_start || row?.day) || to;
+  return matchesCanonicalModelAtDate3({
+    rawModel: row?.model,
+    canonicalModel,
+    dateKey,
+    timeline: aliasTimeline
+  });
+}
+if (!globalThis[CORE_KEY11]) {
+  Object.defineProperty(globalThis, CORE_KEY11, {
+    value: {
+      shouldIncludeUsageRow
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/core/usage-filter.js
+var usageFilterCore = globalThis.__vibeusageUsageFilterCore;
+if (!usageFilterCore) throw new Error("usage filter core not initialized");
+var shouldIncludeUsageRow2 = usageFilterCore.shouldIncludeUsageRow;
+
 // insforge-src/shared/usage-monthly-core.mjs
-var CORE_KEY11 = "__vibeusageUsageMonthlyCore";
+var CORE_KEY12 = "__vibeusageUsageMonthlyCore";
 var dateCore2 = globalThis.__vibeusageDateCore;
 if (!dateCore2) throw new Error("date core not initialized");
 var runtimePrimitivesCore4 = globalThis.__vibeusageRuntimePrimitivesCore;
 if (!runtimePrimitivesCore4) throw new Error("runtime primitives core not initialized");
-var usageModelCore3 = globalThis.__vibeusageUsageModelCore;
-if (!usageModelCore3) throw new Error("usage-model core not initialized");
 var usageMetricsCore3 = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore3) throw new Error("usage metrics core not initialized");
+var usageFilterCore2 = globalThis.__vibeusageUsageFilterCore;
+if (!usageFilterCore2) throw new Error("usage filter core not initialized");
 var { addDatePartsMonths: addDatePartsMonths3, getLocalParts: getLocalParts3 } = dateCore2;
 var { toBigInt: toBigInt3 } = runtimePrimitivesCore4;
-var { normalizeUsageModel: normalizeUsageModel3, extractDateKey: extractDateKey3, resolveIdentityAtDate: resolveIdentityAtDate3 } = usageModelCore3;
 var { resolveBillableTotals: resolveBillableTotals3 } = usageMetricsCore3;
+var { shouldIncludeUsageRow: shouldIncludeUsageRow3 } = usageFilterCore2;
 function initMonthlyBuckets({ startMonthParts, months } = {}) {
   const monthKeys = [];
   const buckets = /* @__PURE__ */ new Map();
@@ -1614,18 +1645,7 @@ function ingestMonthlyRow({
   if (!ts) return false;
   const dt = new Date(ts);
   if (!Number.isFinite(dt.getTime())) return false;
-  if (hasModelFilter) {
-    const rawModel = normalizeUsageModel3(row?.model);
-    const dateKey = extractDateKey3(ts) || to;
-    const identity = resolveIdentityAtDate3({ rawModel, dateKey, timeline: aliasTimeline });
-    const filterIdentity = resolveIdentityAtDate3({
-      rawModel: canonicalModel,
-      usageKey: canonicalModel,
-      dateKey,
-      timeline: aliasTimeline
-    });
-    if (identity.model_id !== filterIdentity.model_id) return false;
-  }
+  if (!shouldIncludeUsageRow3({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) return false;
   const localParts = getLocalParts3(dt, tzContext);
   const key = `${localParts.year}-${String(localParts.month).padStart(2, "0")}`;
   const bucket = buckets?.get?.(key) || null;
@@ -1639,8 +1659,8 @@ function ingestMonthlyRow({
   bucket.reasoning += toBigInt3(row?.reasoning_output_tokens);
   return true;
 }
-if (!globalThis[CORE_KEY11]) {
-  Object.defineProperty(globalThis, CORE_KEY11, {
+if (!globalThis[CORE_KEY12]) {
+  Object.defineProperty(globalThis, CORE_KEY12, {
     value: {
       initMonthlyBuckets,
       ingestMonthlyRow
@@ -1658,7 +1678,7 @@ var initMonthlyBuckets2 = usageMonthlyCore.initMonthlyBuckets;
 var ingestMonthlyRow2 = usageMonthlyCore.ingestMonthlyRow;
 
 // insforge-src/shared/debug-core.mjs
-var CORE_KEY12 = "__vibeusageDebugCore";
+var CORE_KEY13 = "__vibeusageDebugCore";
 var envCore3 = globalThis.__vibeusageEnvCore;
 if (!envCore3) throw new Error("env core not initialized");
 function isDebugEnabled(url) {
@@ -1700,8 +1720,8 @@ function withSlowQueryDebugPayload(body, options) {
     debug: buildSlowQueryDebugPayload(options)
   };
 }
-if (!globalThis[CORE_KEY12]) {
-  Object.defineProperty(globalThis, CORE_KEY12, {
+if (!globalThis[CORE_KEY13]) {
+  Object.defineProperty(globalThis, CORE_KEY13, {
     value: {
       isDebugEnabled,
       buildSlowQueryDebugPayload,
@@ -1721,7 +1741,7 @@ var buildSlowQueryDebugPayload2 = debugCore.buildSlowQueryDebugPayload;
 var withSlowQueryDebugPayload2 = debugCore.withSlowQueryDebugPayload;
 
 // insforge-src/shared/http-core.mjs
-var CORE_KEY13 = "__vibeusageHttpCore";
+var CORE_KEY14 = "__vibeusageHttpCore";
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -1758,8 +1778,8 @@ async function readJson(request) {
     return { error: "Invalid JSON", status: 400, data: null };
   }
 }
-if (!globalThis[CORE_KEY13]) {
-  Object.defineProperty(globalThis, CORE_KEY13, {
+if (!globalThis[CORE_KEY14]) {
+  Object.defineProperty(globalThis, CORE_KEY14, {
     value: {
       corsHeaders,
       handleOptions,
@@ -1783,7 +1803,7 @@ var requireMethod2 = httpCore.requireMethod;
 var readJson2 = httpCore.readJson;
 
 // insforge-src/shared/logging-core.mjs
-var CORE_KEY14 = "__vibeusageLoggingCore";
+var CORE_KEY15 = "__vibeusageLoggingCore";
 var envCore4 = globalThis.__vibeusageEnvCore;
 if (!envCore4) throw new Error("env core not initialized");
 function createRequestId() {
@@ -1881,8 +1901,8 @@ function logSlowQuery(logger, fields) {
 function getSlowQueryThresholdMs3() {
   return envCore4.getSlowQueryThresholdMs();
 }
-if (!globalThis[CORE_KEY14]) {
-  Object.defineProperty(globalThis, CORE_KEY14, {
+if (!globalThis[CORE_KEY15]) {
+  Object.defineProperty(globalThis, CORE_KEY15, {
     value: {
       createLogger,
       withRequestLogging,

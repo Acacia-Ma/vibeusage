@@ -44,4 +44,6 @@ Bucketed pricing resolution for aggregate usage endpoints now converges through 
 
 Alias-timeline canonical-model matching for range-filtered usage queries now converges through `insforge-src/shared/usage-model-core.js`. The ESM `vibeusage-usage-hourly` and `vibeusage-usage-heatmap` functions now delegate their per-row canonical-model inclusion checks to the shared `matchesCanonicalModelAtDate` helper instead of carrying four inline copies of the same identity-comparison rule across UTC and local-time paths.
 
+Row-level canonical-model filtering for aggregate usage endpoints now converges through `insforge-src/shared/usage-filter-core.js`. The shared `usage-monthly-core` and the ESM `vibeusage-usage-summary` function now reuse `shouldIncludeUsageRow` instead of each re-implementing `resolveIdentityAtDate` comparisons, which keeps alias-timeline effective-date filtering aligned across daily, monthly, and summary aggregation paths.
+
 The ESM edge layer still contains additional duplicated business logic beyond this slice. This change converts immediately reachable contract drift to shared modules and guardrails first, then continues function-by-function backend convergence without changing public slugs.
