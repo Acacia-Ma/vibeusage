@@ -1,3 +1,4 @@
+import { getAccessTokenUserId } from "./auth-token";
 import { getInsforgeBaseUrl } from "./config";
 import { getViewerIdentity } from "./vibeusage-api";
 
@@ -14,7 +15,7 @@ function normalizeString(value: unknown): string | null {
 export async function resolveCurrentIdentity(session: any): Promise<CurrentIdentity | null> {
   if (!session?.accessToken) return null;
 
-  const userId = normalizeString(session?.user?.id);
+  const userId = normalizeString(session?.user?.id) ?? getAccessTokenUserId(session.accessToken);
   if (!userId) return null;
 
   try {

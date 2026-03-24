@@ -9,6 +9,12 @@ vi.mock("../vibeusage-api", () => ({
 }));
 
 describe("resolveCurrentIdentity", () => {
+  function makeJwt(payload: Record<string, unknown>) {
+    const encode = (value: unknown) =>
+      Buffer.from(JSON.stringify(value)).toString("base64url").replace(/=/g, "");
+    return `${encode({ alg: "HS256", typ: "JWT" })}.${encode(payload)}.sig`;
+  }
+
   beforeEach(() => {
     vi.resetModules();
     api.getViewerIdentity.mockReset();
@@ -75,6 +81,29 @@ describe("resolveCurrentIdentity", () => {
     ).resolves.toBeNull();
 
     expect(api.getViewerIdentity).not.toHaveBeenCalled();
+  });
+
+  it("derives user id from jwt sub when session user is missing", async () => {
+    api.getViewerIdentity.mockResolvedValueOnce({
+      user_id: "u4",
+      display_name: "Token Neo",
+      avatar_url: null,
+    });
+
+    const mod = await import("../current-identity");
+
+    await expect(
+      mod.resolveCurrentIdentity({
+        accessToken: makeJwt({ sub: "u4", exp: Math.floor(Date.now() / 1000) + 3600 }),
+        user: null,
+      }),
+    ).resolves.toEqual({
+      userId: "u4",
+      displayName: "Token Neo",
+      avatarUrl: null,
+    });
+
+    expect(api.getViewerIdentity).toHaveBeenCalledTimes(1);
   });
 
   it("uses viewer identity even when only metadata full_name exists upstream", async () => {
