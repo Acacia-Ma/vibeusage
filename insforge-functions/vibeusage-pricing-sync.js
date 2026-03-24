@@ -623,6 +623,17 @@ var require_usage_model_core = __commonJS({
       const display = normalizeModel2(rawModel) || DEFAULT_MODEL;
       return { model_id: normalizedKey, model: display };
     }
+    function matchesCanonicalModelAtDate({ rawModel, canonicalModel, dateKey, timeline } = {}) {
+      if (!canonicalModel) return true;
+      const identity = resolveIdentityAtDate({ rawModel, dateKey, timeline });
+      const filterIdentity = resolveIdentityAtDate({
+        rawModel: canonicalModel,
+        usageKey: canonicalModel,
+        dateKey,
+        timeline
+      });
+      return identity.model_id === filterIdentity.model_id;
+    }
     function buildAliasTimeline({ usageModels, aliasRows } = {}) {
       const normalized = new Set(
         Array.isArray(usageModels) ? usageModels.map((model) => normalizeUsageModelKey(model)).filter(Boolean) : []
@@ -679,6 +690,7 @@ var require_usage_model_core = __commonJS({
           resolveModelIdentity,
           resolveUsageModelsForCanonical,
           resolveIdentityAtDate,
+          matchesCanonicalModelAtDate,
           buildAliasTimeline,
           fetchAliasRows
         },

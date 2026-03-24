@@ -532,6 +532,17 @@ function resolveIdentityAtDate({ rawModel, usageKey, dateKey, timeline } = {}) {
   const display = normalizeModel(rawModel) || DEFAULT_MODEL;
   return { model_id: normalizedKey, model: display };
 }
+function matchesCanonicalModelAtDate({ rawModel, canonicalModel, dateKey, timeline } = {}) {
+  if (!canonicalModel) return true;
+  const identity = resolveIdentityAtDate({ rawModel, dateKey, timeline });
+  const filterIdentity = resolveIdentityAtDate({
+    rawModel: canonicalModel,
+    usageKey: canonicalModel,
+    dateKey,
+    timeline
+  });
+  return identity.model_id === filterIdentity.model_id;
+}
 function buildAliasTimeline({ usageModels, aliasRows } = {}) {
   const normalized = new Set(
     Array.isArray(usageModels) ? usageModels.map((model) => normalizeUsageModelKey(model)).filter(Boolean) : []
@@ -588,6 +599,7 @@ if (!globalThis[CORE_KEY3]) {
       resolveModelIdentity,
       resolveUsageModelsForCanonical,
       resolveIdentityAtDate,
+      matchesCanonicalModelAtDate,
       buildAliasTimeline,
       fetchAliasRows
     },
@@ -2082,6 +2094,7 @@ var resolveModelIdentity2 = usageModelCore4.resolveModelIdentity;
 var resolveUsageModelsForCanonical2 = usageModelCore4.resolveUsageModelsForCanonical;
 var extractDateKey2 = usageModelCore4.extractDateKey;
 var resolveIdentityAtDate3 = usageModelCore4.resolveIdentityAtDate;
+var matchesCanonicalModelAtDate2 = usageModelCore4.matchesCanonicalModelAtDate;
 var buildAliasTimeline3 = usageModelCore4.buildAliasTimeline;
 var fetchAliasRows3 = usageModelCore4.fetchAliasRows;
 var createTotals3 = usageMetricsCore3.createTotals;

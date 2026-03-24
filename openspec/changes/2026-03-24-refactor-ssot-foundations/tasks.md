@@ -33,6 +33,7 @@
 - [x] 4.2.9 Converge leaderboard/user-identity normalization semantics through shared backend cores with mirrored ESM artifacts.
 - [x] 4.2.10 Converge usage summary/daily bucketed pricing semantics through shared backend cores with mirrored ESM artifacts.
 - [x] 4.2.11 Converge usage model breakdown bucket-cost attribution semantics through shared backend cores with mirrored ESM artifacts.
+- [x] 4.2.12 Converge alias-timeline canonical-model row matching semantics for hourly/heatmap queries through shared backend cores.
 
 ## 5. Verification
 

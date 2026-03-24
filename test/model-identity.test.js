@@ -6,6 +6,7 @@ const {
   applyModelIdentity,
   resolveModelIdentity,
   resolveUsageModelsForCanonical,
+  matchesCanonicalModelAtDate,
 } = require("../insforge-src/shared/model-identity");
 
 test("normalizeUsageModelKey lowercases and trims", () => {
@@ -138,4 +139,43 @@ test("resolveModelIdentity includes same-day alias timestamps", async () => {
   });
 
   assert.deepEqual(identityMap.get("gpt-foo"), { model_id: "alpha", model: "Alpha" });
+});
+
+test("matchesCanonicalModelAtDate compares identities via alias timeline", () => {
+  assert.equal(
+    matchesCanonicalModelAtDate({
+      rawModel: "gpt-foo",
+      canonicalModel: "alpha",
+      dateKey: "2025-01-15",
+      timeline: new Map([
+        [
+          "gpt-foo",
+          [{ model_id: "alpha", model: "Alpha", effective_from: "2025-01-01" }],
+        ],
+        [
+          "alpha",
+          [{ model_id: "alpha", model: "Alpha", effective_from: "2025-01-01" }],
+        ],
+      ]),
+    }),
+    true,
+  );
+  assert.equal(
+    matchesCanonicalModelAtDate({
+      rawModel: "gpt-foo",
+      canonicalModel: "beta",
+      dateKey: "2025-01-15",
+      timeline: new Map([
+        [
+          "gpt-foo",
+          [{ model_id: "alpha", model: "Alpha", effective_from: "2025-01-01" }],
+        ],
+        [
+          "beta",
+          [{ model_id: "beta", model: "Beta", effective_from: "2025-01-01" }],
+        ],
+      ]),
+    }),
+    false,
+  );
 });

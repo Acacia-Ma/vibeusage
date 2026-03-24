@@ -25,9 +25,9 @@ import {
   fetchAliasRows,
   forEachPage,
   getModelParam,
+  matchesCanonicalModelAtDate,
   normalizeUsageModel,
   resolveBillableTotals,
-  resolveIdentityAtDate,
   resolveUsageModelsForCanonical,
 } from "./shared/usage-summary-support.js";
 
@@ -210,17 +210,16 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
           if (!ts) continue;
           const dt = new Date(ts);
           if (!Number.isFinite(dt.getTime())) continue;
-          if (hasModelFilter) {
-            const rawModel = normalizeUsageModel(row?.model);
-            const dateKey = extractDateKey(ts) || dayLabel;
-            const identity = resolveIdentityAtDate({ rawModel, dateKey, timeline: aliasTimeline });
-            const filterIdentity = resolveIdentityAtDate({
-              rawModel: canonicalModel,
-              usageKey: canonicalModel,
-              dateKey,
+          if (
+            hasModelFilter &&
+            !matchesCanonicalModelAtDate({
+              rawModel: normalizeUsageModel(row?.model),
+              canonicalModel,
+              dateKey: extractDateKey(ts) || dayLabel,
               timeline: aliasTimeline,
-            });
-            if (identity.model_id !== filterIdentity.model_id) continue;
+            })
+          ) {
+            continue;
           }
           const hour = dt.getUTCHours();
           const minute = dt.getUTCMinutes();
@@ -334,17 +333,16 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
         if (!ts) continue;
         const dt = new Date(ts);
         if (!Number.isFinite(dt.getTime())) continue;
-        if (hasModelFilter) {
-          const rawModel = normalizeUsageModel(row?.model);
-          const dateKey = extractDateKey(ts) || dayKey;
-          const identity = resolveIdentityAtDate({ rawModel, dateKey, timeline: aliasTimeline });
-          const filterIdentity = resolveIdentityAtDate({
-            rawModel: canonicalModel,
-            usageKey: canonicalModel,
-            dateKey,
+        if (
+          hasModelFilter &&
+          !matchesCanonicalModelAtDate({
+            rawModel: normalizeUsageModel(row?.model),
+            canonicalModel,
+            dateKey: extractDateKey(ts) || dayKey,
             timeline: aliasTimeline,
-          });
-          if (identity.model_id !== filterIdentity.model_id) continue;
+          })
+        ) {
+          continue;
         }
 
         const localParts = getLocalParts(dt, tzContext);

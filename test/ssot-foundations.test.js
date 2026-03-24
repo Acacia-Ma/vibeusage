@@ -43,6 +43,18 @@ test("backend model semantics flow through a single shared core", () => {
     read("insforge-src/functions-esm/shared/usage-summary-support.js"),
     /shared\/usage-model-core\.mjs/,
   );
+  assert.match(
+    read("insforge-src/functions-esm/shared/usage-summary-support.js"),
+    /matchesCanonicalModelAtDate = usageModelCore\.matchesCanonicalModelAtDate/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-hourly.js"),
+    /matchesCanonicalModelAtDate/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-heatmap.js"),
+    /matchesCanonicalModelAtDate/,
+  );
 });
 
 test("backend pricing and usage metrics semantics flow through shared cores", () => {

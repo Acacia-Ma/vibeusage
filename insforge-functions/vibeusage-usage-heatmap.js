@@ -532,6 +532,17 @@ function resolveIdentityAtDate({ rawModel, usageKey, dateKey, timeline } = {}) {
   const display = normalizeModel(rawModel) || DEFAULT_MODEL;
   return { model_id: normalizedKey, model: display };
 }
+function matchesCanonicalModelAtDate({ rawModel, canonicalModel, dateKey, timeline } = {}) {
+  if (!canonicalModel) return true;
+  const identity = resolveIdentityAtDate({ rawModel, dateKey, timeline });
+  const filterIdentity = resolveIdentityAtDate({
+    rawModel: canonicalModel,
+    usageKey: canonicalModel,
+    dateKey,
+    timeline
+  });
+  return identity.model_id === filterIdentity.model_id;
+}
 function buildAliasTimeline({ usageModels, aliasRows } = {}) {
   const normalized = new Set(
     Array.isArray(usageModels) ? usageModels.map((model) => normalizeUsageModelKey(model)).filter(Boolean) : []
@@ -588,6 +599,7 @@ if (!globalThis[CORE_KEY3]) {
       resolveModelIdentity,
       resolveUsageModelsForCanonical,
       resolveIdentityAtDate,
+      matchesCanonicalModelAtDate,
       buildAliasTimeline,
       fetchAliasRows
     },
@@ -1785,6 +1797,7 @@ var resolveModelIdentity2 = usageModelCore2.resolveModelIdentity;
 var resolveUsageModelsForCanonical2 = usageModelCore2.resolveUsageModelsForCanonical;
 var extractDateKey2 = usageModelCore2.extractDateKey;
 var resolveIdentityAtDate2 = usageModelCore2.resolveIdentityAtDate;
+var matchesCanonicalModelAtDate2 = usageModelCore2.matchesCanonicalModelAtDate;
 var buildAliasTimeline2 = usageModelCore2.buildAliasTimeline;
 var fetchAliasRows2 = usageModelCore2.fetchAliasRows;
 var createTotals3 = usageMetricsCore2.createTotals;
@@ -1877,17 +1890,13 @@ var vibeusage_usage_heatmap_default = withRequestLogging2("vibeusage-usage-heatm
           if (!ts) continue;
           const dt = new Date(ts);
           if (!Number.isFinite(dt.getTime())) continue;
-          if (hasModelFilter2) {
-            const rawModel = normalizeUsageModel2(row?.model);
-            const dateKey = extractDateKey2(ts) || to2;
-            const identity = resolveIdentityAtDate2({ rawModel, dateKey, timeline: aliasTimeline2 });
-            const filterIdentity = resolveIdentityAtDate2({
-              rawModel: canonicalModel2,
-              usageKey: canonicalModel2,
-              dateKey,
-              timeline: aliasTimeline2
-            });
-            if (identity.model_id !== filterIdentity.model_id) continue;
+          if (hasModelFilter2 && !matchesCanonicalModelAtDate2({
+            rawModel: normalizeUsageModel2(row?.model),
+            canonicalModel: canonicalModel2,
+            dateKey: extractDateKey2(ts) || to2,
+            timeline: aliasTimeline2
+          })) {
+            continue;
           }
           const day = formatDateUTC2(dt);
           const prev = valuesByDay2.get(day) || 0n;
@@ -2028,17 +2037,13 @@ var vibeusage_usage_heatmap_default = withRequestLogging2("vibeusage-usage-heatm
         if (!ts) continue;
         const dt = new Date(ts);
         if (!Number.isFinite(dt.getTime())) continue;
-        if (hasModelFilter) {
-          const rawModel = normalizeUsageModel2(row?.model);
-          const dateKey = extractDateKey2(ts) || to;
-          const identity = resolveIdentityAtDate2({ rawModel, dateKey, timeline: aliasTimeline });
-          const filterIdentity = resolveIdentityAtDate2({
-            rawModel: canonicalModel,
-            usageKey: canonicalModel,
-            dateKey,
-            timeline: aliasTimeline
-          });
-          if (identity.model_id !== filterIdentity.model_id) continue;
+        if (hasModelFilter && !matchesCanonicalModelAtDate2({
+          rawModel: normalizeUsageModel2(row?.model),
+          canonicalModel,
+          dateKey: extractDateKey2(ts) || to,
+          timeline: aliasTimeline
+        })) {
+          continue;
         }
         const key = formatLocalDateKey2(dt, tzContext);
         const prev = valuesByDay.get(key) || 0n;
