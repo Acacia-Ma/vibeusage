@@ -952,7 +952,8 @@ var getEdgeClientAndUserId2 = ({ baseUrl, bearer }) => authCore.getEdgeClientAnd
   createUserEdgeClient
 });
 
-// insforge-src/functions-esm/shared/http.js
+// insforge-src/shared/http-core.mjs
+var CORE_KEY6 = "__vibeusageHttpCore";
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -989,6 +990,29 @@ async function readJson(request) {
     return { error: "Invalid JSON", status: 400, data: null };
   }
 }
+if (!globalThis[CORE_KEY6]) {
+  Object.defineProperty(globalThis, CORE_KEY6, {
+    value: {
+      corsHeaders,
+      handleOptions,
+      json,
+      requireMethod,
+      readJson
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/http.js
+var httpCore = globalThis.__vibeusageHttpCore;
+if (!httpCore) throw new Error("http core not initialized");
+var corsHeaders2 = httpCore.corsHeaders;
+var handleOptions2 = httpCore.handleOptions;
+var json2 = httpCore.json;
+var requireMethod2 = httpCore.requireMethod;
+var readJson2 = httpCore.readJson;
 
 // insforge-src/functions-esm/shared/crypto.js
 async function sha256Hex(input) {
@@ -1081,17 +1105,17 @@ function withRequestLogging(functionName, handler) {
 // insforge-src/functions-esm/vibeusage-link-code-init.js
 var LINK_CODE_TTL_MS = 10 * 6e4;
 var vibeusage_link_code_init_default = withRequestLogging("vibeusage-link-code-init", async function(request) {
-  const opt = handleOptions(request);
+  const opt = handleOptions2(request);
   if (opt) return opt;
-  const methodErr = requireMethod(request, "POST");
+  const methodErr = requireMethod2(request, "POST");
   if (methodErr) return methodErr;
   const bearer = getBearerToken2(request.headers.get("Authorization"));
-  if (!bearer) return json({ error: "Missing bearer token" }, 401);
-  const body = await readJson(request);
-  if (body.error) return json({ error: body.error }, body.status);
+  if (!bearer) return json2({ error: "Missing bearer token" }, 401);
+  const body = await readJson2(request);
+  if (body.error) return json2({ error: body.error }, body.status);
   const baseUrl = getBaseUrl2();
   const auth = await getEdgeClientAndUserId2({ baseUrl, bearer });
-  if (!auth.ok) return json({ error: auth.error || "Unauthorized" }, auth.status || 401);
+  if (!auth.ok) return json2({ error: auth.error || "Unauthorized" }, auth.status || 401);
   const serviceRoleKey = getServiceRoleKey2();
   const anonKey = getAnonKey2();
   const dbClient = serviceRoleKey ? await createEdgeClient({
@@ -1114,9 +1138,9 @@ var vibeusage_link_code_init_default = withRequestLogging("vibeusage-link-code-i
     }
   ]);
   if (insertErr) {
-    return json({ error: "Failed to issue link code" }, 500);
+    return json2({ error: "Failed to issue link code" }, 500);
   }
-  return json({ link_code: linkCode, expires_at: expiresAt }, 200);
+  return json2({ link_code: linkCode, expires_at: expiresAt }, 200);
 });
 function generateLinkCode() {
   return crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");

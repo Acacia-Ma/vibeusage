@@ -952,7 +952,8 @@ var getEdgeClientAndUserId2 = ({ baseUrl, bearer }) => authCore.getEdgeClientAnd
   createUserEdgeClient
 });
 
-// insforge-src/functions-esm/shared/http.js
+// insforge-src/shared/http-core.mjs
+var CORE_KEY6 = "__vibeusageHttpCore";
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -974,6 +975,10 @@ function json(body, status = 200, extraHeaders = null) {
     }
   });
 }
+function requireMethod(request, method) {
+  if (request.method !== method) return json({ error: "Method not allowed" }, 405);
+  return null;
+}
 async function readJson(request) {
   if (!request.headers.get("Content-Type")?.includes("application/json")) {
     return { error: "Content-Type must be application/json", status: 415, data: null };
@@ -985,6 +990,29 @@ async function readJson(request) {
     return { error: "Invalid JSON", status: 400, data: null };
   }
 }
+if (!globalThis[CORE_KEY6]) {
+  Object.defineProperty(globalThis, CORE_KEY6, {
+    value: {
+      corsHeaders,
+      handleOptions,
+      json,
+      requireMethod,
+      readJson
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/http.js
+var httpCore = globalThis.__vibeusageHttpCore;
+if (!httpCore) throw new Error("http core not initialized");
+var corsHeaders2 = httpCore.corsHeaders;
+var handleOptions2 = httpCore.handleOptions;
+var json2 = httpCore.json;
+var requireMethod2 = httpCore.requireMethod;
+var readJson2 = httpCore.readJson;
 
 // insforge-src/functions-esm/shared/crypto.js
 async function sha256Hex(input) {
@@ -1089,25 +1117,25 @@ function withRequestLogging(functionName, handler) {
 
 // insforge-src/functions-esm/vibeusage-public-visibility.js
 var vibeusage_public_visibility_default = withRequestLogging("vibeusage-public-visibility", async function(request) {
-  const opt = handleOptions(request);
+  const opt = handleOptions2(request);
   if (opt) return opt;
   if (request.method !== "GET" && request.method !== "POST") {
-    return json({ error: "Method not allowed" }, 405);
+    return json2({ error: "Method not allowed" }, 405);
   }
   const bearer = getBearerToken2(request.headers.get("Authorization"));
-  if (!bearer) return json({ error: "Missing bearer token" }, 401);
+  if (!bearer) return json2({ error: "Missing bearer token" }, 401);
   const baseUrl = getBaseUrl2();
   const auth = await getEdgeClientAndUserId2({ baseUrl, bearer });
-  if (!auth.ok) return json({ error: auth.error || "Unauthorized" }, auth.status || 401);
+  if (!auth.ok) return json2({ error: auth.error || "Unauthorized" }, auth.status || 401);
   if (request.method === "GET") {
     const state = await getPublicVisibilityState2({ edgeClient: auth.edgeClient, userId: auth.userId });
-    return json(state, 200);
+    return json2(state, 200);
   }
-  const body = await readJson(request);
-  if (body.error) return json({ error: body.error }, body.status);
+  const body = await readJson2(request);
+  if (body.error) return json2({ error: body.error }, body.status);
   const enabled = body.data?.enabled;
   if (typeof enabled !== "boolean") {
-    return json({ error: "enabled must be boolean" }, 400);
+    return json2({ error: "enabled must be boolean" }, 400);
   }
   try {
     const state = await setPublicVisibilityState2({
@@ -1116,9 +1144,9 @@ var vibeusage_public_visibility_default = withRequestLogging("vibeusage-public-v
       enabled,
       nowIso: (/* @__PURE__ */ new Date()).toISOString()
     });
-    return json(state, 200);
+    return json2(state, 200);
   } catch (err) {
-    return json({ error: err?.message || "Failed to update public visibility" }, 500);
+    return json2({ error: err?.message || "Failed to update public visibility" }, 500);
   }
 });
 export {

@@ -91,3 +91,15 @@ test("backend auth and public sharing semantics flow through shared cores", () =
     /shared\/public-sharing-core\.mjs/,
   );
 });
+
+test("backend pro status and http helpers flow through shared cores", () => {
+  assert.equal(
+    read("insforge-src/shared/pro-status-core.js"),
+    read("insforge-src/shared/pro-status-core.mjs"),
+  );
+  assert.equal(read("insforge-src/shared/http-core.js"), read("insforge-src/shared/http-core.mjs"));
+  assert.match(read("insforge-src/shared/pro-status.js"), /pro-status-core/);
+  assert.match(read("insforge-src/functions-esm/shared/pro-status.js"), /shared\/pro-status-core\.mjs/);
+  assert.match(read("insforge-src/shared/http.js"), /http-core/);
+  assert.match(read("insforge-src/functions-esm/shared/http.js"), /shared\/http-core\.mjs/);
+});

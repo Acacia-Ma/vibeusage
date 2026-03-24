@@ -30,4 +30,6 @@ Runtime env parsing, request base URL resolution, numeric coercion, and source n
 
 JWT parsing, HS256 verification, bearer-to-user resolution, and public access-context rules now converge through `insforge-src/shared/auth-core.js`. Public share token normalization, public profile resolution, and public visibility state transitions now converge through `insforge-src/shared/public-sharing-core.js`. CJS and ESM wrappers for `auth`, `public-view`, and `public-visibility` now provide only environment/client hashing adapters on top of those cores.
 
+Registration-cutoff and entitlement-based pro status resolution now converge through `insforge-src/shared/pro-status-core.js`. Shared HTTP response helpers (`corsHeaders`, `handleOptions`, `json`, `requireMethod`, `readJson`) now converge through `insforge-src/shared/http-core.js`. CJS and ESM wrappers for `pro-status` and `http` are now thin export layers over those cores.
+
 The ESM edge layer still contains additional duplicated business logic beyond this slice. This change converts immediately reachable contract drift to shared modules and guardrails first, then continues function-by-function backend convergence without changing public slugs.

@@ -1207,7 +1207,8 @@ function withSlowQueryDebugPayload(body, options) {
   };
 }
 
-// insforge-src/functions-esm/shared/http.js
+// insforge-src/shared/http-core.mjs
+var CORE_KEY6 = "__vibeusageHttpCore";
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -1229,6 +1230,44 @@ function json(body, status = 200, extraHeaders = null) {
     }
   });
 }
+function requireMethod(request, method) {
+  if (request.method !== method) return json({ error: "Method not allowed" }, 405);
+  return null;
+}
+async function readJson(request) {
+  if (!request.headers.get("Content-Type")?.includes("application/json")) {
+    return { error: "Content-Type must be application/json", status: 415, data: null };
+  }
+  try {
+    const data = await request.json();
+    return { error: null, status: 200, data };
+  } catch (_error) {
+    return { error: "Invalid JSON", status: 400, data: null };
+  }
+}
+if (!globalThis[CORE_KEY6]) {
+  Object.defineProperty(globalThis, CORE_KEY6, {
+    value: {
+      corsHeaders,
+      handleOptions,
+      json,
+      requireMethod,
+      readJson
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/http.js
+var httpCore = globalThis.__vibeusageHttpCore;
+if (!httpCore) throw new Error("http core not initialized");
+var corsHeaders2 = httpCore.corsHeaders;
+var handleOptions2 = httpCore.handleOptions;
+var json2 = httpCore.json;
+var requireMethod2 = httpCore.requireMethod;
+var readJson2 = httpCore.readJson;
 
 // insforge-src/functions-esm/shared/logging.js
 function createRequestId() {
@@ -1332,7 +1371,7 @@ var toPositiveIntOrNull2 = runtimePrimitivesCore2.toPositiveIntOrNull;
 var toPositiveInt2 = runtimePrimitivesCore2.toPositiveInt;
 
 // insforge-src/shared/pricing-core.mjs
-var CORE_KEY6 = "__vibeusagePricingCore";
+var CORE_KEY7 = "__vibeusagePricingCore";
 var MICROS_PER_DOLLAR = 1000000n;
 var TOKENS_PER_MILLION = 1000000n;
 var DEFAULT_PROFILE = {
@@ -1493,8 +1532,8 @@ function normalizeProfile(profile) {
     }
   };
 }
-if (!globalThis[CORE_KEY6]) {
-  Object.defineProperty(globalThis, CORE_KEY6, {
+if (!globalThis[CORE_KEY7]) {
+  Object.defineProperty(globalThis, CORE_KEY7, {
     value: {
       getDefaultPricingProfile,
       getPricingDefaults: getPricingDefaults3,
@@ -1525,7 +1564,7 @@ var normalizeSource3 = runtimePrimitivesCore4.normalizeSource;
 var getSourceParam2 = runtimePrimitivesCore4.getSourceParam;
 
 // insforge-src/shared/usage-metrics-core.mjs
-var CORE_KEY7 = "__vibeusageUsageMetricsCore";
+var CORE_KEY8 = "__vibeusageUsageMetricsCore";
 var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
 var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
 var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
@@ -1621,8 +1660,8 @@ function parsePricingBucketKey(bucketKey, defaultDate) {
   }
   return { usageKey: bucketKey, dateKey: defaultDate };
 }
-if (!globalThis[CORE_KEY7]) {
-  Object.defineProperty(globalThis, CORE_KEY7, {
+if (!globalThis[CORE_KEY8]) {
+  Object.defineProperty(globalThis, CORE_KEY8, {
     value: {
       createTotals,
       addRowTotals,
@@ -1701,11 +1740,11 @@ var DEFAULT_MODEL2 = "unknown";
 var vibeusage_usage_model_breakdown_default = withRequestLogging(
   "vibeusage-usage-model-breakdown",
   async function(request, logger) {
-    const opt = handleOptions(request);
+    const opt = handleOptions2(request);
     if (opt) return opt;
     const url = new URL(request.url);
     const debugEnabled = isDebugEnabled(url);
-    const respond = (body, status, durationMs) => json(
+    const respond = (body, status, durationMs) => json2(
       debugEnabled ? withSlowQueryDebugPayload(body, { logger, durationMs, status }) : body,
       status
     );

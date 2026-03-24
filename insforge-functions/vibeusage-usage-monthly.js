@@ -1422,7 +1422,8 @@ function withSlowQueryDebugPayload(body, options) {
   };
 }
 
-// insforge-src/functions-esm/shared/http.js
+// insforge-src/shared/http-core.mjs
+var CORE_KEY7 = "__vibeusageHttpCore";
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -1444,6 +1445,44 @@ function json(body, status = 200, extraHeaders = null) {
     }
   });
 }
+function requireMethod(request, method) {
+  if (request.method !== method) return json({ error: "Method not allowed" }, 405);
+  return null;
+}
+async function readJson(request) {
+  if (!request.headers.get("Content-Type")?.includes("application/json")) {
+    return { error: "Content-Type must be application/json", status: 415, data: null };
+  }
+  try {
+    const data = await request.json();
+    return { error: null, status: 200, data };
+  } catch (_error) {
+    return { error: "Invalid JSON", status: 400, data: null };
+  }
+}
+if (!globalThis[CORE_KEY7]) {
+  Object.defineProperty(globalThis, CORE_KEY7, {
+    value: {
+      corsHeaders,
+      handleOptions,
+      json,
+      requireMethod,
+      readJson
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/http.js
+var httpCore = globalThis.__vibeusageHttpCore;
+if (!httpCore) throw new Error("http core not initialized");
+var corsHeaders2 = httpCore.corsHeaders;
+var handleOptions2 = httpCore.handleOptions;
+var json2 = httpCore.json;
+var requireMethod2 = httpCore.requireMethod;
+var readJson2 = httpCore.readJson;
 
 // insforge-src/functions-esm/shared/logging.js
 function createRequestId() {
@@ -1549,11 +1588,11 @@ var getSourceParam2 = runtimePrimitivesCore4.getSourceParam;
 // insforge-src/functions-esm/vibeusage-usage-monthly.js
 var MAX_MONTHS = 24;
 var vibeusage_usage_monthly_default = withRequestLogging("vibeusage-usage-monthly", async function(request, logger) {
-  const opt = handleOptions(request);
+  const opt = handleOptions2(request);
   if (opt) return opt;
   const url = new URL(request.url);
   const debugEnabled = isDebugEnabled(url);
-  const respond = (body, status, durationMs) => json(
+  const respond = (body, status, durationMs) => json2(
     debugEnabled ? withSlowQueryDebugPayload(body, { logger, durationMs, status }) : body,
     status
   );

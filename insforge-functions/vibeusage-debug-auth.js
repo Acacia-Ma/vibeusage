@@ -7,10 +7,11 @@ var __commonJS = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
 
-// insforge-src/shared/http.js
-var require_http = __commonJS({
-  "insforge-src/shared/http.js"(exports2, module2) {
+// insforge-src/shared/http-core.js
+var require_http_core = __commonJS({
+  "insforge-src/shared/http-core.js"() {
     "use strict";
+    var CORE_KEY = "__vibeusageHttpCore";
     var corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -43,16 +44,40 @@ var require_http = __commonJS({
       try {
         const data = await request.json();
         return { error: null, status: 200, data };
-      } catch (_e) {
+      } catch (_error) {
         return { error: "Invalid JSON", status: 400, data: null };
       }
     }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          corsHeaders,
+          handleOptions: handleOptions2,
+          json: json2,
+          requireMethod: requireMethod2,
+          readJson
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
+// insforge-src/shared/http.js
+var require_http = __commonJS({
+  "insforge-src/shared/http.js"(exports2, module2) {
+    "use strict";
+    require_http_core();
+    var httpCore = globalThis.__vibeusageHttpCore;
+    if (!httpCore) throw new Error("http core not initialized");
     module2.exports = {
-      corsHeaders,
-      handleOptions: handleOptions2,
-      json: json2,
-      requireMethod: requireMethod2,
-      readJson
+      corsHeaders: httpCore.corsHeaders,
+      handleOptions: httpCore.handleOptions,
+      json: httpCore.json,
+      requireMethod: httpCore.requireMethod,
+      readJson: httpCore.readJson
     };
   }
 });

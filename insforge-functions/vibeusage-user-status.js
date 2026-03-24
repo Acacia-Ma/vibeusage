@@ -952,7 +952,8 @@ var getEdgeClientAndUserId2 = ({ baseUrl, bearer }) => authCore.getEdgeClientAnd
   createUserEdgeClient
 });
 
-// insforge-src/functions-esm/shared/http.js
+// insforge-src/shared/http-core.mjs
+var CORE_KEY6 = "__vibeusageHttpCore";
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -978,8 +979,43 @@ function requireMethod(request, method) {
   if (request.method !== method) return json({ error: "Method not allowed" }, 405);
   return null;
 }
+async function readJson(request) {
+  if (!request.headers.get("Content-Type")?.includes("application/json")) {
+    return { error: "Content-Type must be application/json", status: 415, data: null };
+  }
+  try {
+    const data = await request.json();
+    return { error: null, status: 200, data };
+  } catch (_error) {
+    return { error: "Invalid JSON", status: 400, data: null };
+  }
+}
+if (!globalThis[CORE_KEY6]) {
+  Object.defineProperty(globalThis, CORE_KEY6, {
+    value: {
+      corsHeaders,
+      handleOptions,
+      json,
+      requireMethod,
+      readJson
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
 
-// insforge-src/functions-esm/shared/pro-status.js
+// insforge-src/functions-esm/shared/http.js
+var httpCore = globalThis.__vibeusageHttpCore;
+if (!httpCore) throw new Error("http core not initialized");
+var corsHeaders2 = httpCore.corsHeaders;
+var handleOptions2 = httpCore.handleOptions;
+var json2 = httpCore.json;
+var requireMethod2 = httpCore.requireMethod;
+var readJson2 = httpCore.readJson;
+
+// insforge-src/shared/pro-status-core.mjs
+var CORE_KEY7 = "__vibeusageProStatusCore";
 var CUTOFF_UTC_ISO = "2025-12-31T15:59:59.000Z";
 var REGISTRATION_YEARS = 99;
 function toMs(value) {
@@ -989,16 +1025,16 @@ function toMs(value) {
 function addUtcYears(iso, years) {
   const ms = toMs(iso);
   if (!Number.isFinite(ms)) return null;
-  const d = new Date(ms);
+  const date = new Date(ms);
   const out = new Date(
     Date.UTC(
-      d.getUTCFullYear() + years,
-      d.getUTCMonth(),
-      d.getUTCDate(),
-      d.getUTCHours(),
-      d.getUTCMinutes(),
-      d.getUTCSeconds(),
-      d.getUTCMilliseconds()
+      date.getUTCFullYear() + years,
+      date.getUTCMonth(),
+      date.getUTCDate(),
+      date.getUTCHours(),
+      date.getUTCMinutes(),
+      date.getUTCSeconds(),
+      date.getUTCMilliseconds()
     )
   );
   return out.toISOString();
@@ -1033,6 +1069,25 @@ function computeProStatus({ createdAt, entitlements, now }) {
   }
   return { active: sources.length > 0, sources, expires_at: expiresAt };
 }
+if (!globalThis[CORE_KEY7]) {
+  Object.defineProperty(globalThis, CORE_KEY7, {
+    value: {
+      CUTOFF_UTC_ISO,
+      REGISTRATION_YEARS,
+      computeProStatus
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/pro-status.js
+var proStatusCore = globalThis.__vibeusageProStatusCore;
+if (!proStatusCore) throw new Error("pro status core not initialized");
+var CUTOFF_UTC_ISO2 = proStatusCore.CUTOFF_UTC_ISO;
+var REGISTRATION_YEARS2 = proStatusCore.REGISTRATION_YEARS;
+var computeProStatus2 = proStatusCore.computeProStatus;
 
 // insforge-src/functions-esm/shared/logging.js
 function createRequestId() {
@@ -1117,15 +1172,15 @@ function withRequestLogging(functionName, handler) {
 
 // insforge-src/functions-esm/vibeusage-user-status.js
 var vibeusage_user_status_default = withRequestLogging("vibeusage-user-status", async function(request) {
-  const opt = handleOptions(request);
+  const opt = handleOptions2(request);
   if (opt) return opt;
-  const methodErr = requireMethod(request, "GET");
+  const methodErr = requireMethod2(request, "GET");
   if (methodErr) return methodErr;
   const bearer = getBearerToken2(request.headers.get("Authorization"));
-  if (!bearer) return json({ error: "Missing bearer token" }, 401);
+  if (!bearer) return json2({ error: "Missing bearer token" }, 401);
   const baseUrl = getBaseUrl2();
   const auth = await getEdgeClientAndUserId2({ baseUrl, bearer });
-  if (!auth.ok) return json({ error: auth.error || "Unauthorized" }, auth.status || 401);
+  if (!auth.ok) return json2({ error: auth.error || "Unauthorized" }, auth.status || 401);
   let createdAt = null;
   let partial = false;
   const serviceRoleKey = getServiceRoleKey2();
@@ -1139,14 +1194,14 @@ var vibeusage_user_status_default = withRequestLogging("vibeusage-user-status", 
       edgeFunctionToken: serviceRoleKey
     });
     const { data: userRow, error: userRowErr } = await serviceClient.database.from("users").select("created_at").eq("id", auth.userId).maybeSingle();
-    if (userRowErr) return json({ error: userRowErr.message }, 500);
+    if (userRowErr) return json2({ error: userRowErr.message }, 500);
     if (typeof userRow?.created_at !== "string" || userRow.created_at.length === 0) {
-      return json({ error: "Missing user created_at" }, 500);
+      return json2({ error: "Missing user created_at" }, 500);
     }
     createdAt = userRow.created_at;
   }
   const { data: entitlements, error: entErr } = await auth.edgeClient.database.from("vibeusage_user_entitlements").select("source,effective_from,effective_to,revoked_at").eq("user_id", auth.userId).order("effective_to", { ascending: false });
-  if (entErr) return json({ error: entErr.message }, 500);
+  if (entErr) return json2({ error: entErr.message }, 500);
   let subscriptions = [];
   let subscriptionsPartial = false;
   const { data: subscriptionRows, error: subscriptionErr } = await auth.edgeClient.database.from("vibeusage_tracker_subscriptions").select(
@@ -1156,7 +1211,7 @@ var vibeusage_user_status_default = withRequestLogging("vibeusage-user-status", 
     if (isMissingRelationError(subscriptionErr, "vibeusage_tracker_subscriptions")) {
       subscriptionsPartial = true;
     } else {
-      return json({ error: subscriptionErr.message }, 500);
+      return json2({ error: subscriptionErr.message }, 500);
     }
   } else {
     subscriptions = normalizeSubscriptions(subscriptionRows);
@@ -1176,7 +1231,7 @@ var vibeusage_user_status_default = withRequestLogging("vibeusage-user-status", 
     if (isMissingRelationError(tokenStats.error, "vibeusage_tracker_device_tokens")) {
       installPartial = true;
     } else {
-      return json({ error: tokenStats.error.message }, 500);
+      return json2({ error: tokenStats.error.message }, 500);
     }
   } else {
     activeDeviceTokens = tokenStats.count;
@@ -1192,15 +1247,15 @@ var vibeusage_user_status_default = withRequestLogging("vibeusage-user-status", 
     if (isMissingRelationError(deviceStats.error, "vibeusage_tracker_devices")) {
       installPartial = true;
     } else {
-      return json({ error: deviceStats.error.message }, 500);
+      return json2({ error: deviceStats.error.message }, 500);
     }
   } else {
     activeDevices = deviceStats.count;
     latestDeviceSeenAt = deviceStats.latestAt;
   }
   const asOf = (/* @__PURE__ */ new Date()).toISOString();
-  const status = computeProStatus({ createdAt, entitlements, now: asOf });
-  return json(
+  const status = computeProStatus2({ createdAt, entitlements, now: asOf });
+  return json2(
     {
       user_id: auth.userId,
       created_at: createdAt ?? null,

@@ -975,7 +975,8 @@ function addUtcDays(date, days) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days));
 }
 
-// insforge-src/functions-esm/shared/http.js
+// insforge-src/shared/http-core.mjs
+var CORE_KEY6 = "__vibeusageHttpCore";
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -1001,6 +1002,40 @@ function requireMethod(request, method) {
   if (request.method !== method) return json({ error: "Method not allowed" }, 405);
   return null;
 }
+async function readJson(request) {
+  if (!request.headers.get("Content-Type")?.includes("application/json")) {
+    return { error: "Content-Type must be application/json", status: 415, data: null };
+  }
+  try {
+    const data = await request.json();
+    return { error: null, status: 200, data };
+  } catch (_error) {
+    return { error: "Invalid JSON", status: 400, data: null };
+  }
+}
+if (!globalThis[CORE_KEY6]) {
+  Object.defineProperty(globalThis, CORE_KEY6, {
+    value: {
+      corsHeaders,
+      handleOptions,
+      json,
+      requireMethod,
+      readJson
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/http.js
+var httpCore = globalThis.__vibeusageHttpCore;
+if (!httpCore) throw new Error("http core not initialized");
+var corsHeaders2 = httpCore.corsHeaders;
+var handleOptions2 = httpCore.handleOptions;
+var json2 = httpCore.json;
+var requireMethod2 = httpCore.requireMethod;
+var readJson2 = httpCore.readJson;
 
 // insforge-src/functions-esm/shared/numbers.js
 var runtimePrimitivesCore2 = globalThis.__vibeusageRuntimePrimitivesCore;
@@ -1015,23 +1050,23 @@ var MAX_LIMIT = 100;
 var DEFAULT_OFFSET = 0;
 var MAX_OFFSET = 1e4;
 async function vibeusage_leaderboard_default(request) {
-  const opt = handleOptions(request);
+  const opt = handleOptions2(request);
   if (opt) return opt;
-  const methodErr = requireMethod(request, "GET");
+  const methodErr = requireMethod2(request, "GET");
   if (methodErr) return methodErr;
   const bearer = getBearerToken2(request.headers.get("Authorization"));
   const baseUrl = getBaseUrl2();
   let auth = { ok: false, edgeClient: null, userId: null };
   if (bearer) {
     auth = await getAccessContext2({ baseUrl, bearer, allowPublic: false });
-    if (!auth.ok) return json({ error: auth.error || "Unauthorized" }, auth.status || 401);
+    if (!auth.ok) return json2({ error: auth.error || "Unauthorized" }, auth.status || 401);
   }
   const viewerUserId = auth.ok ? auth.userId : null;
   const url = new URL(request.url);
   const period = normalizePeriod(url.searchParams.get("period"));
-  if (!period) return json({ error: "Invalid period" }, 400);
+  if (!period) return json2({ error: "Invalid period" }, 400);
   const metric = normalizeMetric(url.searchParams.get("metric"));
-  if (url.searchParams.has("metric") && !metric) return json({ error: "Invalid metric" }, 400);
+  if (url.searchParams.has("metric") && !metric) return json2({ error: "Invalid metric" }, 400);
   const limit = normalizeLimit(url.searchParams.get("limit"));
   const offset = normalizeOffset(url.searchParams.get("offset"));
   const page = Math.floor(offset / Math.max(1, limit)) + 1;
@@ -1040,7 +1075,7 @@ async function vibeusage_leaderboard_default(request) {
   try {
     ({ from, to } = await computeWindow({ period }));
   } catch (error) {
-    return json({ error: String(error?.message || error) }, 500);
+    return json2({ error: String(error?.message || error) }, 500);
   }
   const serviceRoleKey = getServiceRoleKey2();
   const anonKey = getAnonKey2();
@@ -1061,7 +1096,7 @@ async function vibeusage_leaderboard_default(request) {
       offset
     });
     if (snapshot.ok) {
-      return json(
+      return json2(
         {
           period,
           metric,
@@ -1087,7 +1122,7 @@ async function vibeusage_leaderboard_default(request) {
     anonKey,
     edgeFunctionToken: anonKey
   }) : null;
-  if (!readClient) return json({ error: "Service unavailable" }, 503);
+  if (!readClient) return json2({ error: "Service unavailable" }, 503);
   if (auth.ok) {
     const singleQuery = await tryLoadSingleQuery({
       edgeClient: auth.edgeClient,
@@ -1096,7 +1131,7 @@ async function vibeusage_leaderboard_default(request) {
       offset
     });
     if (singleQuery) {
-      return json(
+      return json2(
         {
           period,
           metric,
@@ -1118,17 +1153,17 @@ async function vibeusage_leaderboard_default(request) {
   const { data: rawEntries, error: entriesErr } = await readClient.database.from(entriesView).select(
     "user_id,rank,is_me,display_name,avatar_url,gpt_tokens,claude_tokens,other_tokens,total_tokens,is_public"
   ).order("rank", { ascending: true }).range(offset, offset + limit - 1);
-  if (entriesErr) return json({ error: entriesErr.message }, 500);
+  if (entriesErr) return json2({ error: entriesErr.message }, 500);
   let rawMe = null;
   if (viewerUserId) {
     const meRes = await auth.edgeClient.database.from(meView).select("rank,gpt_tokens,claude_tokens,other_tokens,total_tokens").maybeSingle();
-    if (meRes.error) return json({ error: meRes.error.message }, 500);
+    if (meRes.error) return json2({ error: meRes.error.message }, 500);
     rawMe = meRes.data;
   }
   const publicUserSet = await loadActivePublicUserIds({ serviceClient, rows: rawEntries });
   const entries = (rawEntries || []).slice(0, limit).map((row) => normalizeEntry(row, { userId: viewerUserId, publicUserSet }));
   const me = viewerUserId ? normalizeMe(rawMe) : null;
-  return json(
+  return json2(
     {
       period,
       metric,
