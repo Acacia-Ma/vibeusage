@@ -24,6 +24,7 @@
 - [ ] 4.2 Continue migrating ESM shared business rules behind canonical backend modules without changing public slugs.
 - [x] 4.2.1 Converge model normalization, identity, and alias timeline semantics through `insforge-src/shared/usage-model-core.js` with a mirrored ESM artifact.
 - [x] 4.2.2 Converge pricing and usage metric helper semantics through shared backend cores with mirrored ESM artifacts.
+- [x] 4.2.3 Converge runtime/env/source/number helper semantics through shared backend cores with mirrored ESM artifacts.
 
 ## 5. Verification
 

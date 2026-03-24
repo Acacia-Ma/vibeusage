@@ -57,27 +57,482 @@ var require_http = __commonJS({
   }
 });
 
+// insforge-src/shared/runtime-primitives-core.js
+var require_runtime_primitives_core = __commonJS({
+  "insforge-src/shared/runtime-primitives-core.js"() {
+    "use strict";
+    var CORE_KEY = "__vibeusageRuntimePrimitivesCore";
+    var MAX_SOURCE_LENGTH = 64;
+    function toBigInt(value) {
+      if (typeof value === "bigint") return value >= 0n ? value : 0n;
+      if (typeof value === "number") {
+        if (!Number.isFinite(value) || value <= 0) return 0n;
+        return BigInt(Math.floor(value));
+      }
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!/^[0-9]+$/.test(trimmed)) return 0n;
+        try {
+          return BigInt(trimmed);
+        } catch (_error) {
+          return 0n;
+        }
+      }
+      return 0n;
+    }
+    function toPositiveIntOrNull2(value) {
+      if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!/^[0-9]+$/.test(trimmed)) return null;
+        const n = Number.parseInt(trimmed, 10);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      }
+      if (typeof value === "bigint") {
+        if (value <= 0n) return null;
+        const n = Number(value);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      }
+      return null;
+    }
+    function toPositiveInt(value) {
+      const n = toPositiveIntOrNull2(value);
+      return n == null ? 0 : n;
+    }
+    function normalizeSource2(value) {
+      if (typeof value !== "string") return null;
+      const normalized = value.trim().toLowerCase();
+      if (!normalized) return null;
+      if (normalized.length > MAX_SOURCE_LENGTH) return normalized.slice(0, MAX_SOURCE_LENGTH);
+      return normalized;
+    }
+    function getSourceParam(url) {
+      if (!url || typeof url.searchParams?.get !== "function") {
+        return { ok: false, error: "Invalid request URL" };
+      }
+      const raw = url.searchParams.get("source");
+      if (raw == null) return { ok: true, source: null };
+      if (raw.trim() === "") return { ok: true, source: null };
+      const normalized = normalizeSource2(raw);
+      if (!normalized) return { ok: false, error: "Invalid source" };
+      return { ok: true, source: normalized };
+    }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          MAX_SOURCE_LENGTH,
+          toBigInt,
+          toPositiveInt,
+          toPositiveIntOrNull: toPositiveIntOrNull2,
+          normalizeSource: normalizeSource2,
+          getSourceParam
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
+// insforge-src/shared/usage-model-core.js
+var require_usage_model_core = __commonJS({
+  "insforge-src/shared/usage-model-core.js"() {
+    "use strict";
+    var CORE_KEY = "__vibeusageUsageModelCore";
+    var DEFAULT_MODEL = "unknown";
+    function normalizeModel2(value) {
+      if (typeof value !== "string") return null;
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    }
+    function normalizeUsageModel2(value) {
+      const normalized = normalizeModel2(value);
+      return normalized ? normalized.toLowerCase() : null;
+    }
+    function escapeLike(value) {
+      return String(value).replace(/[\\%_]/g, "\\$&");
+    }
+    function applyUsageModelFilter(query, usageModels) {
+      if (!query || typeof query.or !== "function") return query;
+      const models = Array.isArray(usageModels) ? usageModels : [];
+      const terms = [];
+      const seen = /* @__PURE__ */ new Set();
+      for (const model of models) {
+        const normalized = normalizeUsageModel2(model);
+        if (!normalized) continue;
+        const exact = `model.ilike.${escapeLike(normalized)}`;
+        if (seen.has(exact)) continue;
+        seen.add(exact);
+        terms.push(exact);
+      }
+      if (terms.length === 0) return query;
+      return query.or(terms.join(","));
+    }
+    function getModelParam(url) {
+      if (!url || typeof url.searchParams?.get !== "function") {
+        return { ok: false, error: "Invalid request URL" };
+      }
+      const raw = url.searchParams.get("model");
+      if (raw == null || raw.trim() === "") return { ok: true, model: null };
+      const normalized = normalizeUsageModel2(raw);
+      if (!normalized) return { ok: false, error: "Invalid model" };
+      return { ok: true, model: normalized };
+    }
+    function normalizeDateKey(value) {
+      if (typeof value !== "string") return null;
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      return trimmed.length >= 10 ? trimmed.slice(0, 10) : trimmed;
+    }
+    function extractDateKey(value) {
+      if (value instanceof Date) return value.toISOString().slice(0, 10);
+      if (typeof value === "string" && value.length >= 10) return value.slice(0, 10);
+      return null;
+    }
+    function nextDateKey(dateKey) {
+      if (!dateKey) return null;
+      const date = /* @__PURE__ */ new Date(`${dateKey}T00:00:00Z`);
+      if (Number.isNaN(date.getTime())) return null;
+      date.setUTCDate(date.getUTCDate() + 1);
+      return date.toISOString().slice(0, 10);
+    }
+    function normalizeUsageModelKey(value) {
+      return normalizeUsageModel2(value);
+    }
+    function normalizeDisplayNameValue(value) {
+      if (typeof value !== "string") return null;
+      const trimmed = value.trim();
+      return trimmed || null;
+    }
+    function buildIdentityMap({ usageModels, aliasRows } = {}) {
+      const normalized = /* @__PURE__ */ new Set();
+      for (const model of Array.isArray(usageModels) ? usageModels : []) {
+        const key = normalizeUsageModelKey(model);
+        if (key) normalized.add(key);
+      }
+      const map = /* @__PURE__ */ new Map();
+      for (const row of Array.isArray(aliasRows) ? aliasRows : []) {
+        const usageKey = normalizeUsageModelKey(row?.usage_model);
+        const canonical = normalizeUsageModelKey(row?.canonical_model);
+        if (!usageKey || !canonical) continue;
+        if (normalized.size > 0 && !normalized.has(usageKey)) continue;
+        const display = normalizeDisplayNameValue(row?.display_name) || canonical;
+        const effective = String(row?.effective_from || "");
+        const existing = map.get(usageKey);
+        if (!existing || effective > existing.effective_from) {
+          map.set(usageKey, { model_id: canonical, model: display, effective_from: effective });
+        }
+      }
+      for (const key of normalized) {
+        if (!map.has(key)) {
+          map.set(key, { model_id: key, model: key, effective_from: "" });
+        }
+      }
+      const result = /* @__PURE__ */ new Map();
+      for (const [key, value] of map.entries()) {
+        result.set(key, { model_id: value.model_id, model: value.model });
+      }
+      return result;
+    }
+    function applyModelIdentity({ rawModel, identityMap } = {}) {
+      const normalized = normalizeUsageModelKey(rawModel) || DEFAULT_MODEL;
+      const entry = identityMap && typeof identityMap.get === "function" ? identityMap.get(normalized) : null;
+      if (entry) return { model_id: entry.model_id, model: entry.model };
+      const display = normalizeDisplayNameValue(rawModel) || DEFAULT_MODEL;
+      return { model_id: normalized, model: display };
+    }
+    function readQueryOutcome(result, query) {
+      const data = Array.isArray(result?.data) ? result.data : Array.isArray(query?.data) ? query.data : null;
+      const error = result?.error || query?.error || null;
+      return { data, error };
+    }
+    async function resolveModelIdentity({ edgeClient, usageModels, effectiveDate } = {}) {
+      const models = Array.isArray(usageModels) ? usageModels.map(normalizeUsageModelKey).filter(Boolean) : [];
+      if (!models.length) return /* @__PURE__ */ new Map();
+      const database = edgeClient?.database;
+      if (!database || typeof database.from !== "function") {
+        return buildIdentityMap({ usageModels: models, aliasRows: [] });
+      }
+      const dateKey = normalizeDateKey(effectiveDate) || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+      const dateKeyNext = nextDateKey(dateKey) || dateKey;
+      const query = database.from("vibeusage_model_aliases").select("usage_model,canonical_model,display_name,effective_from");
+      if (!query || typeof query.eq !== "function" || typeof query.in !== "function" || typeof query.lt !== "function" || typeof query.order !== "function") {
+        return buildIdentityMap({ usageModels: models, aliasRows: [] });
+      }
+      const result = await query.eq("active", true).in("usage_model", models).lt("effective_from", dateKeyNext).order("effective_from", { ascending: false });
+      const { data, error } = readQueryOutcome(result, query);
+      if (error || !Array.isArray(data)) {
+        return buildIdentityMap({ usageModels: models, aliasRows: [] });
+      }
+      return buildIdentityMap({ usageModels: models, aliasRows: data });
+    }
+    async function resolveUsageModelsForCanonical({ edgeClient, canonicalModel, effectiveDate } = {}) {
+      const canonical = normalizeUsageModelKey(canonicalModel);
+      if (!canonical) return { canonical: null, usageModels: [] };
+      const database = edgeClient?.database;
+      if (!database || typeof database.from !== "function") {
+        return { canonical, usageModels: [canonical] };
+      }
+      const dateKey = normalizeDateKey(effectiveDate) || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+      const dateKeyNext = nextDateKey(dateKey) || dateKey;
+      const query = database.from("vibeusage_model_aliases").select("usage_model,canonical_model,effective_from");
+      if (!query || typeof query.eq !== "function" || typeof query.lt !== "function" || typeof query.order !== "function") {
+        return { canonical, usageModels: [canonical] };
+      }
+      const result = await query.eq("active", true).eq("canonical_model", canonical).lt("effective_from", dateKeyNext).order("effective_from", { ascending: false });
+      const { data, error } = readQueryOutcome(result, query);
+      if (error || !Array.isArray(data)) {
+        return { canonical, usageModels: [canonical] };
+      }
+      const usageMap = /* @__PURE__ */ new Map();
+      for (const row of data) {
+        const usageKey = normalizeUsageModelKey(row?.usage_model);
+        if (!usageKey) continue;
+        const effective = String(row?.effective_from || "");
+        const existing = usageMap.get(usageKey);
+        if (!existing || effective > existing) usageMap.set(usageKey, effective);
+      }
+      const usageModelsSet = /* @__PURE__ */ new Set([canonical]);
+      for (const usageKey of usageMap.keys()) {
+        usageModelsSet.add(usageKey);
+      }
+      return { canonical, usageModels: Array.from(usageModelsSet.values()) };
+    }
+    function resolveIdentityAtDate({ rawModel, usageKey, dateKey, timeline } = {}) {
+      const normalizedKey = usageKey || normalizeUsageModelKey(rawModel) || DEFAULT_MODEL;
+      const normalizedDateKey = extractDateKey(dateKey) || dateKey || null;
+      const entries = timeline && typeof timeline.get === "function" ? timeline.get(normalizedKey) : null;
+      if (Array.isArray(entries)) {
+        let match = null;
+        for (const entry of entries) {
+          if (entry.effective_from && normalizedDateKey && entry.effective_from <= normalizedDateKey) {
+            match = entry;
+          } else if (entry.effective_from && normalizedDateKey && entry.effective_from > normalizedDateKey) {
+            break;
+          }
+        }
+        if (match) return { model_id: match.model_id, model: match.model };
+      }
+      const display = normalizeModel2(rawModel) || DEFAULT_MODEL;
+      return { model_id: normalizedKey, model: display };
+    }
+    function buildAliasTimeline({ usageModels, aliasRows } = {}) {
+      const normalized = new Set(
+        Array.isArray(usageModels) ? usageModels.map((model) => normalizeUsageModelKey(model)).filter(Boolean) : []
+      );
+      const timeline = /* @__PURE__ */ new Map();
+      for (const row of Array.isArray(aliasRows) ? aliasRows : []) {
+        const usageKey = normalizeUsageModelKey(row?.usage_model);
+        const canonical = normalizeUsageModelKey(row?.canonical_model);
+        if (!usageKey || !canonical) continue;
+        if (normalized.size > 0 && !normalized.has(usageKey)) continue;
+        const display = normalizeModel2(row?.display_name) || canonical;
+        const effective = extractDateKey(row?.effective_from || "");
+        if (!effective) continue;
+        const entry = { model_id: canonical, model: display, effective_from: effective };
+        const list = timeline.get(usageKey);
+        if (list) {
+          list.push(entry);
+        } else {
+          timeline.set(usageKey, [entry]);
+        }
+      }
+      for (const list of timeline.values()) {
+        list.sort((a, b) => String(a.effective_from).localeCompare(String(b.effective_from)));
+      }
+      return timeline;
+    }
+    async function fetchAliasRows({ edgeClient, usageModels, effectiveDate } = {}) {
+      const models = Array.isArray(usageModels) ? usageModels.map((model) => normalizeUsageModelKey(model)).filter(Boolean) : [];
+      const database = edgeClient?.database;
+      if (!models.length || !database || typeof database.from !== "function") return [];
+      const dateKey = extractDateKey(effectiveDate) || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+      const dateKeyNext = nextDateKey(dateKey) || dateKey;
+      const query = database.from("vibeusage_model_aliases").select("usage_model,canonical_model,display_name,effective_from");
+      if (!query || typeof query.eq !== "function" || typeof query.in !== "function" || typeof query.lt !== "function" || typeof query.order !== "function") {
+        return [];
+      }
+      const result = await query.eq("active", true).in("usage_model", models).lt("effective_from", dateKeyNext).order("effective_from", { ascending: true });
+      const { data, error } = readQueryOutcome(result, query);
+      if (error || !Array.isArray(data)) return [];
+      return data;
+    }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          normalizeModel: normalizeModel2,
+          normalizeUsageModel: normalizeUsageModel2,
+          applyUsageModelFilter,
+          getModelParam,
+          normalizeDateKey,
+          extractDateKey,
+          normalizeUsageModelKey,
+          buildIdentityMap,
+          applyModelIdentity,
+          resolveModelIdentity,
+          resolveUsageModelsForCanonical,
+          resolveIdentityAtDate,
+          buildAliasTimeline,
+          fetchAliasRows
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
+// insforge-src/shared/env-core.js
+var require_env_core = __commonJS({
+  "insforge-src/shared/env-core.js"() {
+    "use strict";
+    var CORE_KEY = "__vibeusageEnvCore";
+    var DEFAULT_BASE_URL = "http://insforge:7130";
+    var DEFAULT_USAGE_MAX_DAYS = 800;
+    var DEFAULT_SLOW_QUERY_THRESHOLD_MS = 2e3;
+    var DEFAULT_PRICING_MODEL = "gpt-5.2-codex";
+    var DEFAULT_PRICING_SOURCE = "openrouter";
+    var runtimePrimitivesCore = globalThis.__vibeusageRuntimePrimitivesCore;
+    if (!runtimePrimitivesCore) throw new Error("runtime primitives core not initialized");
+    var usageModelCore = globalThis.__vibeusageUsageModelCore;
+    if (!usageModelCore) throw new Error("usage-model core not initialized");
+    function readDenoEnvValue(key) {
+      try {
+        if (typeof Deno !== "undefined" && Deno?.env?.get) {
+          const value = Deno.env.get(key);
+          return value == null ? null : value;
+        }
+      } catch (_error) {
+      }
+      return null;
+    }
+    function readEnvValue(key) {
+      const denoValue = readDenoEnvValue(key);
+      if (denoValue != null) return denoValue;
+      try {
+        if (typeof process !== "undefined" && process?.env) {
+          const value = process.env[key];
+          if (value != null) return value;
+        }
+      } catch (_error) {
+      }
+      return null;
+    }
+    function clampInt(value, min, max) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return min;
+      return Math.min(max, Math.max(min, Math.floor(n)));
+    }
+    function getBaseUrl2() {
+      return readDenoEnvValue("INSFORGE_INTERNAL_URL") || DEFAULT_BASE_URL;
+    }
+    function firstHeaderValue(value) {
+      if (typeof value !== "string") return null;
+      const first = value.split(",")[0]?.trim();
+      return first || null;
+    }
+    function getForwardedBaseUrl(request) {
+      const headers = request?.headers;
+      if (!headers || typeof headers.get !== "function") return null;
+      const forwardedHost = firstHeaderValue(headers.get("x-forwarded-host"));
+      const host = forwardedHost || firstHeaderValue(headers.get("host"));
+      if (!host) return null;
+      const proto = firstHeaderValue(headers.get("x-forwarded-proto")) || "https";
+      return `${proto}://${host}`;
+    }
+    function getRequestBaseUrl(request) {
+      const forwarded = getForwardedBaseUrl(request);
+      if (forwarded) return forwarded;
+      if (request && typeof request.url === "string") {
+        try {
+          const url = new URL(request.url);
+          if (url.origin && url.origin !== "null") return url.origin;
+        } catch (_error) {
+        }
+      }
+      return getBaseUrl2();
+    }
+    function getServiceRoleKey2() {
+      return readDenoEnvValue("INSFORGE_SERVICE_ROLE_KEY") || readDenoEnvValue("SERVICE_ROLE_KEY") || readDenoEnvValue("INSFORGE_API_KEY") || readDenoEnvValue("API_KEY") || null;
+    }
+    function getAnonKey2() {
+      return readDenoEnvValue("ANON_KEY") || readDenoEnvValue("INSFORGE_ANON_KEY") || null;
+    }
+    function getJwtSecret() {
+      return readDenoEnvValue("INSFORGE_JWT_SECRET") || null;
+    }
+    function getUsageMaxDays() {
+      const raw = readEnvValue("VIBEUSAGE_USAGE_MAX_DAYS");
+      if (raw == null || raw === "") return DEFAULT_USAGE_MAX_DAYS;
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n <= 0) return DEFAULT_USAGE_MAX_DAYS;
+      return clampInt(n, 1, 5e3);
+    }
+    function getSlowQueryThresholdMs() {
+      const raw = readEnvValue("VIBEUSAGE_SLOW_QUERY_MS");
+      if (raw == null || raw === "") return DEFAULT_SLOW_QUERY_THRESHOLD_MS;
+      const n = Number(raw);
+      if (!Number.isFinite(n)) return DEFAULT_SLOW_QUERY_THRESHOLD_MS;
+      if (n <= 0) return 0;
+      return clampInt(n, 1, 6e4);
+    }
+    function normalizePricingModel(value) {
+      const normalized = usageModelCore.normalizeModel?.(value) || null;
+      if (!normalized || normalized.toLowerCase() === "unknown") return null;
+      return normalized;
+    }
+    function getPricingDefaults() {
+      const primaryModel = normalizePricingModel(readEnvValue("VIBEUSAGE_PRICING_MODEL"));
+      const primarySource = runtimePrimitivesCore.normalizeSource(
+        readEnvValue("VIBEUSAGE_PRICING_SOURCE")
+      );
+      return {
+        model: primaryModel || DEFAULT_PRICING_MODEL,
+        source: primarySource || DEFAULT_PRICING_SOURCE
+      };
+    }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          readEnvValue,
+          clampInt,
+          getBaseUrl: getBaseUrl2,
+          getRequestBaseUrl,
+          getServiceRoleKey: getServiceRoleKey2,
+          getAnonKey: getAnonKey2,
+          getJwtSecret,
+          getUsageMaxDays,
+          getSlowQueryThresholdMs,
+          getPricingDefaults
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
 // insforge-src/shared/env.js
 var require_env = __commonJS({
   "insforge-src/shared/env.js"(exports2, module2) {
     "use strict";
-    function getBaseUrl2() {
-      return Deno.env.get("INSFORGE_INTERNAL_URL") || "http://insforge:7130";
-    }
-    function getServiceRoleKey2() {
-      return Deno.env.get("INSFORGE_SERVICE_ROLE_KEY") || Deno.env.get("SERVICE_ROLE_KEY") || Deno.env.get("INSFORGE_API_KEY") || Deno.env.get("API_KEY") || null;
-    }
-    function getAnonKey2() {
-      return Deno.env.get("ANON_KEY") || Deno.env.get("INSFORGE_ANON_KEY") || null;
-    }
-    function getJwtSecret() {
-      return Deno.env.get("INSFORGE_JWT_SECRET") || null;
-    }
+    require_runtime_primitives_core();
+    require_usage_model_core();
+    require_env_core();
+    var envCore = globalThis.__vibeusageEnvCore;
+    if (!envCore) throw new Error("env core not initialized");
     module2.exports = {
-      getBaseUrl: getBaseUrl2,
-      getServiceRoleKey: getServiceRoleKey2,
-      getAnonKey: getAnonKey2,
-      getJwtSecret
+      getBaseUrl: envCore.getBaseUrl,
+      getRequestBaseUrl: envCore.getRequestBaseUrl,
+      getServiceRoleKey: envCore.getServiceRoleKey,
+      getAnonKey: envCore.getAnonKey,
+      getJwtSecret: envCore.getJwtSecret,
+      getUsageMaxDays: envCore.getUsageMaxDays,
+      getSlowQueryThresholdMs: envCore.getSlowQueryThresholdMs,
+      getPricingDefaults: envCore.getPricingDefaults
     };
   }
 });
@@ -422,6 +877,7 @@ var require_auth = __commonJS({
 var require_date = __commonJS({
   "insforge-src/shared/date.js"(exports2, module2) {
     "use strict";
+    var env = require_env();
     function isDate2(s) {
       return typeof s === "string" && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(s);
     }
@@ -666,33 +1122,7 @@ var require_date = __commonJS({
       return days;
     }
     function getUsageMaxDays() {
-      const raw = readEnvValue("VIBEUSAGE_USAGE_MAX_DAYS");
-      if (raw == null || raw === "") return 800;
-      const n = Number(raw);
-      if (!Number.isFinite(n)) return 800;
-      if (n <= 0) return 800;
-      return clampInt(n, 1, 5e3);
-    }
-    function readEnvValue(key) {
-      try {
-        if (typeof Deno !== "undefined" && Deno?.env?.get) {
-          const value = Deno.env.get(key);
-          if (value !== void 0) return value;
-        }
-      } catch (_e) {
-      }
-      try {
-        if (typeof process !== "undefined" && process?.env) {
-          return process.env[key];
-        }
-      } catch (_e) {
-      }
-      return null;
-    }
-    function clampInt(value, min, max) {
-      const n = Number(value);
-      if (!Number.isFinite(n)) return min;
-      return Math.min(max, Math.max(min, Math.floor(n)));
+      return env.getUsageMaxDays();
     }
     module2.exports = {
       isDate: isDate2,
@@ -726,46 +1156,13 @@ var require_date = __commonJS({
 var require_numbers = __commonJS({
   "insforge-src/shared/numbers.js"(exports2, module2) {
     "use strict";
-    function toBigInt(v) {
-      if (typeof v === "bigint") return v >= 0n ? v : 0n;
-      if (typeof v === "number") {
-        if (!Number.isFinite(v) || v <= 0) return 0n;
-        return BigInt(Math.floor(v));
-      }
-      if (typeof v === "string") {
-        const s = v.trim();
-        if (!/^[0-9]+$/.test(s)) return 0n;
-        try {
-          return BigInt(s);
-        } catch (_e) {
-          return 0n;
-        }
-      }
-      return 0n;
-    }
-    function toPositiveIntOrNull2(v) {
-      if (typeof v === "number" && Number.isInteger(v) && v > 0) return v;
-      if (typeof v === "string") {
-        const s = v.trim();
-        if (!/^[0-9]+$/.test(s)) return null;
-        const n = Number.parseInt(s, 10);
-        return Number.isFinite(n) && n > 0 ? n : null;
-      }
-      if (typeof v === "bigint") {
-        if (v <= 0n) return null;
-        const n = Number(v);
-        return Number.isFinite(n) && n > 0 ? n : null;
-      }
-      return null;
-    }
-    function toPositiveInt(v) {
-      const n = toPositiveIntOrNull2(v);
-      return n == null ? 0 : n;
-    }
+    require_runtime_primitives_core();
+    var runtimePrimitivesCore = globalThis.__vibeusageRuntimePrimitivesCore;
+    if (!runtimePrimitivesCore) throw new Error("runtime primitives core not initialized");
     module2.exports = {
-      toBigInt,
-      toPositiveInt,
-      toPositiveIntOrNull: toPositiveIntOrNull2
+      toBigInt: runtimePrimitivesCore.toBigInt,
+      toPositiveInt: runtimePrimitivesCore.toPositiveInt,
+      toPositiveIntOrNull: runtimePrimitivesCore.toPositiveIntOrNull
     };
   }
 });
@@ -774,279 +1171,14 @@ var require_numbers = __commonJS({
 var require_source = __commonJS({
   "insforge-src/shared/source.js"(exports2, module2) {
     "use strict";
-    var MAX_SOURCE_LENGTH = 64;
-    function normalizeSource2(value) {
-      if (typeof value !== "string") return null;
-      const normalized = value.trim().toLowerCase();
-      if (!normalized) return null;
-      if (normalized.length > MAX_SOURCE_LENGTH) return normalized.slice(0, MAX_SOURCE_LENGTH);
-      return normalized;
-    }
-    function getSourceParam(url) {
-      if (!url || typeof url.searchParams?.get !== "function") {
-        return { ok: false, error: "Invalid request URL" };
-      }
-      const raw = url.searchParams.get("source");
-      if (raw == null) return { ok: true, source: null };
-      if (raw.trim() === "") return { ok: true, source: null };
-      const normalized = normalizeSource2(raw);
-      if (!normalized) return { ok: false, error: "Invalid source" };
-      return { ok: true, source: normalized };
-    }
+    require_runtime_primitives_core();
+    var runtimePrimitivesCore = globalThis.__vibeusageRuntimePrimitivesCore;
+    if (!runtimePrimitivesCore) throw new Error("runtime primitives core not initialized");
     module2.exports = {
-      MAX_SOURCE_LENGTH,
-      normalizeSource: normalizeSource2,
-      getSourceParam
+      MAX_SOURCE_LENGTH: runtimePrimitivesCore.MAX_SOURCE_LENGTH,
+      normalizeSource: runtimePrimitivesCore.normalizeSource,
+      getSourceParam: runtimePrimitivesCore.getSourceParam
     };
-  }
-});
-
-// insforge-src/shared/usage-model-core.js
-var require_usage_model_core = __commonJS({
-  "insforge-src/shared/usage-model-core.js"() {
-    "use strict";
-    var CORE_KEY = "__vibeusageUsageModelCore";
-    var DEFAULT_MODEL = "unknown";
-    function normalizeModel2(value) {
-      if (typeof value !== "string") return null;
-      const trimmed = value.trim();
-      return trimmed.length > 0 ? trimmed : null;
-    }
-    function normalizeUsageModel2(value) {
-      const normalized = normalizeModel2(value);
-      return normalized ? normalized.toLowerCase() : null;
-    }
-    function escapeLike(value) {
-      return String(value).replace(/[\\%_]/g, "\\$&");
-    }
-    function applyUsageModelFilter(query, usageModels) {
-      if (!query || typeof query.or !== "function") return query;
-      const models = Array.isArray(usageModels) ? usageModels : [];
-      const terms = [];
-      const seen = /* @__PURE__ */ new Set();
-      for (const model of models) {
-        const normalized = normalizeUsageModel2(model);
-        if (!normalized) continue;
-        const exact = `model.ilike.${escapeLike(normalized)}`;
-        if (seen.has(exact)) continue;
-        seen.add(exact);
-        terms.push(exact);
-      }
-      if (terms.length === 0) return query;
-      return query.or(terms.join(","));
-    }
-    function getModelParam(url) {
-      if (!url || typeof url.searchParams?.get !== "function") {
-        return { ok: false, error: "Invalid request URL" };
-      }
-      const raw = url.searchParams.get("model");
-      if (raw == null || raw.trim() === "") return { ok: true, model: null };
-      const normalized = normalizeUsageModel2(raw);
-      if (!normalized) return { ok: false, error: "Invalid model" };
-      return { ok: true, model: normalized };
-    }
-    function normalizeDateKey(value) {
-      if (typeof value !== "string") return null;
-      const trimmed = value.trim();
-      if (!trimmed) return null;
-      return trimmed.length >= 10 ? trimmed.slice(0, 10) : trimmed;
-    }
-    function extractDateKey(value) {
-      if (value instanceof Date) return value.toISOString().slice(0, 10);
-      if (typeof value === "string" && value.length >= 10) return value.slice(0, 10);
-      return null;
-    }
-    function nextDateKey(dateKey) {
-      if (!dateKey) return null;
-      const date = /* @__PURE__ */ new Date(`${dateKey}T00:00:00Z`);
-      if (Number.isNaN(date.getTime())) return null;
-      date.setUTCDate(date.getUTCDate() + 1);
-      return date.toISOString().slice(0, 10);
-    }
-    function normalizeUsageModelKey(value) {
-      return normalizeUsageModel2(value);
-    }
-    function normalizeDisplayNameValue(value) {
-      if (typeof value !== "string") return null;
-      const trimmed = value.trim();
-      return trimmed || null;
-    }
-    function buildIdentityMap({ usageModels, aliasRows } = {}) {
-      const normalized = /* @__PURE__ */ new Set();
-      for (const model of Array.isArray(usageModels) ? usageModels : []) {
-        const key = normalizeUsageModelKey(model);
-        if (key) normalized.add(key);
-      }
-      const map = /* @__PURE__ */ new Map();
-      for (const row of Array.isArray(aliasRows) ? aliasRows : []) {
-        const usageKey = normalizeUsageModelKey(row?.usage_model);
-        const canonical = normalizeUsageModelKey(row?.canonical_model);
-        if (!usageKey || !canonical) continue;
-        if (normalized.size > 0 && !normalized.has(usageKey)) continue;
-        const display = normalizeDisplayNameValue(row?.display_name) || canonical;
-        const effective = String(row?.effective_from || "");
-        const existing = map.get(usageKey);
-        if (!existing || effective > existing.effective_from) {
-          map.set(usageKey, { model_id: canonical, model: display, effective_from: effective });
-        }
-      }
-      for (const key of normalized) {
-        if (!map.has(key)) {
-          map.set(key, { model_id: key, model: key, effective_from: "" });
-        }
-      }
-      const result = /* @__PURE__ */ new Map();
-      for (const [key, value] of map.entries()) {
-        result.set(key, { model_id: value.model_id, model: value.model });
-      }
-      return result;
-    }
-    function applyModelIdentity({ rawModel, identityMap } = {}) {
-      const normalized = normalizeUsageModelKey(rawModel) || DEFAULT_MODEL;
-      const entry = identityMap && typeof identityMap.get === "function" ? identityMap.get(normalized) : null;
-      if (entry) return { model_id: entry.model_id, model: entry.model };
-      const display = normalizeDisplayNameValue(rawModel) || DEFAULT_MODEL;
-      return { model_id: normalized, model: display };
-    }
-    function readQueryOutcome(result, query) {
-      const data = Array.isArray(result?.data) ? result.data : Array.isArray(query?.data) ? query.data : null;
-      const error = result?.error || query?.error || null;
-      return { data, error };
-    }
-    async function resolveModelIdentity({ edgeClient, usageModels, effectiveDate } = {}) {
-      const models = Array.isArray(usageModels) ? usageModels.map(normalizeUsageModelKey).filter(Boolean) : [];
-      if (!models.length) return /* @__PURE__ */ new Map();
-      const database = edgeClient?.database;
-      if (!database || typeof database.from !== "function") {
-        return buildIdentityMap({ usageModels: models, aliasRows: [] });
-      }
-      const dateKey = normalizeDateKey(effectiveDate) || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-      const dateKeyNext = nextDateKey(dateKey) || dateKey;
-      const query = database.from("vibeusage_model_aliases").select("usage_model,canonical_model,display_name,effective_from");
-      if (!query || typeof query.eq !== "function" || typeof query.in !== "function" || typeof query.lt !== "function" || typeof query.order !== "function") {
-        return buildIdentityMap({ usageModels: models, aliasRows: [] });
-      }
-      const result = await query.eq("active", true).in("usage_model", models).lt("effective_from", dateKeyNext).order("effective_from", { ascending: false });
-      const { data, error } = readQueryOutcome(result, query);
-      if (error || !Array.isArray(data)) {
-        return buildIdentityMap({ usageModels: models, aliasRows: [] });
-      }
-      return buildIdentityMap({ usageModels: models, aliasRows: data });
-    }
-    async function resolveUsageModelsForCanonical({ edgeClient, canonicalModel, effectiveDate } = {}) {
-      const canonical = normalizeUsageModelKey(canonicalModel);
-      if (!canonical) return { canonical: null, usageModels: [] };
-      const database = edgeClient?.database;
-      if (!database || typeof database.from !== "function") {
-        return { canonical, usageModels: [canonical] };
-      }
-      const dateKey = normalizeDateKey(effectiveDate) || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-      const dateKeyNext = nextDateKey(dateKey) || dateKey;
-      const query = database.from("vibeusage_model_aliases").select("usage_model,canonical_model,effective_from");
-      if (!query || typeof query.eq !== "function" || typeof query.lt !== "function" || typeof query.order !== "function") {
-        return { canonical, usageModels: [canonical] };
-      }
-      const result = await query.eq("active", true).eq("canonical_model", canonical).lt("effective_from", dateKeyNext).order("effective_from", { ascending: false });
-      const { data, error } = readQueryOutcome(result, query);
-      if (error || !Array.isArray(data)) {
-        return { canonical, usageModels: [canonical] };
-      }
-      const usageMap = /* @__PURE__ */ new Map();
-      for (const row of data) {
-        const usageKey = normalizeUsageModelKey(row?.usage_model);
-        if (!usageKey) continue;
-        const effective = String(row?.effective_from || "");
-        const existing = usageMap.get(usageKey);
-        if (!existing || effective > existing) usageMap.set(usageKey, effective);
-      }
-      const usageModelsSet = /* @__PURE__ */ new Set([canonical]);
-      for (const usageKey of usageMap.keys()) {
-        usageModelsSet.add(usageKey);
-      }
-      return { canonical, usageModels: Array.from(usageModelsSet.values()) };
-    }
-    function resolveIdentityAtDate({ rawModel, usageKey, dateKey, timeline } = {}) {
-      const normalizedKey = usageKey || normalizeUsageModelKey(rawModel) || DEFAULT_MODEL;
-      const normalizedDateKey = extractDateKey(dateKey) || dateKey || null;
-      const entries = timeline && typeof timeline.get === "function" ? timeline.get(normalizedKey) : null;
-      if (Array.isArray(entries)) {
-        let match = null;
-        for (const entry of entries) {
-          if (entry.effective_from && normalizedDateKey && entry.effective_from <= normalizedDateKey) {
-            match = entry;
-          } else if (entry.effective_from && normalizedDateKey && entry.effective_from > normalizedDateKey) {
-            break;
-          }
-        }
-        if (match) return { model_id: match.model_id, model: match.model };
-      }
-      const display = normalizeModel2(rawModel) || DEFAULT_MODEL;
-      return { model_id: normalizedKey, model: display };
-    }
-    function buildAliasTimeline({ usageModels, aliasRows } = {}) {
-      const normalized = new Set(
-        Array.isArray(usageModels) ? usageModels.map((model) => normalizeUsageModelKey(model)).filter(Boolean) : []
-      );
-      const timeline = /* @__PURE__ */ new Map();
-      for (const row of Array.isArray(aliasRows) ? aliasRows : []) {
-        const usageKey = normalizeUsageModelKey(row?.usage_model);
-        const canonical = normalizeUsageModelKey(row?.canonical_model);
-        if (!usageKey || !canonical) continue;
-        if (normalized.size > 0 && !normalized.has(usageKey)) continue;
-        const display = normalizeModel2(row?.display_name) || canonical;
-        const effective = extractDateKey(row?.effective_from || "");
-        if (!effective) continue;
-        const entry = { model_id: canonical, model: display, effective_from: effective };
-        const list = timeline.get(usageKey);
-        if (list) {
-          list.push(entry);
-        } else {
-          timeline.set(usageKey, [entry]);
-        }
-      }
-      for (const list of timeline.values()) {
-        list.sort((a, b) => String(a.effective_from).localeCompare(String(b.effective_from)));
-      }
-      return timeline;
-    }
-    async function fetchAliasRows({ edgeClient, usageModels, effectiveDate } = {}) {
-      const models = Array.isArray(usageModels) ? usageModels.map((model) => normalizeUsageModelKey(model)).filter(Boolean) : [];
-      const database = edgeClient?.database;
-      if (!models.length || !database || typeof database.from !== "function") return [];
-      const dateKey = extractDateKey(effectiveDate) || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-      const dateKeyNext = nextDateKey(dateKey) || dateKey;
-      const query = database.from("vibeusage_model_aliases").select("usage_model,canonical_model,display_name,effective_from");
-      if (!query || typeof query.eq !== "function" || typeof query.in !== "function" || typeof query.lt !== "function" || typeof query.order !== "function") {
-        return [];
-      }
-      const result = await query.eq("active", true).in("usage_model", models).lt("effective_from", dateKeyNext).order("effective_from", { ascending: true });
-      const { data, error } = readQueryOutcome(result, query);
-      if (error || !Array.isArray(data)) return [];
-      return data;
-    }
-    if (!globalThis[CORE_KEY]) {
-      Object.defineProperty(globalThis, CORE_KEY, {
-        value: {
-          normalizeModel: normalizeModel2,
-          normalizeUsageModel: normalizeUsageModel2,
-          applyUsageModelFilter,
-          getModelParam,
-          normalizeDateKey,
-          extractDateKey,
-          normalizeUsageModelKey,
-          buildIdentityMap,
-          applyModelIdentity,
-          resolveModelIdentity,
-          resolveUsageModelsForCanonical,
-          resolveIdentityAtDate,
-          buildAliasTimeline,
-          fetchAliasRows
-        },
-        configurable: true,
-        enumerable: false,
-        writable: false
-      });
-    }
   }
 });
 
@@ -1131,6 +1263,7 @@ var require_pagination = __commonJS({
 var require_logging = __commonJS({
   "insforge-src/shared/logging.js"(exports2, module2) {
     "use strict";
+    var env = require_env();
     function createRequestId() {
       if (globalThis?.crypto?.randomUUID) return globalThis.crypto.randomUUID();
       return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -1214,13 +1347,13 @@ var require_logging = __commonJS({
     module2.exports = {
       withRequestLogging: withRequestLogging2,
       logSlowQuery,
-      getSlowQueryThresholdMs
+      getSlowQueryThresholdMs: env.getSlowQueryThresholdMs
     };
     function logSlowQuery(logger, fields) {
       if (!logger || typeof logger.log !== "function") return;
       const durationMs = Number(fields?.duration_ms ?? fields?.durationMs);
       if (!Number.isFinite(durationMs)) return;
-      const thresholdMs = getSlowQueryThresholdMs();
+      const thresholdMs = env.getSlowQueryThresholdMs();
       if (durationMs < thresholdMs) return;
       logger.log({
         stage: "slow_query",
@@ -1228,35 +1361,6 @@ var require_logging = __commonJS({
         ...fields || {},
         duration_ms: Math.round(durationMs)
       });
-    }
-    function getSlowQueryThresholdMs() {
-      const raw = readEnvValue("VIBEUSAGE_SLOW_QUERY_MS");
-      if (raw == null || raw === "") return 2e3;
-      const n = Number(raw);
-      if (!Number.isFinite(n)) return 2e3;
-      if (n <= 0) return 0;
-      return clampInt(n, 1, 6e4);
-    }
-    function readEnvValue(key) {
-      try {
-        if (typeof Deno !== "undefined" && Deno?.env?.get) {
-          const value = Deno.env.get(key);
-          if (value !== void 0) return value;
-        }
-      } catch (_e) {
-      }
-      try {
-        if (typeof process !== "undefined" && process?.env) {
-          return process.env[key];
-        }
-      } catch (_e) {
-      }
-      return null;
-    }
-    function clampInt(value, min, max) {
-      const n = Number(value);
-      if (!Number.isFinite(n)) return min;
-      return Math.min(max, Math.max(min, Math.floor(n)));
     }
   }
 });

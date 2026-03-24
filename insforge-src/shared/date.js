@@ -1,5 +1,7 @@
 "use strict";
 
+const env = require("./env");
+
 function isDate(s) {
   return typeof s === "string" && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(s);
 }
@@ -274,33 +276,7 @@ function listDateStrings(from, to) {
 }
 
 function getUsageMaxDays() {
-  const raw = readEnvValue("VIBEUSAGE_USAGE_MAX_DAYS");
-  if (raw == null || raw === "") return 800;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return 800;
-  if (n <= 0) return 800;
-  return clampInt(n, 1, 5000);
-}
-
-function readEnvValue(key) {
-  try {
-    if (typeof Deno !== "undefined" && Deno?.env?.get) {
-      const value = Deno.env.get(key);
-      if (value !== undefined) return value;
-    }
-  } catch (_e) {}
-  try {
-    if (typeof process !== "undefined" && process?.env) {
-      return process.env[key];
-    }
-  } catch (_e) {}
-  return null;
-}
-
-function clampInt(value, min, max) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return min;
-  return Math.min(max, Math.max(min, Math.floor(n)));
+  return env.getUsageMaxDays();
 }
 
 module.exports = {

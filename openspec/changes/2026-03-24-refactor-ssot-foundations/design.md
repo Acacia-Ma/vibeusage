@@ -26,4 +26,6 @@ Model normalization, canonical identity resolution, and alias timeline rules now
 
 Pricing resolution, cost computation, billable-total resolution, shared totals helpers, and pricing bucket key parsing now follow the same pattern through `insforge-src/shared/pricing-core.js` and `insforge-src/shared/usage-metrics-core.js`, again with mirrored `.mjs` artifacts for the ESM edge layer.
 
+Runtime env parsing, request base URL resolution, numeric coercion, and source normalization now converge through `insforge-src/shared/env-core.js` and `insforge-src/shared/runtime-primitives-core.js`. CJS and ESM wrappers for `env`, `date`, `logging`, `numbers`, and `source` now consume those cores instead of carrying separate helper implementations.
+
 The ESM edge layer still contains additional duplicated business logic beyond this slice. This change converts immediately reachable contract drift to shared modules and guardrails first, then continues function-by-function backend convergence without changing public slugs.

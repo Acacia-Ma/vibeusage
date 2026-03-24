@@ -1,4 +1,6 @@
+import "../../shared/runtime-primitives-core.mjs";
 import "../../shared/usage-model-core.mjs";
+import "../../shared/env-core.mjs";
 import "../../shared/pricing-core.mjs";
 
 const pricingCore = globalThis.__vibeusagePricingCore;

@@ -4,33 +4,8 @@ const CORE_KEY = "__vibeusageUsageMetricsCore";
 const BILLABLE_INPUT_OUTPUT_REASONING = new Set(["codex", "every-code"]);
 const BILLABLE_ADD_ALL = new Set(["claude", "opencode"]);
 const BILLABLE_TOTAL = new Set(["gemini"]);
-const MAX_SOURCE_LENGTH = 64;
-
-function toBigInt(value) {
-  if (typeof value === "bigint") return value >= 0n ? value : 0n;
-  if (typeof value === "number") {
-    if (!Number.isFinite(value) || value <= 0) return 0n;
-    return BigInt(Math.floor(value));
-  }
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!/^[0-9]+$/.test(trimmed)) return 0n;
-    try {
-      return BigInt(trimmed);
-    } catch (_error) {
-      return 0n;
-    }
-  }
-  return 0n;
-}
-
-function normalizeSource(value) {
-  if (typeof value !== "string") return null;
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) return null;
-  if (normalized.length > MAX_SOURCE_LENGTH) return normalized.slice(0, MAX_SOURCE_LENGTH);
-  return normalized;
-}
+const runtimePrimitivesCore = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore) throw new Error("runtime primitives core not initialized");
 
 function createTotals() {
   return {
@@ -45,21 +20,21 @@ function createTotals() {
 
 function addRowTotals(target, row) {
   if (!target || !row) return;
-  target.total_tokens += toBigInt(row?.total_tokens);
-  target.billable_total_tokens += toBigInt(row?.billable_total_tokens);
-  target.input_tokens += toBigInt(row?.input_tokens);
-  target.cached_input_tokens += toBigInt(row?.cached_input_tokens);
-  target.output_tokens += toBigInt(row?.output_tokens);
-  target.reasoning_output_tokens += toBigInt(row?.reasoning_output_tokens);
+  target.total_tokens += runtimePrimitivesCore.toBigInt(row?.total_tokens);
+  target.billable_total_tokens += runtimePrimitivesCore.toBigInt(row?.billable_total_tokens);
+  target.input_tokens += runtimePrimitivesCore.toBigInt(row?.input_tokens);
+  target.cached_input_tokens += runtimePrimitivesCore.toBigInt(row?.cached_input_tokens);
+  target.output_tokens += runtimePrimitivesCore.toBigInt(row?.output_tokens);
+  target.reasoning_output_tokens += runtimePrimitivesCore.toBigInt(row?.reasoning_output_tokens);
 }
 
 function computeBillableTotalTokens({ source, totals } = {}) {
-  const normalizedSource = normalizeSource(source) || "unknown";
-  const input = toBigInt(totals?.input_tokens);
-  const cached = toBigInt(totals?.cached_input_tokens);
-  const output = toBigInt(totals?.output_tokens);
-  const reasoning = toBigInt(totals?.reasoning_output_tokens);
-  const total = toBigInt(totals?.total_tokens);
+  const normalizedSource = runtimePrimitivesCore.normalizeSource(source) || "unknown";
+  const input = runtimePrimitivesCore.toBigInt(totals?.input_tokens);
+  const cached = runtimePrimitivesCore.toBigInt(totals?.cached_input_tokens);
+  const output = runtimePrimitivesCore.toBigInt(totals?.output_tokens);
+  const reasoning = runtimePrimitivesCore.toBigInt(totals?.reasoning_output_tokens);
+  const total = runtimePrimitivesCore.toBigInt(totals?.total_tokens);
   const hasTotal = Boolean(totals && Object.prototype.hasOwnProperty.call(totals, "total_tokens"));
 
   if (BILLABLE_TOTAL.has(normalizedSource)) return total;
@@ -86,7 +61,7 @@ function resolveBillableTotals({
         );
   const resolvedTotals = totals || row;
   const billable = stored
-    ? toBigInt(row?.[billableField])
+    ? runtimePrimitivesCore.toBigInt(row?.[billableField])
     : computeBillableTotalTokens({ source, totals: resolvedTotals });
   return { billable, hasStoredBillable: stored };
 }
@@ -95,7 +70,7 @@ function applyTotalsAndBillable({ totals, row, billable, hasStoredBillable } = {
   if (!totals || !row) return;
   addRowTotals(totals, row);
   if (!hasStoredBillable) {
-    totals.billable_total_tokens += toBigInt(billable);
+    totals.billable_total_tokens += runtimePrimitivesCore.toBigInt(billable);
   }
 }
 

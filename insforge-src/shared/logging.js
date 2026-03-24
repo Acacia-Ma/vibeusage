@@ -1,5 +1,7 @@
 "use strict";
 
+const env = require("./env");
+
 function createRequestId() {
   if (globalThis?.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -92,14 +94,14 @@ function withRequestLogging(functionName, handler) {
 module.exports = {
   withRequestLogging,
   logSlowQuery,
-  getSlowQueryThresholdMs,
+  getSlowQueryThresholdMs: env.getSlowQueryThresholdMs,
 };
 
 function logSlowQuery(logger, fields) {
   if (!logger || typeof logger.log !== "function") return;
   const durationMs = Number(fields?.duration_ms ?? fields?.durationMs);
   if (!Number.isFinite(durationMs)) return;
-  const thresholdMs = getSlowQueryThresholdMs();
+  const thresholdMs = env.getSlowQueryThresholdMs();
   if (durationMs < thresholdMs) return;
   logger.log({
     stage: "slow_query",
@@ -110,31 +112,5 @@ function logSlowQuery(logger, fields) {
 }
 
 function getSlowQueryThresholdMs() {
-  const raw = readEnvValue("VIBEUSAGE_SLOW_QUERY_MS");
-  if (raw == null || raw === "") return 2000;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return 2000;
-  if (n <= 0) return 0;
-  return clampInt(n, 1, 60000);
-}
-
-function readEnvValue(key) {
-  try {
-    if (typeof Deno !== "undefined" && Deno?.env?.get) {
-      const value = Deno.env.get(key);
-      if (value !== undefined) return value;
-    }
-  } catch (_e) {}
-  try {
-    if (typeof process !== "undefined" && process?.env) {
-      return process.env[key];
-    }
-  } catch (_e) {}
-  return null;
-}
-
-function clampInt(value, min, max) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return min;
-  return Math.min(max, Math.max(min, Math.floor(n)));
+  return env.getSlowQueryThresholdMs();
 }

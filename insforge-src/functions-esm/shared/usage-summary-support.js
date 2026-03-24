@@ -1,5 +1,6 @@
 import { applyCanaryFilter } from "./canary.js";
 import "../../shared/usage-model-core.mjs";
+import "../../shared/runtime-primitives-core.mjs";
 import "../../shared/usage-metrics-core.mjs";
 
 const DEFAULT_MODEL = "unknown";

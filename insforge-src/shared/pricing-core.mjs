@@ -16,31 +16,19 @@ const DEFAULT_PROFILE = {
   },
 };
 
-function readEnvValue(key) {
-  try {
-    if (typeof Deno !== "undefined" && Deno?.env?.get) {
-      const value = Deno.env.get(key);
-      if (value !== undefined) return value;
-    }
-  } catch (_error) {}
-  try {
-    if (typeof process !== "undefined" && process?.env) {
-      const value = process.env[key];
-      if (value !== undefined) return value;
-    }
-  } catch (_error) {}
-  return null;
-}
+const runtimePrimitivesCore = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore) throw new Error("runtime primitives core not initialized");
+const usageModelCore = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore) throw new Error("usage-model core not initialized");
+const envCore = globalThis.__vibeusageEnvCore;
+if (!envCore) throw new Error("env core not initialized");
 
 function normalizeSource(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim().toLowerCase();
-  return trimmed.length > 0 ? trimmed : null;
+  return runtimePrimitivesCore.normalizeSource(value);
 }
 
 function normalizeModelValue(value) {
-  const usageModelCore = globalThis.__vibeusageUsageModelCore;
-  const normalized = usageModelCore?.normalizeModel?.(value) || null;
+  const normalized = usageModelCore.normalizeModel?.(value) || null;
   if (!normalized || normalized.toLowerCase() === "unknown") return null;
   return normalized;
 }
@@ -55,12 +43,7 @@ function getDefaultPricingProfile() {
 }
 
 function getPricingDefaults() {
-  const primaryModel = normalizeModelValue(readEnvValue("VIBEUSAGE_PRICING_MODEL"));
-  const primarySource = normalizeSource(readEnvValue("VIBEUSAGE_PRICING_SOURCE"));
-  return {
-    model: primaryModel || DEFAULT_PROFILE.model,
-    source: primarySource || DEFAULT_PROFILE.source,
-  };
+  return envCore.getPricingDefaults();
 }
 
 async function resolvePricingProfile({ edgeClient, effectiveDate, model, source } = {}) {
@@ -133,11 +116,11 @@ async function resolvePricingProfile({ edgeClient, effectiveDate, model, source 
 
 function computeUsageCost(totals, profile) {
   const pricing = normalizeProfile(profile || DEFAULT_PROFILE);
-  const input = normalizeBigInt(totals?.input_tokens);
-  const cached = normalizeBigInt(totals?.cached_input_tokens);
-  const output = normalizeBigInt(totals?.output_tokens);
-  const reasoning = normalizeBigInt(totals?.reasoning_output_tokens);
-  const total = normalizeBigInt(totals?.total_tokens);
+  const input = runtimePrimitivesCore.toBigInt(totals?.input_tokens);
+  const cached = runtimePrimitivesCore.toBigInt(totals?.cached_input_tokens);
+  const output = runtimePrimitivesCore.toBigInt(totals?.output_tokens);
+  const reasoning = runtimePrimitivesCore.toBigInt(totals?.reasoning_output_tokens);
+  const total = runtimePrimitivesCore.toBigInt(totals?.total_tokens);
   const sumAdd = input + cached + output + reasoning;
   const sumOverlap = input + output;
   const canOverlap = cached <= input && reasoning <= output;
@@ -181,7 +164,7 @@ function buildPricingMetadata({ profile, pricingMode }) {
 }
 
 function formatUsdFromMicros(micros) {
-  const value = normalizeBigInt(micros);
+  const value = runtimePrimitivesCore.toBigInt(micros);
   const dollars = value / MICROS_PER_DOLLAR;
   const remainder = value % MICROS_PER_DOLLAR;
   return `${dollars.toString()}.${remainder.toString().padStart(6, "0")}`;
@@ -207,24 +190,16 @@ function normalizeProfile(profile) {
         ? profile.effective_from
         : DEFAULT_PROFILE.effective_from,
     rates_micro_per_million: {
-      input: toPositiveInt(profile?.rates_micro_per_million?.input),
-      cached_input: toPositiveInt(profile?.rates_micro_per_million?.cached_input),
-      output: toPositiveInt(profile?.rates_micro_per_million?.output),
-      reasoning_output: toPositiveInt(profile?.rates_micro_per_million?.reasoning_output),
+      input: runtimePrimitivesCore.toPositiveInt(profile?.rates_micro_per_million?.input),
+      cached_input: runtimePrimitivesCore.toPositiveInt(
+        profile?.rates_micro_per_million?.cached_input,
+      ),
+      output: runtimePrimitivesCore.toPositiveInt(profile?.rates_micro_per_million?.output),
+      reasoning_output: runtimePrimitivesCore.toPositiveInt(
+        profile?.rates_micro_per_million?.reasoning_output,
+      ),
     },
   };
-}
-
-function toPositiveInt(value) {
-  const n = Number(value);
-  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
-}
-
-function normalizeBigInt(value) {
-  if (typeof value === "bigint") return value >= 0n ? value : 0n;
-  const n = Number(value);
-  if (Number.isFinite(n) && n >= 0) return BigInt(Math.floor(n));
-  return 0n;
 }
 
 if (!globalThis[CORE_KEY]) {

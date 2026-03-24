@@ -1,6 +1,8 @@
 "use strict";
 
+require("./runtime-primitives-core");
 require("./usage-model-core");
+require("./env-core");
 require("./pricing-core");
 
 const pricingCore = globalThis.__vibeusagePricingCore;

@@ -40,6 +40,11 @@ test("backend model semantics flow through a single shared core", () => {
 
 test("backend pricing and usage metrics semantics flow through shared cores", () => {
   assert.equal(
+    read("insforge-src/shared/runtime-primitives-core.js"),
+    read("insforge-src/shared/runtime-primitives-core.mjs"),
+  );
+  assert.equal(read("insforge-src/shared/env-core.js"), read("insforge-src/shared/env-core.mjs"));
+  assert.equal(
     read("insforge-src/shared/pricing-core.js"),
     read("insforge-src/shared/pricing-core.mjs"),
   );
@@ -47,6 +52,14 @@ test("backend pricing and usage metrics semantics flow through shared cores", ()
     read("insforge-src/shared/usage-metrics-core.js"),
     read("insforge-src/shared/usage-metrics-core.mjs"),
   );
+  assert.match(read("insforge-src/shared/numbers.js"), /runtime-primitives-core/);
+  assert.match(read("insforge-src/shared/source.js"), /runtime-primitives-core/);
+  assert.match(read("insforge-src/functions-esm/shared/numbers.js"), /runtime-primitives-core\.mjs/);
+  assert.match(read("insforge-src/functions-esm/shared/source.js"), /runtime-primitives-core\.mjs/);
+  assert.match(read("insforge-src/shared/env.js"), /env-core/);
+  assert.match(read("insforge-src/functions-esm/shared/env.js"), /env-core\.mjs/);
+  assert.match(read("insforge-src/shared/date.js"), /require\("\.\/env"\)/);
+  assert.match(read("insforge-src/shared/logging.js"), /require\("\.\/env"\)/);
   assert.match(read("insforge-src/shared/pricing.js"), /pricing-core/);
   assert.match(read("insforge-src/shared/usage-billable.js"), /usage-metrics-core/);
   assert.match(read("insforge-src/shared/usage-aggregate.js"), /usage-metrics-core/);
