@@ -4,7 +4,7 @@ export function normalizeAccessToken(token) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-export function getAccessTokenExpiryMs(token) {
+function decodeAccessTokenPayload(token) {
   const normalized = normalizeAccessToken(token);
   if (!normalized) return null;
   const parts = normalized.split(".");
@@ -17,13 +17,23 @@ export function getAccessTokenExpiryMs(token) {
       .padEnd(payloadPart.length + ((4 - (payloadPart.length % 4)) % 4), "=");
     const decoded =
       typeof atob === "function" ? atob(padded) : Buffer.from(padded, "base64").toString("utf8");
-    const payload = JSON.parse(decoded);
-    const exp = payload?.exp;
-    if (typeof exp !== "number" || !Number.isFinite(exp) || exp <= 0) return null;
-    return Math.floor(exp * 1000);
+    return JSON.parse(decoded);
   } catch {
     return null;
   }
+}
+
+export function getAccessTokenExpiryMs(token) {
+  const payload = decodeAccessTokenPayload(token);
+  const exp = payload?.exp;
+  if (typeof exp !== "number" || !Number.isFinite(exp) || exp <= 0) return null;
+  return Math.floor(exp * 1000);
+}
+
+export function getAccessTokenUserId(token) {
+  const payload = decodeAccessTokenPayload(token);
+  const sub = typeof payload?.sub === "string" ? payload.sub.trim() : "";
+  return sub.length > 0 ? sub : null;
 }
 
 export function isLikelyExpiredAccessToken(token, skewMs = 30_000) {

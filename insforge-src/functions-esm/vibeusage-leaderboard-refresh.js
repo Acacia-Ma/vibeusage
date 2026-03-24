@@ -1,22 +1,17 @@
-// Edge function: vibeusage-leaderboard-refresh
-// Rebuilds leaderboard snapshots for current UTC period window.
-// Auth: Authorization: Bearer <service_role_key>
-
-"use strict";
-
-const { handleOptions, json, requireMethod } = require("../shared/http");
-const { getBearerToken } = require("../shared/auth");
-const { getAnonKey, getBaseUrl, getServiceRoleKey } = require("../shared/env");
-const { toUtcDay, addUtcDays, formatDateUTC } = require("../shared/date");
-const { forEachPage } = require("../shared/pagination");
-const { toBigInt, toPositiveInt } = require("../shared/numbers");
-const { resolveUserIdentity } = require("../shared/user-identity");
+import { getBearerToken } from "./shared/auth.js";
+import { addUtcDays, formatDateUTC, toUtcDay } from "./shared/date.js";
+import { createEdgeClient } from "./shared/insforge-client.js";
+import { handleOptions, json, requireMethod } from "./shared/http.js";
+import { toBigInt, toPositiveInt } from "./shared/numbers.js";
+import { forEachPage } from "./shared/pagination.js";
+import { getAnonKey, getBaseUrl, getServiceRoleKey } from "./shared/env.js";
+import { resolveUserIdentity } from "./shared/user-identity.js";
 
 const PERIODS = ["week", "month"];
 const SOURCE_PAGE_SIZE = 1000;
 const INSERT_BATCH_SIZE = 500;
 
-module.exports = async function (request) {
+export default async function (request) {
   const opt = handleOptions(request);
   if (opt) return opt;
 
@@ -35,7 +30,7 @@ module.exports = async function (request) {
 
   const baseUrl = getBaseUrl();
   const anonKey = getAnonKey();
-  const serviceClient = createClient({
+  const serviceClient = await createEdgeClient({
     baseUrl,
     anonKey: anonKey || serviceRoleKey,
     edgeFunctionToken: serviceRoleKey,
@@ -66,7 +61,7 @@ module.exports = async function (request) {
   }
 
   return json({ success: true, generated_at: generatedAt, results }, 200);
-};
+}
 
 function normalizePeriod(raw) {
   if (typeof raw !== "string") return null;
@@ -245,9 +240,7 @@ function normalizeSnapshotRow({ row, period, from, to, generatedAt, publicProfil
 
   const fallbackDisplayName = normalizeDisplayName(row.display_name);
   const fallbackAvatarUrl = normalizeAvatarUrl(row.avatar_url);
-  // Keep profile fields in snapshot independent from current visibility.
-  // Read path controls exposure using canonical public state at request time.
-  const displayName = (publicProfile?.displayName || fallbackDisplayName || "Anonymous");
+  const displayName = publicProfile?.displayName || fallbackDisplayName || "Anonymous";
   const avatarUrl = publicProfile?.avatarUrl || fallbackAvatarUrl;
   const isPublic = publicProfile?.isPublic || false;
 

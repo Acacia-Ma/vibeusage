@@ -1,16 +1,10 @@
-// Edge function: vibeusage-public-view-profile
-// Returns a privacy-safe display name for a public share token.
+import { getBearerToken, resolvePublicView } from "./shared/auth.js";
+import { getBaseUrl } from "./shared/env.js";
+import { handleOptions, json, requireMethod } from "./shared/http.js";
+import { withRequestLogging } from "./shared/logging.js";
+import { resolveUserIdentity } from "./shared/user-identity.js";
 
-"use strict";
-
-const { handleOptions, json, requireMethod } = require("../shared/http");
-const { getBearerToken } = require("../shared/auth");
-const { resolvePublicView } = require("../shared/public-view");
-const { getBaseUrl } = require("../shared/env");
-const { withRequestLogging } = require("../shared/logging");
-const { resolveUserIdentity } = require("../shared/user-identity");
-
-module.exports = withRequestLogging("vibeusage-public-view-profile", async function (request) {
+export default withRequestLogging("vibeusage-public-view-profile", async function (request) {
   const opt = handleOptions(request);
   if (opt) return opt;
 

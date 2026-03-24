@@ -8,5 +8,6 @@ export type AuthTokenProvider =
     };
 
 export function normalizeAccessToken(token: unknown): string | null;
+export function getAccessTokenUserId(token: unknown): string | null;
 export function resolveAuthAccessToken(auth: AuthTokenProvider): Promise<string | null>;
 export function isAccessTokenReady(token: AuthTokenProvider | unknown): boolean;

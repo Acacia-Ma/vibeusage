@@ -122,7 +122,7 @@ async function createUserEdgeClient({ baseUrl, bearer }) {
   });
 }
 
-async function resolvePublicView({ baseUrl, shareToken }) {
+export async function resolvePublicView({ baseUrl, shareToken }) {
   const token = normalizeShareToken(shareToken);
   if (!token) return { ok: false, edgeClient: null, userId: null };
   const serviceRoleKey = getServiceRoleKey();

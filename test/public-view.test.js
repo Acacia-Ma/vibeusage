@@ -69,22 +69,22 @@ test("legacy public view edge functions are retired", () => {
 });
 
 test("public view profile edge function is defined", () => {
-  const profileSrc = read("insforge-src/functions/vibeusage-public-view-profile.js");
+  const profileSrc = read("insforge-src/functions-esm/vibeusage-public-view-profile.js");
   assert.match(profileSrc, /public[- ]view[- ]profile/i);
 });
 
 test("public view profile returns avatar url", () => {
-  const profileSrc = read("insforge-src/functions/vibeusage-public-view-profile.js");
+  const profileSrc = read("insforge-src/functions-esm/vibeusage-public-view-profile.js");
   assert.match(profileSrc, /avatar_url/);
 });
 
 test("public view profile does not select user_metadata", () => {
-  const profileSrc = read("insforge-src/functions/vibeusage-public-view-profile.js");
+  const profileSrc = read("insforge-src/functions-esm/vibeusage-public-view-profile.js");
   assert.doesNotMatch(profileSrc, /user_metadata/);
 });
 
 test("public view profile selects public users fields", () => {
-  const profileSrc = read("insforge-src/functions/vibeusage-public-view-profile.js");
+  const profileSrc = read("insforge-src/functions-esm/vibeusage-public-view-profile.js");
   assert.match(profileSrc, /select\(['"]nickname,avatar_url,profile,metadata['"]\)/);
 });
 

@@ -82,6 +82,22 @@ test("vibeusage function sources are not wrapper shims", () => {
   }
 });
 
+test("identity deploy artifacts are built from the ESM pipeline", () => {
+  const slugs = [
+    "vibeusage-viewer-identity",
+    "vibeusage-public-view-profile",
+    "vibeusage-leaderboard-refresh",
+  ];
+
+  for (const slug of slugs) {
+    const filePath = path.join(__dirname, "..", "insforge-functions", `${slug}.js`);
+    const content = fs.readFileSync(filePath, "utf8");
+    assert.match(content, /^\/\/ @ts-nocheck\nimport \{ createClient as __insforgeCreateClient \} from "npm:@insforge\/sdk";/);
+    assert.equal(content.includes("var __commonJS"), false, `${slug} still uses legacy CommonJS bundle output`);
+    assert.match(content, new RegExp(`// insforge-src/functions-esm/${slug}\\.js`));
+  }
+});
+
 test("env exposes INSFORGE_JWT_SECRET via getJwtSecret", () => {
   setDenoEnv({ INSFORGE_JWT_SECRET: JWT_SECRET });
   const { getJwtSecret } = require("../insforge-src/shared/env");
@@ -141,8 +157,8 @@ test("local jwt verification rejects expired token", async () => {
   assert.equal(res.ok, false);
 });
 
-test("shared user identity resolver prefers nickname and sanitizes avatar", () => {
-  const { resolveUserIdentity } = require("../insforge-src/shared/user-identity");
+test("shared user identity resolver prefers nickname and sanitizes avatar", async () => {
+  const { resolveUserIdentity } = await import("../insforge-src/functions-esm/shared/user-identity.js");
 
   const resolved = resolveUserIdentity({
     nickname: "Neo Prime",
@@ -165,8 +181,8 @@ test("shared user identity resolver prefers nickname and sanitizes avatar", () =
   });
 });
 
-test("shared user identity resolver falls back to profile and metadata fields", () => {
-  const { resolveUserIdentity } = require("../insforge-src/shared/user-identity");
+test("shared user identity resolver falls back to profile and metadata fields", async () => {
+  const { resolveUserIdentity } = await import("../insforge-src/functions-esm/shared/user-identity.js");
 
   assert.deepEqual(
     resolveUserIdentity({
@@ -214,7 +230,7 @@ test("vibeusage-viewer-identity resolves current viewer identity from unified ro
     INSFORGE_JWT_SECRET: JWT_SECRET,
   });
 
-  const fn = require("../insforge-functions/vibeusage-viewer-identity");
+  const fn = await loadEdgeFunction("vibeusage-viewer-identity");
 
   globalThis.createClient = (args) => {
     assert.equal(args?.edgeFunctionToken, userJwt);
@@ -7623,7 +7639,7 @@ test("vibeusage-leaderboard-refresh rejects non-week period", async () => {
     INSFORGE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
   });
 
-  const fn = require("../insforge-functions/vibeusage-leaderboard-refresh");
+  const fn = await loadEdgeFunction("vibeusage-leaderboard-refresh");
 
   globalThis.createClient = () => {
     throw new Error("Unexpected createClient call");
@@ -7646,7 +7662,7 @@ test("vibeusage-leaderboard-refresh defaults to week+month periods", async () =>
     INSFORGE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
   });
 
-  const fn = require("../insforge-functions/vibeusage-leaderboard-refresh");
+  const fn = await loadEdgeFunction("vibeusage-leaderboard-refresh");
 
   const deletedPeriods = [];
   const sourceViews = [];
@@ -7730,7 +7746,7 @@ test("vibeusage-leaderboard-refresh snapshots weekly leaderboard with token fiel
     INSFORGE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
   });
 
-  const fn = require("../insforge-functions/vibeusage-leaderboard-refresh");
+  const fn = await loadEdgeFunction("vibeusage-leaderboard-refresh");
 
   const deletes = [];
   const inserts = [];
