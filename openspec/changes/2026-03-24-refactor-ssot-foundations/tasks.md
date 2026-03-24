@@ -20,8 +20,9 @@
 
 ## 4. Backend convergence
 
-- [ ] 4.1 Add backend SSOT guardrails for duplicated shared semantics.
+- [x] 4.1 Add backend SSOT guardrails for duplicated shared semantics.
 - [ ] 4.2 Continue migrating ESM shared business rules behind canonical backend modules without changing public slugs.
+- [x] 4.2.1 Converge model normalization, identity, and alias timeline semantics through `insforge-src/shared/usage-model-core.js` with a mirrored ESM artifact.
 
 ## 5. Verification
 

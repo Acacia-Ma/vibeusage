@@ -23,3 +23,17 @@ test("dashboard and cli API clients reuse the shared function contract", () => {
   assert.match(read("dashboard/src/lib/vibeusage-api.ts"), /shared\/vibeusage-function-contract\.js/);
   assert.match(read("src/lib/vibeusage-api.js"), /shared\/vibeusage-function-contract/);
 });
+
+test("backend model semantics flow through a single shared core", () => {
+  assert.equal(
+    read("insforge-src/shared/usage-model-core.js"),
+    read("insforge-src/shared/usage-model-core.mjs"),
+  );
+  assert.match(read("insforge-src/shared/model.js"), /usage-model-core/);
+  assert.match(read("insforge-src/shared/model-identity.js"), /usage-model-core/);
+  assert.match(read("insforge-src/shared/model-alias-timeline.js"), /usage-model-core/);
+  assert.match(
+    read("insforge-src/functions-esm/shared/usage-summary-support.js"),
+    /shared\/usage-model-core\.mjs/,
+  );
+});

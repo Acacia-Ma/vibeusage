@@ -22,4 +22,6 @@
 
 ## Backend convergence note
 
-The ESM edge layer still contains duplicated business logic relative to `insforge-src/shared/*`. This change converts immediately reachable contract drift to shared modules and adds guardrails first, then continues function-by-function backend convergence without changing public slugs.
+Model normalization, canonical identity resolution, and alias timeline rules now converge through `insforge-src/shared/usage-model-core.js`. The ESM layer consumes a mirrored `.mjs` artifact whose contents are guardrailed to stay byte-for-byte identical, while CJS and ESM wrappers remain thin export layers only.
+
+The ESM edge layer still contains additional duplicated business logic beyond this slice. This change converts immediately reachable contract drift to shared modules and guardrails first, then continues function-by-function backend convergence without changing public slugs.

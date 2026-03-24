@@ -680,12 +680,9 @@ function getSourceParam(url) {
   return { ok: true, source: normalized };
 }
 
-// insforge-src/functions-esm/shared/usage-summary-support.js
+// insforge-src/shared/usage-model-core.mjs
+var CORE_KEY = "__vibeusageUsageModelCore";
 var DEFAULT_MODEL = "unknown";
-var MAX_PAGE_SIZE = 1e3;
-var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
-var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
-var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
 function normalizeModel(value) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -730,6 +727,11 @@ function normalizeDateKey(value) {
   if (!trimmed) return null;
   return trimmed.length >= 10 ? trimmed.slice(0, 10) : trimmed;
 }
+function extractDateKey(value) {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === "string" && value.length >= 10) return value.slice(0, 10);
+  return null;
+}
 function nextDateKey(dateKey) {
   if (!dateKey) return null;
   const date = /* @__PURE__ */ new Date(`${dateKey}T00:00:00Z`);
@@ -738,45 +740,111 @@ function nextDateKey(dateKey) {
   return date.toISOString().slice(0, 10);
 }
 function normalizeUsageModelKey(value) {
+  return normalizeUsageModel(value);
+}
+function normalizeDisplayNameValue(value) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
-  return trimmed ? trimmed.toLowerCase() : null;
+  return trimmed || null;
+}
+function buildIdentityMap({ usageModels, aliasRows } = {}) {
+  const normalized = /* @__PURE__ */ new Set();
+  for (const model of Array.isArray(usageModels) ? usageModels : []) {
+    const key = normalizeUsageModelKey(model);
+    if (key) normalized.add(key);
+  }
+  const map = /* @__PURE__ */ new Map();
+  for (const row of Array.isArray(aliasRows) ? aliasRows : []) {
+    const usageKey = normalizeUsageModelKey(row?.usage_model);
+    const canonical = normalizeUsageModelKey(row?.canonical_model);
+    if (!usageKey || !canonical) continue;
+    if (normalized.size > 0 && !normalized.has(usageKey)) continue;
+    const display = normalizeDisplayNameValue(row?.display_name) || canonical;
+    const effective = String(row?.effective_from || "");
+    const existing = map.get(usageKey);
+    if (!existing || effective > existing.effective_from) {
+      map.set(usageKey, { model_id: canonical, model: display, effective_from: effective });
+    }
+  }
+  for (const key of normalized) {
+    if (!map.has(key)) {
+      map.set(key, { model_id: key, model: key, effective_from: "" });
+    }
+  }
+  const result = /* @__PURE__ */ new Map();
+  for (const [key, value] of map.entries()) {
+    result.set(key, { model_id: value.model_id, model: value.model });
+  }
+  return result;
+}
+function applyModelIdentity({ rawModel, identityMap } = {}) {
+  const normalized = normalizeUsageModelKey(rawModel) || DEFAULT_MODEL;
+  const entry = identityMap && typeof identityMap.get === "function" ? identityMap.get(normalized) : null;
+  if (entry) return { model_id: entry.model_id, model: entry.model };
+  const display = normalizeDisplayNameValue(rawModel) || DEFAULT_MODEL;
+  return { model_id: normalized, model: display };
+}
+function readQueryOutcome(result, query) {
+  const data = Array.isArray(result?.data) ? result.data : Array.isArray(query?.data) ? query.data : null;
+  const error = result?.error || query?.error || null;
+  return { data, error };
+}
+async function resolveModelIdentity({ edgeClient, usageModels, effectiveDate } = {}) {
+  const models = Array.isArray(usageModels) ? usageModels.map(normalizeUsageModelKey).filter(Boolean) : [];
+  if (!models.length) return /* @__PURE__ */ new Map();
+  const database = edgeClient?.database;
+  if (!database || typeof database.from !== "function") {
+    return buildIdentityMap({ usageModels: models, aliasRows: [] });
+  }
+  const dateKey = normalizeDateKey(effectiveDate) || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const dateKeyNext = nextDateKey(dateKey) || dateKey;
+  const query = database.from("vibeusage_model_aliases").select("usage_model,canonical_model,display_name,effective_from");
+  if (!query || typeof query.eq !== "function" || typeof query.in !== "function" || typeof query.lt !== "function" || typeof query.order !== "function") {
+    return buildIdentityMap({ usageModels: models, aliasRows: [] });
+  }
+  const result = await query.eq("active", true).in("usage_model", models).lt("effective_from", dateKeyNext).order("effective_from", { ascending: false });
+  const { data, error } = readQueryOutcome(result, query);
+  if (error || !Array.isArray(data)) {
+    return buildIdentityMap({ usageModels: models, aliasRows: [] });
+  }
+  return buildIdentityMap({ usageModels: models, aliasRows: data });
 }
 async function resolveUsageModelsForCanonical({ edgeClient, canonicalModel, effectiveDate } = {}) {
   const canonical = normalizeUsageModelKey(canonicalModel);
   if (!canonical) return { canonical: null, usageModels: [] };
-  if (!edgeClient?.database) return { canonical, usageModels: [canonical] };
+  const database = edgeClient?.database;
+  if (!database || typeof database.from !== "function") {
+    return { canonical, usageModels: [canonical] };
+  }
   const dateKey = normalizeDateKey(effectiveDate) || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const dateKeyNext = nextDateKey(dateKey) || dateKey;
-  const query = edgeClient.database.from("vibeusage_model_aliases").select("usage_model,canonical_model,effective_from");
+  const query = database.from("vibeusage_model_aliases").select("usage_model,canonical_model,effective_from");
   if (!query || typeof query.eq !== "function" || typeof query.lt !== "function" || typeof query.order !== "function") {
     return { canonical, usageModels: [canonical] };
   }
   const result = await query.eq("active", true).eq("canonical_model", canonical).lt("effective_from", dateKeyNext).order("effective_from", { ascending: false });
-  if (result?.error || !Array.isArray(result?.data)) {
+  const { data, error } = readQueryOutcome(result, query);
+  if (error || !Array.isArray(data)) {
     return { canonical, usageModels: [canonical] };
   }
   const usageMap = /* @__PURE__ */ new Map();
-  for (const row of result.data) {
+  for (const row of data) {
     const usageKey = normalizeUsageModelKey(row?.usage_model);
     if (!usageKey) continue;
     const effective = String(row?.effective_from || "");
     const existing = usageMap.get(usageKey);
     if (!existing || effective > existing) usageMap.set(usageKey, effective);
   }
-  const usageModels = /* @__PURE__ */ new Set([canonical]);
-  for (const usageKey of usageMap.keys()) usageModels.add(usageKey);
-  return { canonical, usageModels: Array.from(usageModels.values()) };
-}
-function extractDateKey(value) {
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  if (typeof value === "string" && value.length >= 10) return value.slice(0, 10);
-  return null;
+  const usageModelsSet = /* @__PURE__ */ new Set([canonical]);
+  for (const usageKey of usageMap.keys()) {
+    usageModelsSet.add(usageKey);
+  }
+  return { canonical, usageModels: Array.from(usageModelsSet.values()) };
 }
 function resolveIdentityAtDate({ rawModel, usageKey, dateKey, timeline } = {}) {
   const normalizedKey = usageKey || normalizeUsageModelKey(rawModel) || DEFAULT_MODEL;
   const normalizedDateKey = extractDateKey(dateKey) || dateKey || null;
-  const entries = timeline?.get?.(normalizedKey) || null;
+  const entries = timeline && typeof timeline.get === "function" ? timeline.get(normalizedKey) : null;
   if (Array.isArray(entries)) {
     let match = null;
     for (const entry of entries) {
@@ -800,7 +868,7 @@ function buildAliasTimeline({ usageModels, aliasRows } = {}) {
     const usageKey = normalizeUsageModelKey(row?.usage_model);
     const canonical = normalizeUsageModelKey(row?.canonical_model);
     if (!usageKey || !canonical) continue;
-    if (normalized.size && !normalized.has(usageKey)) continue;
+    if (normalized.size > 0 && !normalized.has(usageKey)) continue;
     const display = normalizeModel(row?.display_name) || canonical;
     const effective = extractDateKey(row?.effective_from || "");
     if (!effective) continue;
@@ -819,17 +887,62 @@ function buildAliasTimeline({ usageModels, aliasRows } = {}) {
 }
 async function fetchAliasRows({ edgeClient, usageModels, effectiveDate } = {}) {
   const models = Array.isArray(usageModels) ? usageModels.map((model) => normalizeUsageModelKey(model)).filter(Boolean) : [];
-  if (!models.length || !edgeClient?.database) return [];
+  const database = edgeClient?.database;
+  if (!models.length || !database || typeof database.from !== "function") return [];
   const dateKey = extractDateKey(effectiveDate) || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const dateKeyNext = nextDateKey(dateKey) || dateKey;
-  const query = edgeClient.database.from("vibeusage_model_aliases").select("usage_model,canonical_model,display_name,effective_from");
+  const query = database.from("vibeusage_model_aliases").select("usage_model,canonical_model,display_name,effective_from");
   if (!query || typeof query.eq !== "function" || typeof query.in !== "function" || typeof query.lt !== "function" || typeof query.order !== "function") {
     return [];
   }
   const result = await query.eq("active", true).in("usage_model", models).lt("effective_from", dateKeyNext).order("effective_from", { ascending: true });
-  if (result?.error || !Array.isArray(result?.data)) return [];
-  return result.data;
+  const { data, error } = readQueryOutcome(result, query);
+  if (error || !Array.isArray(data)) return [];
+  return data;
 }
+if (!globalThis[CORE_KEY]) {
+  Object.defineProperty(globalThis, CORE_KEY, {
+    value: {
+      normalizeModel,
+      normalizeUsageModel,
+      applyUsageModelFilter,
+      getModelParam,
+      normalizeDateKey,
+      extractDateKey,
+      normalizeUsageModelKey,
+      buildIdentityMap,
+      applyModelIdentity,
+      resolveModelIdentity,
+      resolveUsageModelsForCanonical,
+      resolveIdentityAtDate,
+      buildAliasTimeline,
+      fetchAliasRows
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/usage-summary-support.js
+var MAX_PAGE_SIZE = 1e3;
+var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
+var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
+var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
+var usageModelCore = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore) throw new Error("usage-model core not initialized");
+var normalizeModel2 = usageModelCore.normalizeModel;
+var normalizeUsageModel2 = usageModelCore.normalizeUsageModel;
+var applyUsageModelFilter2 = usageModelCore.applyUsageModelFilter;
+var getModelParam2 = usageModelCore.getModelParam;
+var normalizeUsageModelKey2 = usageModelCore.normalizeUsageModelKey;
+var applyModelIdentity2 = usageModelCore.applyModelIdentity;
+var resolveModelIdentity2 = usageModelCore.resolveModelIdentity;
+var resolveUsageModelsForCanonical2 = usageModelCore.resolveUsageModelsForCanonical;
+var extractDateKey2 = usageModelCore.extractDateKey;
+var resolveIdentityAtDate2 = usageModelCore.resolveIdentityAtDate;
+var buildAliasTimeline2 = usageModelCore.buildAliasTimeline;
+var fetchAliasRows2 = usageModelCore.fetchAliasRows;
 async function forEachPage({ createQuery, pageSize, onPage }) {
   if (typeof createQuery !== "function") throw new Error("createQuery must be a function");
   if (typeof onPage !== "function") throw new Error("onPage must be a function");
@@ -908,7 +1021,7 @@ var vibeusage_usage_hourly_default = withRequestLogging("vibeusage-usage-hourly"
   const sourceResult = getSourceParam(url);
   if (!sourceResult.ok) return respond({ error: sourceResult.error }, 400, 0);
   const source = sourceResult.source;
-  const modelResult = getModelParam(url);
+  const modelResult = getModelParam2(url);
   if (!modelResult.ok) return respond({ error: modelResult.error }, 400, 0);
   const model = modelResult.model;
   if (isUtcTimeZone(tzContext)) {
@@ -934,7 +1047,7 @@ var vibeusage_usage_hourly_default = withRequestLogging("vibeusage-usage-hourly"
       endUtc: endUtc2,
       tzContext
     });
-    const modelFilter2 = await resolveUsageModelsForCanonical({
+    const modelFilter2 = await resolveUsageModelsForCanonical2({
       edgeClient: auth.edgeClient,
       canonicalModel: model,
       effectiveDate: dayLabel
@@ -944,12 +1057,12 @@ var vibeusage_usage_hourly_default = withRequestLogging("vibeusage-usage-hourly"
     const hasModelFilter2 = Array.isArray(usageModels2) && usageModels2.length > 0;
     let aliasTimeline2 = null;
     if (hasModelFilter2) {
-      const aliasRows = await fetchAliasRows({
+      const aliasRows = await fetchAliasRows2({
         edgeClient: auth.edgeClient,
         usageModels: usageModels2,
         effectiveDate: dayLabel
       });
-      aliasTimeline2 = buildAliasTimeline({ usageModels: usageModels2, aliasRows });
+      aliasTimeline2 = buildAliasTimeline2({ usageModels: usageModels2, aliasRows });
     }
     const aggregateStartMs = Date.now();
     const aggregateRows = hasModelFilter2 ? null : await tryAggregateHourlyTotals({
@@ -1020,7 +1133,7 @@ var vibeusage_usage_hourly_default = withRequestLogging("vibeusage-usage-hourly"
           "hour_start,model,source,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens"
         ).eq("user_id", auth.userId);
         if (source) query = query.eq("source", source);
-        if (hasModelFilter2) query = applyUsageModelFilter(query, usageModels2);
+        if (hasModelFilter2) query = applyUsageModelFilter2(query, usageModels2);
         query = applyCanaryFilter(query, { source, model: canonicalModel2 });
         return query.gte("hour_start", startIso2).lt("hour_start", endIso2).order("hour_start", { ascending: true }).order("device_id", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
       },
@@ -1033,10 +1146,10 @@ var vibeusage_usage_hourly_default = withRequestLogging("vibeusage-usage-hourly"
           const dt = new Date(ts);
           if (!Number.isFinite(dt.getTime())) continue;
           if (hasModelFilter2) {
-            const rawModel = normalizeUsageModel(row?.model);
-            const dateKey = extractDateKey(ts) || dayLabel;
-            const identity = resolveIdentityAtDate({ rawModel, dateKey, timeline: aliasTimeline2 });
-            const filterIdentity = resolveIdentityAtDate({
+            const rawModel = normalizeUsageModel2(row?.model);
+            const dateKey = extractDateKey2(ts) || dayLabel;
+            const identity = resolveIdentityAtDate2({ rawModel, dateKey, timeline: aliasTimeline2 });
+            const filterIdentity = resolveIdentityAtDate2({
               rawModel: canonicalModel2,
               usageKey: canonicalModel2,
               dateKey,
@@ -1090,7 +1203,7 @@ var vibeusage_usage_hourly_default = withRequestLogging("vibeusage-usage-hourly"
   const dayKey = dayRaw || todayKey;
   const dayParts = parseDateParts(dayKey);
   if (!dayParts) return respond({ error: "Invalid day" }, 400, 0);
-  const modelFilter = await resolveUsageModelsForCanonical({
+  const modelFilter = await resolveUsageModelsForCanonical2({
     edgeClient: auth.edgeClient,
     canonicalModel: model,
     effectiveDate: dayKey
@@ -1100,12 +1213,12 @@ var vibeusage_usage_hourly_default = withRequestLogging("vibeusage-usage-hourly"
   const hasModelFilter = Array.isArray(usageModels) && usageModels.length > 0;
   let aliasTimeline = null;
   if (hasModelFilter) {
-    const aliasRows = await fetchAliasRows({
+    const aliasRows = await fetchAliasRows2({
       edgeClient: auth.edgeClient,
       usageModels,
       effectiveDate: dayKey
     });
-    aliasTimeline = buildAliasTimeline({ usageModels, aliasRows });
+    aliasTimeline = buildAliasTimeline2({ usageModels, aliasRows });
   }
   const startUtc = localDatePartsToUtc({ ...dayParts, hour: 0, minute: 0, second: 0 }, tzContext);
   const endUtc = localDatePartsToUtc(addDatePartsDays(dayParts, 1), tzContext);
@@ -1127,7 +1240,7 @@ var vibeusage_usage_hourly_default = withRequestLogging("vibeusage-usage-hourly"
         "hour_start,model,source,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens"
       ).eq("user_id", auth.userId);
       if (source) query = query.eq("source", source);
-      if (hasModelFilter) query = applyUsageModelFilter(query, usageModels);
+      if (hasModelFilter) query = applyUsageModelFilter2(query, usageModels);
       query = applyCanaryFilter(query, { source, model: canonicalModel });
       return query.gte("hour_start", startIso).lt("hour_start", endIso).order("hour_start", { ascending: true }).order("device_id", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
     },
@@ -1140,10 +1253,10 @@ var vibeusage_usage_hourly_default = withRequestLogging("vibeusage-usage-hourly"
         const dt = new Date(ts);
         if (!Number.isFinite(dt.getTime())) continue;
         if (hasModelFilter) {
-          const rawModel = normalizeUsageModel(row?.model);
-          const dateKey = extractDateKey(ts) || dayKey;
-          const identity = resolveIdentityAtDate({ rawModel, dateKey, timeline: aliasTimeline });
-          const filterIdentity = resolveIdentityAtDate({
+          const rawModel = normalizeUsageModel2(row?.model);
+          const dateKey = extractDateKey2(ts) || dayKey;
+          const identity = resolveIdentityAtDate2({ rawModel, dateKey, timeline: aliasTimeline });
+          const filterIdentity = resolveIdentityAtDate2({
             rawModel: canonicalModel,
             usageKey: canonicalModel,
             dateKey,
@@ -1279,7 +1392,7 @@ async function tryAggregateHourlyTotals({
     ).eq("user_id", userId);
     if (source) query = query.eq("source", source);
     if (Array.isArray(usageModels) && usageModels.length > 0) {
-      query = applyUsageModelFilter(query, usageModels);
+      query = applyUsageModelFilter2(query, usageModels);
     }
     query = applyCanaryFilter(query, { source, model: canonicalModel });
     const { data, error } = await query.gte("hour_start", startIso).lt("hour_start", endIso).order("hour", { ascending: true }).order("source", { ascending: true });
