@@ -2,11 +2,17 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { webcrypto } = require("node:crypto");
 const { logSlowQuery } = require("../insforge-src/shared/logging");
 const { getUsageMaxDays } = require("../insforge-src/shared/date");
+const { sha256Hex } = require("../insforge-src/shared/crypto");
 const { normalizeUsageModel, applyUsageModelFilter } = require("../insforge-src/shared/model");
 const { resolveIdentityAtDate } = require("../insforge-src/shared/model-alias-timeline");
 const pricing = require("../insforge-src/shared/pricing");
+
+if (!globalThis.crypto) {
+  globalThis.crypto = webcrypto;
+}
 
 function createPricingEdgeClient({ aliasRows = [], profileRows = [] } = {}) {
   return {
@@ -242,4 +248,9 @@ test("resolveIdentityAtDate does not infer suffix aliases for prefixed models", 
 
   assert.equal(identity.model_id, "aws/gpt-4o");
   assert.equal(identity.model, "aws/gpt-4o");
+});
+
+test("sha256Hex normalizes nullish inputs to empty string", async () => {
+  assert.equal(await sha256Hex(undefined), await sha256Hex(""));
+  assert.equal(await sha256Hex(null), await sha256Hex(""));
 });

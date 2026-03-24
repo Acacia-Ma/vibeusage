@@ -1,7 +1,6 @@
-export async function sha256Hex(input) {
-  const data = new TextEncoder().encode(String(input ?? ""));
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hash))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
+import "../../shared/crypto-core.mjs";
+
+const cryptoCore = globalThis.__vibeusageCryptoCore;
+if (!cryptoCore) throw new Error("crypto core not initialized");
+
+export const sha256Hex = cryptoCore.sha256Hex;

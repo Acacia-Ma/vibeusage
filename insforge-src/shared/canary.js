@@ -1,17 +1,11 @@
 "use strict";
 
-function isCanaryTag(value) {
-  if (typeof value !== "string") return false;
-  return value.trim().toLowerCase() === "canary";
-}
+require("./canary-core");
 
-function applyCanaryFilter(query, { source, model } = {}) {
-  if (!query || typeof query.neq !== "function") return query;
-  if (isCanaryTag(source) || isCanaryTag(model)) return query;
-  return query.neq("source", "canary").neq("model", "canary");
-}
+const canaryCore = globalThis.__vibeusageCanaryCore;
+if (!canaryCore) throw new Error("canary core not initialized");
 
 module.exports = {
-  applyCanaryFilter,
-  isCanaryTag,
+  applyCanaryFilter: canaryCore.applyCanaryFilter,
+  isCanaryTag: canaryCore.isCanaryTag,
 };

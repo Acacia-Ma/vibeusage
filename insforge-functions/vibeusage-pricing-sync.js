@@ -1418,10 +1418,11 @@ var require_model = __commonJS({
   }
 });
 
-// insforge-src/shared/canary.js
-var require_canary = __commonJS({
-  "insforge-src/shared/canary.js"(exports2, module2) {
+// insforge-src/shared/canary-core.js
+var require_canary_core = __commonJS({
+  "insforge-src/shared/canary-core.js"() {
     "use strict";
+    var CORE_KEY = "__vibeusageCanaryCore";
     function isCanaryTag(value) {
       if (typeof value !== "string") return false;
       return value.trim().toLowerCase() === "canary";
@@ -1431,9 +1432,30 @@ var require_canary = __commonJS({
       if (isCanaryTag(source) || isCanaryTag(model)) return query;
       return query.neq("source", "canary").neq("model", "canary");
     }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          applyCanaryFilter: applyCanaryFilter2,
+          isCanaryTag
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
+// insforge-src/shared/canary.js
+var require_canary = __commonJS({
+  "insforge-src/shared/canary.js"(exports2, module2) {
+    "use strict";
+    require_canary_core();
+    var canaryCore = globalThis.__vibeusageCanaryCore;
+    if (!canaryCore) throw new Error("canary core not initialized");
     module2.exports = {
-      applyCanaryFilter: applyCanaryFilter2,
-      isCanaryTag
+      applyCanaryFilter: canaryCore.applyCanaryFilter,
+      isCanaryTag: canaryCore.isCanaryTag
     };
   }
 });

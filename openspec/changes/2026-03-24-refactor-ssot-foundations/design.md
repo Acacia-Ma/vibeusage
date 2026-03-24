@@ -32,4 +32,6 @@ JWT parsing, HS256 verification, bearer-to-user resolution, and public access-co
 
 Registration-cutoff and entitlement-based pro status resolution now converge through `insforge-src/shared/pro-status-core.js`. Shared HTTP response helpers (`corsHeaders`, `handleOptions`, `json`, `requireMethod`, `readJson`) now converge through `insforge-src/shared/http-core.js`. CJS and ESM wrappers for `pro-status` and `http` are now thin export layers over those cores.
 
+Canary model filtering, slow-query debug payload construction, and SHA-256 hashing semantics now converge through `insforge-src/shared/canary-core.js`, `insforge-src/shared/debug-core.js`, and `insforge-src/shared/crypto-core.js`. CJS and ESM wrappers for `canary`, `debug`, and `crypto` are now thin export layers over those cores, and nullish hashing inputs are normalized identically across both runtimes.
+
 The ESM edge layer still contains additional duplicated business logic beyond this slice. This change converts immediately reachable contract drift to shared modules and guardrails first, then continues function-by-function backend convergence without changing public slugs.

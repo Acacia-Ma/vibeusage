@@ -1,10 +1,7 @@
-export function isCanaryTag(value) {
-  if (typeof value !== "string") return false;
-  return value.trim().toLowerCase() === "canary";
-}
+import "../../shared/canary-core.mjs";
 
-export function applyCanaryFilter(query, { source, model } = {}) {
-  if (!query || typeof query.neq !== "function") return query;
-  if (isCanaryTag(source) || isCanaryTag(model)) return query;
-  return query.neq("source", "canary").neq("model", "canary");
-}
+const canaryCore = globalThis.__vibeusageCanaryCore;
+if (!canaryCore) throw new Error("canary core not initialized");
+
+export const isCanaryTag = canaryCore.isCanaryTag;
+export const applyCanaryFilter = canaryCore.applyCanaryFilter;

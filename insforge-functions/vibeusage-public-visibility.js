@@ -861,7 +861,7 @@ async function setPublicVisibilityState({
   userId,
   enabled,
   nowIso,
-  sha256Hex: sha256Hex2
+  sha256Hex: sha256Hex3
 } = {}) {
   if (!edgeClient) throw new TypeError("edgeClient is required");
   if (typeof userId !== "string" || userId.trim().length === 0) {
@@ -870,20 +870,20 @@ async function setPublicVisibilityState({
   if (typeof enabled !== "boolean") {
     throw new TypeError("enabled must be boolean");
   }
-  if (typeof sha256Hex2 !== "function") {
+  if (typeof sha256Hex3 !== "function") {
     throw new TypeError("sha256Hex is required");
   }
   if (enabled) {
-    await enablePublicVisibility({ edgeClient, userId, nowIso, sha256Hex: sha256Hex2 });
+    await enablePublicVisibility({ edgeClient, userId, nowIso, sha256Hex: sha256Hex3 });
   } else {
     await disablePublicVisibility({ edgeClient, userId, nowIso });
   }
   return getPublicVisibilityState({ edgeClient, userId });
 }
-async function enablePublicVisibility({ edgeClient, userId, nowIso, sha256Hex: sha256Hex2 }) {
+async function enablePublicVisibility({ edgeClient, userId, nowIso, sha256Hex: sha256Hex3 }) {
   const table = edgeClient.database.from("vibeusage_public_views");
   const shareToken = buildPublicShareToken(userId);
-  const tokenHash = await sha256Hex2(shareToken);
+  const tokenHash = await sha256Hex3(shareToken);
   const updatedAt = typeof nowIso === "string" && nowIso ? nowIso : (/* @__PURE__ */ new Date()).toISOString();
   const nextRow = {
     user_id: userId,
@@ -1014,12 +1014,28 @@ var json2 = httpCore.json;
 var requireMethod2 = httpCore.requireMethod;
 var readJson2 = httpCore.readJson;
 
-// insforge-src/functions-esm/shared/crypto.js
+// insforge-src/shared/crypto-core.mjs
+var CORE_KEY7 = "__vibeusageCryptoCore";
 async function sha256Hex(input) {
   const data = new TextEncoder().encode(String(input ?? ""));
   const hash = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
+if (!globalThis[CORE_KEY7]) {
+  Object.defineProperty(globalThis, CORE_KEY7, {
+    value: {
+      sha256Hex
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/crypto.js
+var cryptoCore = globalThis.__vibeusageCryptoCore;
+if (!cryptoCore) throw new Error("crypto core not initialized");
+var sha256Hex2 = cryptoCore.sha256Hex;
 
 // insforge-src/functions-esm/shared/public-visibility.js
 var publicSharingCore2 = globalThis.__vibeusagePublicSharingCore;
@@ -1031,7 +1047,7 @@ var setPublicVisibilityState2 = ({ edgeClient, userId, enabled, nowIso }) => pub
   userId,
   enabled,
   nowIso,
-  sha256Hex
+  sha256Hex: sha256Hex2
 });
 
 // insforge-src/functions-esm/shared/logging.js

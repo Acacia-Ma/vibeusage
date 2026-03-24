@@ -964,7 +964,8 @@ var getAccessContext2 = ({ baseUrl, bearer, allowPublic = false }) => authCore.g
   resolvePublicView: resolvePublicView2
 });
 
-// insforge-src/functions-esm/shared/canary.js
+// insforge-src/shared/canary-core.mjs
+var CORE_KEY6 = "__vibeusageCanaryCore";
 function isCanaryTag(value) {
   if (typeof value !== "string") return false;
   return value.trim().toLowerCase() === "canary";
@@ -974,6 +975,23 @@ function applyCanaryFilter(query, { source, model } = {}) {
   if (isCanaryTag(source) || isCanaryTag(model)) return query;
   return query.neq("source", "canary").neq("model", "canary");
 }
+if (!globalThis[CORE_KEY6]) {
+  Object.defineProperty(globalThis, CORE_KEY6, {
+    value: {
+      applyCanaryFilter,
+      isCanaryTag
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/canary.js
+var canaryCore = globalThis.__vibeusageCanaryCore;
+if (!canaryCore) throw new Error("canary core not initialized");
+var isCanaryTag2 = canaryCore.isCanaryTag;
+var applyCanaryFilter2 = canaryCore.applyCanaryFilter;
 
 // insforge-src/functions-esm/shared/date.js
 var TIMEZONE_FORMATTERS = /* @__PURE__ */ new Map();
@@ -1179,12 +1197,16 @@ function getUsageMaxDays3() {
   return getUsageMaxDays2();
 }
 
-// insforge-src/functions-esm/shared/debug.js
+// insforge-src/shared/debug-core.mjs
+var CORE_KEY7 = "__vibeusageDebugCore";
+var envCore2 = globalThis.__vibeusageEnvCore;
+if (!envCore2) throw new Error("env core not initialized");
 function isDebugEnabled(url) {
   if (!url) return false;
   if (typeof url === "string") {
     try {
-      return new URL(url).searchParams.get("debug") === "1";
+      const parsed = new URL(url);
+      return parsed.searchParams.get("debug") === "1";
     } catch (_error) {
       return false;
     }
@@ -1193,7 +1215,7 @@ function isDebugEnabled(url) {
 }
 function buildSlowQueryDebugPayload({ logger, durationMs, status } = {}) {
   const safeDuration = Number.isFinite(durationMs) ? Math.max(0, Math.round(durationMs)) : 0;
-  const thresholdMs = getSlowQueryThresholdMs2();
+  const thresholdMs = envCore2.getSlowQueryThresholdMs();
   if (logger?.log) {
     logger.log({
       stage: "debug_payload",
@@ -1218,9 +1240,28 @@ function withSlowQueryDebugPayload(body, options) {
     debug: buildSlowQueryDebugPayload(options)
   };
 }
+if (!globalThis[CORE_KEY7]) {
+  Object.defineProperty(globalThis, CORE_KEY7, {
+    value: {
+      isDebugEnabled,
+      buildSlowQueryDebugPayload,
+      withSlowQueryDebugPayload
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/debug.js
+var debugCore = globalThis.__vibeusageDebugCore;
+if (!debugCore) throw new Error("debug core not initialized");
+var isDebugEnabled2 = debugCore.isDebugEnabled;
+var buildSlowQueryDebugPayload2 = debugCore.buildSlowQueryDebugPayload;
+var withSlowQueryDebugPayload2 = debugCore.withSlowQueryDebugPayload;
 
 // insforge-src/shared/http-core.mjs
-var CORE_KEY6 = "__vibeusageHttpCore";
+var CORE_KEY8 = "__vibeusageHttpCore";
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -1257,8 +1298,8 @@ async function readJson(request) {
     return { error: "Invalid JSON", status: 400, data: null };
   }
 }
-if (!globalThis[CORE_KEY6]) {
-  Object.defineProperty(globalThis, CORE_KEY6, {
+if (!globalThis[CORE_KEY8]) {
+  Object.defineProperty(globalThis, CORE_KEY8, {
     value: {
       corsHeaders,
       handleOptions,
@@ -1383,7 +1424,7 @@ var toPositiveIntOrNull2 = runtimePrimitivesCore2.toPositiveIntOrNull;
 var toPositiveInt2 = runtimePrimitivesCore2.toPositiveInt;
 
 // insforge-src/shared/pricing-core.mjs
-var CORE_KEY7 = "__vibeusagePricingCore";
+var CORE_KEY9 = "__vibeusagePricingCore";
 var MICROS_PER_DOLLAR = 1000000n;
 var TOKENS_PER_MILLION = 1000000n;
 var DEFAULT_PROFILE = {
@@ -1401,8 +1442,8 @@ var runtimePrimitivesCore3 = globalThis.__vibeusageRuntimePrimitivesCore;
 if (!runtimePrimitivesCore3) throw new Error("runtime primitives core not initialized");
 var usageModelCore2 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore2) throw new Error("usage-model core not initialized");
-var envCore2 = globalThis.__vibeusageEnvCore;
-if (!envCore2) throw new Error("env core not initialized");
+var envCore3 = globalThis.__vibeusageEnvCore;
+if (!envCore3) throw new Error("env core not initialized");
 function normalizeSource2(value) {
   return runtimePrimitivesCore3.normalizeSource(value);
 }
@@ -1420,7 +1461,7 @@ function getDefaultPricingProfile() {
   };
 }
 function getPricingDefaults3() {
-  return envCore2.getPricingDefaults();
+  return envCore3.getPricingDefaults();
 }
 async function resolvePricingProfile({ edgeClient, effectiveDate, model, source } = {}) {
   const fallback = getDefaultPricingProfile();
@@ -1544,8 +1585,8 @@ function normalizeProfile(profile) {
     }
   };
 }
-if (!globalThis[CORE_KEY7]) {
-  Object.defineProperty(globalThis, CORE_KEY7, {
+if (!globalThis[CORE_KEY9]) {
+  Object.defineProperty(globalThis, CORE_KEY9, {
     value: {
       getDefaultPricingProfile,
       getPricingDefaults: getPricingDefaults3,
@@ -1569,7 +1610,7 @@ var buildPricingMetadata2 = pricingCore.buildPricingMetadata;
 var formatUsdFromMicros2 = pricingCore.formatUsdFromMicros;
 
 // insforge-src/shared/usage-metrics-core.mjs
-var CORE_KEY8 = "__vibeusageUsageMetricsCore";
+var CORE_KEY10 = "__vibeusageUsageMetricsCore";
 var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
 var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
 var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
@@ -1665,8 +1706,8 @@ function parsePricingBucketKey(bucketKey, defaultDate) {
   }
   return { usageKey: bucketKey, dateKey: defaultDate };
 }
-if (!globalThis[CORE_KEY8]) {
-  Object.defineProperty(globalThis, CORE_KEY8, {
+if (!globalThis[CORE_KEY10]) {
+  Object.defineProperty(globalThis, CORE_KEY10, {
     value: {
       createTotals,
       addRowTotals,
@@ -1747,7 +1788,7 @@ async function fetchRollupRows({ edgeClient, userId, fromDay, toDay, source, mod
       ).eq("user_id", userId).gte("day", fromDay).lte("day", toDay);
       if (source) query = query.eq("source", source);
       if (model) query = query.eq("model", model);
-      query = applyCanaryFilter(query, { source, model });
+      query = applyCanaryFilter2(query, { source, model });
       return query.order("day", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
     },
     onPage: (pageRows) => {
@@ -1768,9 +1809,9 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
   const opt = handleOptions2(request);
   if (opt) return opt;
   const url = new URL(request.url);
-  const debugEnabled = isDebugEnabled(url);
+  const debugEnabled = isDebugEnabled2(url);
   const respond = (body, status, durationMs) => json2(
-    debugEnabled ? withSlowQueryDebugPayload(body, { logger, durationMs, status }) : body,
+    debugEnabled ? withSlowQueryDebugPayload2(body, { logger, durationMs, status }) : body,
     status
   );
   if (request.method !== "GET") return respond({ error: "Method not allowed" }, 405, 0);
@@ -1883,7 +1924,7 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
         ).eq("user_id", auth.userId);
         if (source) query = query.eq("source", source);
         if (hasModelFilter) query = applyUsageModelFilter2(query, usageModels);
-        query = applyCanaryFilter(query, { source, model: canonicalModel });
+        query = applyCanaryFilter2(query, { source, model: canonicalModel });
         query = query.gte("hour_start", rangeStartIso).lt("hour_start", rangeEndIso);
         return applyHourlyOrdering(query);
       },
@@ -1900,7 +1941,7 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
     let query = auth.edgeClient.database.from("vibeusage_tracker_hourly").select("hour_start").eq("user_id", auth.userId);
     if (source) query = query.eq("source", source);
     if (hasModelFilter) query = applyUsageModelFilter2(query, usageModels);
-    query = applyCanaryFilter(query, { source, model: canonicalModel });
+    query = applyCanaryFilter2(query, { source, model: canonicalModel });
     const { data, error } = await query.gte("hour_start", rangeStartIso).lt("hour_start", rangeEndIso).order("hour_start", { ascending: true }).limit(1);
     if (error) return { ok: false, error };
     return { ok: true, hasRows: Array.isArray(data) && data.length > 0 };
@@ -1945,7 +1986,7 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
         ).eq("user_id", auth.userId);
         if (source) query = query.eq("source", source);
         if (hasModelFilter) query = applyUsageModelFilter2(query, usageModels);
-        query = applyCanaryFilter(query, { source, model: canonicalModel });
+        query = applyCanaryFilter2(query, { source, model: canonicalModel });
         query = query.gte("hour_start", rangeStartIso).lt("hour_start", rangeEndIso);
         return applyHourlyOrdering(query);
       },

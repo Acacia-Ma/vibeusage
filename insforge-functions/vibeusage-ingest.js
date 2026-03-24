@@ -1287,17 +1287,38 @@ var require_auth = __commonJS({
   }
 });
 
+// insforge-src/shared/crypto-core.js
+var require_crypto_core = __commonJS({
+  "insforge-src/shared/crypto-core.js"() {
+    "use strict";
+    var CORE_KEY = "__vibeusageCryptoCore";
+    async function sha256Hex2(input) {
+      const data = new TextEncoder().encode(String(input ?? ""));
+      const hash = await crypto.subtle.digest("SHA-256", data);
+      return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          sha256Hex: sha256Hex2
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
 // insforge-src/shared/crypto.js
 var require_crypto = __commonJS({
   "insforge-src/shared/crypto.js"(exports2, module2) {
     "use strict";
-    async function sha256Hex2(input) {
-      const data = new TextEncoder().encode(input);
-      const hash = await crypto.subtle.digest("SHA-256", data);
-      return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
-    }
+    require_crypto_core();
+    var cryptoCore = globalThis.__vibeusageCryptoCore;
+    if (!cryptoCore) throw new Error("crypto core not initialized");
     module2.exports = {
-      sha256Hex: sha256Hex2
+      sha256Hex: cryptoCore.sha256Hex
     };
   }
 });

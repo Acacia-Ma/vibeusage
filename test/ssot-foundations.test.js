@@ -103,3 +103,24 @@ test("backend pro status and http helpers flow through shared cores", () => {
   assert.match(read("insforge-src/shared/http.js"), /http-core/);
   assert.match(read("insforge-src/functions-esm/shared/http.js"), /shared\/http-core\.mjs/);
 });
+
+test("backend canary debug and crypto helpers flow through shared cores", () => {
+  assert.equal(
+    read("insforge-src/shared/canary-core.js"),
+    read("insforge-src/shared/canary-core.mjs"),
+  );
+  assert.equal(
+    read("insforge-src/shared/debug-core.js"),
+    read("insforge-src/shared/debug-core.mjs"),
+  );
+  assert.equal(
+    read("insforge-src/shared/crypto-core.js"),
+    read("insforge-src/shared/crypto-core.mjs"),
+  );
+  assert.match(read("insforge-src/shared/canary.js"), /canary-core/);
+  assert.match(read("insforge-src/functions-esm/shared/canary.js"), /shared\/canary-core\.mjs/);
+  assert.match(read("insforge-src/shared/debug.js"), /debug-core/);
+  assert.match(read("insforge-src/functions-esm/shared/debug.js"), /shared\/debug-core\.mjs/);
+  assert.match(read("insforge-src/shared/crypto.js"), /crypto-core/);
+  assert.match(read("insforge-src/functions-esm/shared/crypto.js"), /shared\/crypto-core\.mjs/);
+});

@@ -27,6 +27,7 @@
 - [x] 4.2.3 Converge runtime/env/source/number helper semantics through shared backend cores with mirrored ESM artifacts.
 - [x] 4.2.4 Converge auth/public-view/public-visibility semantics through shared backend cores with mirrored ESM artifacts.
 - [x] 4.2.5 Converge pro-status/http helper semantics through shared backend cores with mirrored ESM artifacts.
+- [x] 4.2.6 Converge canary/debug/crypto helper semantics through shared backend cores with mirrored ESM artifacts.
 
 ## 5. Verification
 
