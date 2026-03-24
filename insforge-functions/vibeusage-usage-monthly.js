@@ -1557,69 +1557,13 @@ if (!globalThis[CORE_KEY10]) {
   });
 }
 
-// insforge-src/shared/usage-rollup-core.mjs
-var CORE_KEY11 = "__vibeusageUsageRollupCore";
-var canaryCore3 = globalThis.__vibeusageCanaryCore;
-if (!canaryCore3) throw new Error("canary core not initialized");
-var paginationCore = globalThis.__vibeusagePaginationCore;
-if (!paginationCore) throw new Error("pagination core not initialized");
-var usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
-if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
-var { applyCanaryFilter: applyCanaryFilter4 } = canaryCore3;
-var { forEachPage: forEachPage2 } = paginationCore;
-var { createTotals: createTotals2, addRowTotals: addRowTotals2 } = usageMetricsCore;
-async function fetchRollupRows({ edgeClient, userId, fromDay, toDay, source, model }) {
-  const rows = [];
-  const { error } = await forEachPage2({
-    createQuery: () => {
-      let query = edgeClient.database.from("vibeusage_tracker_daily_rollup").select(
-        "day,source,model,total_tokens,billable_total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens"
-      ).eq("user_id", userId).gte("day", fromDay).lte("day", toDay);
-      if (source) query = query.eq("source", source);
-      if (model) query = query.eq("model", model);
-      query = applyCanaryFilter4(query, { source, model });
-      return query.order("day", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
-    },
-    onPage: (pageRows) => {
-      if (!Array.isArray(pageRows) || pageRows.length === 0) return;
-      rows.push(...pageRows);
-    }
-  });
-  if (error) return { ok: false, error };
-  return { ok: true, rows };
-}
-function sumRollupRows(rows) {
-  const totals = createTotals2();
-  for (const row of Array.isArray(rows) ? rows : []) {
-    addRowTotals2(totals, row);
-  }
-  return totals;
-}
-function isRollupEnabled() {
-  return false;
-}
-if (!globalThis[CORE_KEY11]) {
-  Object.defineProperty(globalThis, CORE_KEY11, {
-    value: {
-      fetchRollupRows,
-      sumRollupRows,
-      isRollupEnabled
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
-  });
-}
-
 // insforge-src/functions-esm/shared/usage-summary-support.js
 var usageModelCore3 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore3) throw new Error("usage-model core not initialized");
-var usageMetricsCore2 = globalThis.__vibeusageUsageMetricsCore;
-if (!usageMetricsCore2) throw new Error("usage metrics core not initialized");
-var paginationCore2 = globalThis.__vibeusagePaginationCore;
-if (!paginationCore2) throw new Error("pagination core not initialized");
-var usageRollupCore = globalThis.__vibeusageUsageRollupCore;
-if (!usageRollupCore) throw new Error("usage rollup core not initialized");
+var usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
+if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
+var paginationCore = globalThis.__vibeusagePaginationCore;
+if (!paginationCore) throw new Error("pagination core not initialized");
 var normalizeModel2 = usageModelCore3.normalizeModel;
 var normalizeUsageModel2 = usageModelCore3.normalizeUsageModel;
 var applyUsageModelFilter3 = usageModelCore3.applyUsageModelFilter;
@@ -1634,20 +1578,18 @@ var resolveIdentityAtDate2 = usageModelCore3.resolveIdentityAtDate;
 var matchesCanonicalModelAtDate2 = usageModelCore3.matchesCanonicalModelAtDate;
 var buildAliasTimeline2 = usageModelCore3.buildAliasTimeline;
 var fetchAliasRows2 = usageModelCore3.fetchAliasRows;
-var createTotals3 = usageMetricsCore2.createTotals;
-var addRowTotals3 = usageMetricsCore2.addRowTotals;
-var resolveBillableTotals2 = usageMetricsCore2.resolveBillableTotals;
-var applyTotalsAndBillable2 = usageMetricsCore2.applyTotalsAndBillable;
-var getSourceEntry2 = usageMetricsCore2.getSourceEntry;
-var resolveDisplayName2 = usageMetricsCore2.resolveDisplayName;
-var buildPricingBucketKey2 = usageMetricsCore2.buildPricingBucketKey;
-var parsePricingBucketKey2 = usageMetricsCore2.parsePricingBucketKey;
-var forEachPage3 = paginationCore2.forEachPage;
-var fetchRollupRows2 = usageRollupCore.fetchRollupRows;
-var isRollupEnabled2 = usageRollupCore.isRollupEnabled;
+var createTotals2 = usageMetricsCore.createTotals;
+var addRowTotals2 = usageMetricsCore.addRowTotals;
+var resolveBillableTotals2 = usageMetricsCore.resolveBillableTotals;
+var applyTotalsAndBillable2 = usageMetricsCore.applyTotalsAndBillable;
+var getSourceEntry2 = usageMetricsCore.getSourceEntry;
+var resolveDisplayName2 = usageMetricsCore.resolveDisplayName;
+var buildPricingBucketKey2 = usageMetricsCore.buildPricingBucketKey;
+var parsePricingBucketKey2 = usageMetricsCore.parsePricingBucketKey;
+var forEachPage2 = paginationCore.forEachPage;
 
 // insforge-src/shared/usage-filter-core.mjs
-var CORE_KEY12 = "__vibeusageUsageFilterCore";
+var CORE_KEY11 = "__vibeusageUsageFilterCore";
 var usageModelCore4 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore4) throw new Error("usage-model core not initialized");
 var { extractDateKey: extractDateKey3, matchesCanonicalModelAtDate: matchesCanonicalModelAtDate3 } = usageModelCore4;
@@ -1661,8 +1603,8 @@ function shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimel
     timeline: aliasTimeline
   });
 }
-if (!globalThis[CORE_KEY12]) {
-  Object.defineProperty(globalThis, CORE_KEY12, {
+if (!globalThis[CORE_KEY11]) {
+  Object.defineProperty(globalThis, CORE_KEY11, {
     value: {
       shouldIncludeUsageRow
     },
@@ -1678,18 +1620,18 @@ if (!usageFilterCore) throw new Error("usage filter core not initialized");
 var shouldIncludeUsageRow2 = usageFilterCore.shouldIncludeUsageRow;
 
 // insforge-src/shared/usage-monthly-core.mjs
-var CORE_KEY13 = "__vibeusageUsageMonthlyCore";
+var CORE_KEY12 = "__vibeusageUsageMonthlyCore";
 var dateCore2 = globalThis.__vibeusageDateCore;
 if (!dateCore2) throw new Error("date core not initialized");
 var runtimePrimitivesCore4 = globalThis.__vibeusageRuntimePrimitivesCore;
 if (!runtimePrimitivesCore4) throw new Error("runtime primitives core not initialized");
-var usageMetricsCore3 = globalThis.__vibeusageUsageMetricsCore;
-if (!usageMetricsCore3) throw new Error("usage metrics core not initialized");
+var usageMetricsCore2 = globalThis.__vibeusageUsageMetricsCore;
+if (!usageMetricsCore2) throw new Error("usage metrics core not initialized");
 var usageFilterCore2 = globalThis.__vibeusageUsageFilterCore;
 if (!usageFilterCore2) throw new Error("usage filter core not initialized");
 var { addDatePartsMonths: addDatePartsMonths3, getLocalParts: getLocalParts3 } = dateCore2;
 var { toBigInt: toBigInt3 } = runtimePrimitivesCore4;
-var { resolveBillableTotals: resolveBillableTotals3 } = usageMetricsCore3;
+var { resolveBillableTotals: resolveBillableTotals3 } = usageMetricsCore2;
 var { shouldIncludeUsageRow: shouldIncludeUsageRow3 } = usageFilterCore2;
 function initMonthlyBuckets({ startMonthParts, months } = {}) {
   const monthKeys = [];
@@ -1738,8 +1680,8 @@ function ingestMonthlyRow({
   bucket.reasoning += toBigInt3(row?.reasoning_output_tokens);
   return true;
 }
-if (!globalThis[CORE_KEY13]) {
-  Object.defineProperty(globalThis, CORE_KEY13, {
+if (!globalThis[CORE_KEY12]) {
+  Object.defineProperty(globalThis, CORE_KEY12, {
     value: {
       initMonthlyBuckets,
       ingestMonthlyRow
@@ -1757,7 +1699,7 @@ var initMonthlyBuckets2 = usageMonthlyCore.initMonthlyBuckets;
 var ingestMonthlyRow2 = usageMonthlyCore.ingestMonthlyRow;
 
 // insforge-src/shared/debug-core.mjs
-var CORE_KEY14 = "__vibeusageDebugCore";
+var CORE_KEY13 = "__vibeusageDebugCore";
 var envCore3 = globalThis.__vibeusageEnvCore;
 if (!envCore3) throw new Error("env core not initialized");
 function isDebugEnabled(url) {
@@ -1799,8 +1741,8 @@ function withSlowQueryDebugPayload(body, options) {
     debug: buildSlowQueryDebugPayload(options)
   };
 }
-if (!globalThis[CORE_KEY14]) {
-  Object.defineProperty(globalThis, CORE_KEY14, {
+if (!globalThis[CORE_KEY13]) {
+  Object.defineProperty(globalThis, CORE_KEY13, {
     value: {
       isDebugEnabled,
       buildSlowQueryDebugPayload,
@@ -1820,7 +1762,7 @@ var buildSlowQueryDebugPayload2 = debugCore.buildSlowQueryDebugPayload;
 var withSlowQueryDebugPayload2 = debugCore.withSlowQueryDebugPayload;
 
 // insforge-src/shared/http-core.mjs
-var CORE_KEY15 = "__vibeusageHttpCore";
+var CORE_KEY14 = "__vibeusageHttpCore";
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -1857,8 +1799,8 @@ async function readJson(request) {
     return { error: "Invalid JSON", status: 400, data: null };
   }
 }
-if (!globalThis[CORE_KEY15]) {
-  Object.defineProperty(globalThis, CORE_KEY15, {
+if (!globalThis[CORE_KEY14]) {
+  Object.defineProperty(globalThis, CORE_KEY14, {
     value: {
       corsHeaders,
       handleOptions,
@@ -1882,7 +1824,7 @@ var requireMethod2 = httpCore.requireMethod;
 var readJson2 = httpCore.readJson;
 
 // insforge-src/shared/logging-core.mjs
-var CORE_KEY16 = "__vibeusageLoggingCore";
+var CORE_KEY15 = "__vibeusageLoggingCore";
 var envCore4 = globalThis.__vibeusageEnvCore;
 if (!envCore4) throw new Error("env core not initialized");
 function createRequestId() {
@@ -1980,8 +1922,8 @@ function logSlowQuery(logger, fields) {
 function getSlowQueryThresholdMs3() {
   return envCore4.getSlowQueryThresholdMs();
 }
-if (!globalThis[CORE_KEY16]) {
-  Object.defineProperty(globalThis, CORE_KEY16, {
+if (!globalThis[CORE_KEY15]) {
+  Object.defineProperty(globalThis, CORE_KEY15, {
     value: {
       createLogger,
       withRequestLogging,
@@ -2061,7 +2003,7 @@ var vibeusage_usage_monthly_default = withRequestLogging2("vibeusage-usage-month
   const { monthKeys, buckets } = initMonthlyBuckets2({ startMonthParts, months });
   const queryStartMs = Date.now();
   let rowCount = 0;
-  const { error } = await forEachPage3({
+  const { error } = await forEachPage2({
     createQuery: () => buildHourlyUsageQuery2({
       edgeClient: auth.edgeClient,
       userId: auth.userId,

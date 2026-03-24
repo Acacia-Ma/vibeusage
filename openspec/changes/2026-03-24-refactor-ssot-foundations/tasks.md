@@ -38,6 +38,7 @@
 - [x] 4.2.14 Converge raw hourly usage query construction semantics through shared backend cores with mirrored ESM artifacts.
 - [x] 4.2.15 Converge request-time usage model filter context resolution through `usage-model-core` and shared ESM support exports.
 - [x] 4.2.16 Converge aggregate summary/daily pricing resolution through `usage-pricing-core` and shared ESM consumers.
+- [x] 4.2.17 Converge summary/daily runtime aggregation onto the hourly-only path while rollup remains explicitly disabled in shared core.
 
 ## 5. Verification
 

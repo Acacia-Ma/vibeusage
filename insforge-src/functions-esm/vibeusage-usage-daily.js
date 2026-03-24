@@ -6,7 +6,6 @@ import {
   addDatePartsDays,
   getUsageMaxDays,
   getUsageTimeZoneContext,
-  isUtcTimeZone,
   listDateStrings,
   localDatePartsToUtc,
   normalizeDateRangeLocal,
@@ -25,11 +24,9 @@ import {
   buildPricingBucketKey,
   createTotals,
   extractDateKey,
-  fetchRollupRows,
   forEachPage,
   getModelParam,
   getSourceEntry,
-  isRollupEnabled,
   normalizeUsageModel,
   normalizeUsageModelKey,
   resolveBillableTotals,
@@ -104,14 +101,6 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
   const distinctUsageModels = new Set();
   const pricingBuckets = hasModelParam ? null : new Map();
 
-  const resetAggregation = () => {
-    totals = createTotals();
-    sourcesMap = new Map();
-    distinctModels = new Set();
-    rowCount = 0;
-    rollupHit = false;
-  };
-
   const ingestRow = (row) => {
     const sourceKey = normalizeSource(row?.source) || "codex";
     const { billable, hasStoredBillable } = resolveBillableTotals({ row, source: sourceKey });
@@ -136,9 +125,7 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
 
   const queryStartMs = Date.now();
   let rowCount = 0;
-  let rollupHit = false;
-  let hourlyError = null;
-  const rollupEnabled = isRollupEnabled();
+  const rollupHit = false;
 
   const sumHourlyRange = async () => {
     const { error } = await forEachPage({
@@ -173,68 +160,8 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
     if (error) return { ok: false, error };
     return { ok: true };
   };
-
-  const hasHourlyData = async (rangeStartIso, rangeEndIso) => {
-    const { data, error } = await buildHourlyUsageQuery({
-      edgeClient: auth.edgeClient,
-      userId: auth.userId,
-      source,
-      usageModels,
-      canonicalModel,
-      startIso: rangeStartIso,
-      endIso: rangeEndIso,
-      select: "hour_start",
-    }).limit(1);
-    if (error) return { ok: false, error };
-    return { ok: true, hasRows: Array.isArray(data) && data.length > 0 };
-  };
-
-  if (rollupEnabled && isUtcTimeZone(tzContext)) {
-    const rollupRes = await fetchRollupRows({
-      edgeClient: auth.edgeClient,
-      userId: auth.userId,
-      fromDay: from,
-      toDay: to,
-      source,
-      model: canonicalModel || null,
-    });
-    if (rollupRes.ok) {
-      const rows = Array.isArray(rollupRes.rows) ? rollupRes.rows : [];
-      rowCount += rows.length;
-      rollupHit = true;
-      for (const row of rows) {
-        const day = row?.day;
-        const bucket = buckets.get(day);
-        if (!bucket) continue;
-        if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) {
-          continue;
-        }
-        const dayValue = row?.day;
-        const rowForBucket =
-          row?.hour_start || !dayValue ? row : { ...row, hour_start: `${dayValue}T00:00:00.000Z` };
-        const billable = ingestRow(row);
-        applyDailyBucket({ buckets, row: rowForBucket, tzContext, billable });
-      }
-
-      if (rows.length === 0) {
-        const hourlyCheck = await hasHourlyData(startIso, endIso);
-        if (!hourlyCheck.ok) {
-          hourlyError = hourlyCheck.error;
-        } else if (hourlyCheck.hasRows) {
-          resetAggregation();
-          const hourlyRes = await sumHourlyRange();
-          if (!hourlyRes.ok) hourlyError = hourlyRes.error;
-        }
-      }
-    } else {
-      resetAggregation();
-      const hourlyRes = await sumHourlyRange();
-      if (!hourlyRes.ok) hourlyError = hourlyRes.error;
-    }
-  } else {
-    const hourlyRes = await sumHourlyRange();
-    if (!hourlyRes.ok) hourlyError = hourlyRes.error;
-  }
+  const hourlyRes = await sumHourlyRange();
+  if (!hourlyRes.ok) return respond({ error: hourlyRes.error.message }, 500, Date.now() - queryStartMs);
 
   const queryDurationMs = Date.now() - queryStartMs;
   logSlowQuery(logger, {
@@ -248,8 +175,6 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
     tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null,
     rollup_hit: rollupHit,
   });
-
-  if (hourlyError) return respond({ error: hourlyError.message }, 500, queryDurationMs);
 
   const pricingSummary = await resolveAggregateUsagePricing({
     edgeClient: auth.edgeClient,

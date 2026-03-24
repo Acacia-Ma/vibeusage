@@ -3,7 +3,6 @@ import "../../shared/usage-model-core.mjs";
 import "../../shared/runtime-primitives-core.mjs";
 import "../../shared/usage-metrics-core.mjs";
 import "../../shared/pagination-core.mjs";
-import "../../shared/usage-rollup-core.mjs";
 
 void applyCanaryFilter;
 
@@ -13,8 +12,6 @@ const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
 const paginationCore = globalThis.__vibeusagePaginationCore;
 if (!paginationCore) throw new Error("pagination core not initialized");
-const usageRollupCore = globalThis.__vibeusageUsageRollupCore;
-if (!usageRollupCore) throw new Error("usage rollup core not initialized");
 
 export const normalizeModel = usageModelCore.normalizeModel;
 export const normalizeUsageModel = usageModelCore.normalizeUsageModel;
@@ -39,5 +36,3 @@ export const resolveDisplayName = usageMetricsCore.resolveDisplayName;
 export const buildPricingBucketKey = usageMetricsCore.buildPricingBucketKey;
 export const parsePricingBucketKey = usageMetricsCore.parsePricingBucketKey;
 export const forEachPage = paginationCore.forEachPage;
-export const fetchRollupRows = usageRollupCore.fetchRollupRows;
-export const isRollupEnabled = usageRollupCore.isRollupEnabled;

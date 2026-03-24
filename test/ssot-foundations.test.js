@@ -200,10 +200,6 @@ test("backend usage rollup and bucket helpers flow through shared cores", () => 
     /shared\/pagination-core\.mjs/,
   );
   assert.match(
-    read("insforge-src/functions-esm/shared/usage-summary-support.js"),
-    /shared\/usage-rollup-core\.mjs/,
-  );
-  assert.match(
     read("insforge-src/functions-esm/shared/core/usage-daily.js"),
     /shared\/usage-daily-core\.mjs/,
   );
@@ -228,6 +224,13 @@ test("backend usage rollup and bucket helpers flow through shared cores", () => 
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /buildHourlyUsageQuery/);
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-heatmap.js"), /buildHourlyUsageQuery/);
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js"), /buildHourlyUsageQuery/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/shared/usage-summary-support.js"), /usage-rollup-core/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/shared/usage-summary-support.js"), /fetchRollupRows/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/shared/usage-summary-support.js"), /isRollupEnabled/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /fetchRollupRows/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /isRollupEnabled/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /fetchRollupRows/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /isRollupEnabled/);
 });
 
 test("backend leaderboard and user identity semantics flow through shared cores", () => {

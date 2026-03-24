@@ -2267,69 +2267,13 @@ if (!globalThis[CORE_KEY17]) {
   });
 }
 
-// insforge-src/shared/usage-rollup-core.mjs
-var CORE_KEY18 = "__vibeusageUsageRollupCore";
-var canaryCore3 = globalThis.__vibeusageCanaryCore;
-if (!canaryCore3) throw new Error("canary core not initialized");
-var paginationCore = globalThis.__vibeusagePaginationCore;
-if (!paginationCore) throw new Error("pagination core not initialized");
-var usageMetricsCore2 = globalThis.__vibeusageUsageMetricsCore;
-if (!usageMetricsCore2) throw new Error("usage metrics core not initialized");
-var { applyCanaryFilter: applyCanaryFilter4 } = canaryCore3;
-var { forEachPage: forEachPage2 } = paginationCore;
-var { createTotals: createTotals2, addRowTotals: addRowTotals2 } = usageMetricsCore2;
-async function fetchRollupRows({ edgeClient, userId, fromDay, toDay, source, model }) {
-  const rows = [];
-  const { error } = await forEachPage2({
-    createQuery: () => {
-      let query = edgeClient.database.from("vibeusage_tracker_daily_rollup").select(
-        "day,source,model,total_tokens,billable_total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens"
-      ).eq("user_id", userId).gte("day", fromDay).lte("day", toDay);
-      if (source) query = query.eq("source", source);
-      if (model) query = query.eq("model", model);
-      query = applyCanaryFilter4(query, { source, model });
-      return query.order("day", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
-    },
-    onPage: (pageRows) => {
-      if (!Array.isArray(pageRows) || pageRows.length === 0) return;
-      rows.push(...pageRows);
-    }
-  });
-  if (error) return { ok: false, error };
-  return { ok: true, rows };
-}
-function sumRollupRows(rows) {
-  const totals = createTotals2();
-  for (const row of Array.isArray(rows) ? rows : []) {
-    addRowTotals2(totals, row);
-  }
-  return totals;
-}
-function isRollupEnabled() {
-  return false;
-}
-if (!globalThis[CORE_KEY18]) {
-  Object.defineProperty(globalThis, CORE_KEY18, {
-    value: {
-      fetchRollupRows,
-      sumRollupRows,
-      isRollupEnabled
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
-  });
-}
-
 // insforge-src/functions-esm/shared/usage-summary-support.js
 var usageModelCore6 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore6) throw new Error("usage-model core not initialized");
-var usageMetricsCore3 = globalThis.__vibeusageUsageMetricsCore;
-if (!usageMetricsCore3) throw new Error("usage metrics core not initialized");
-var paginationCore2 = globalThis.__vibeusagePaginationCore;
-if (!paginationCore2) throw new Error("pagination core not initialized");
-var usageRollupCore = globalThis.__vibeusageUsageRollupCore;
-if (!usageRollupCore) throw new Error("usage rollup core not initialized");
+var usageMetricsCore2 = globalThis.__vibeusageUsageMetricsCore;
+if (!usageMetricsCore2) throw new Error("usage metrics core not initialized");
+var paginationCore = globalThis.__vibeusagePaginationCore;
+if (!paginationCore) throw new Error("pagination core not initialized");
 var normalizeModel2 = usageModelCore6.normalizeModel;
 var normalizeUsageModel2 = usageModelCore6.normalizeUsageModel;
 var applyUsageModelFilter3 = usageModelCore6.applyUsageModelFilter;
@@ -2344,17 +2288,15 @@ var resolveIdentityAtDate3 = usageModelCore6.resolveIdentityAtDate;
 var matchesCanonicalModelAtDate3 = usageModelCore6.matchesCanonicalModelAtDate;
 var buildAliasTimeline3 = usageModelCore6.buildAliasTimeline;
 var fetchAliasRows3 = usageModelCore6.fetchAliasRows;
-var createTotals3 = usageMetricsCore3.createTotals;
-var addRowTotals3 = usageMetricsCore3.addRowTotals;
-var resolveBillableTotals2 = usageMetricsCore3.resolveBillableTotals;
-var applyTotalsAndBillable2 = usageMetricsCore3.applyTotalsAndBillable;
-var getSourceEntry2 = usageMetricsCore3.getSourceEntry;
-var resolveDisplayName3 = usageMetricsCore3.resolveDisplayName;
-var buildPricingBucketKey3 = usageMetricsCore3.buildPricingBucketKey;
-var parsePricingBucketKey3 = usageMetricsCore3.parsePricingBucketKey;
-var forEachPage3 = paginationCore2.forEachPage;
-var fetchRollupRows2 = usageRollupCore.fetchRollupRows;
-var isRollupEnabled2 = usageRollupCore.isRollupEnabled;
+var createTotals2 = usageMetricsCore2.createTotals;
+var addRowTotals2 = usageMetricsCore2.addRowTotals;
+var resolveBillableTotals2 = usageMetricsCore2.resolveBillableTotals;
+var applyTotalsAndBillable2 = usageMetricsCore2.applyTotalsAndBillable;
+var getSourceEntry2 = usageMetricsCore2.getSourceEntry;
+var resolveDisplayName3 = usageMetricsCore2.resolveDisplayName;
+var buildPricingBucketKey3 = usageMetricsCore2.buildPricingBucketKey;
+var parsePricingBucketKey3 = usageMetricsCore2.parsePricingBucketKey;
+var forEachPage2 = paginationCore.forEachPage;
 
 // insforge-src/functions-esm/vibeusage-usage-daily.js
 var DEFAULT_MODEL3 = "unknown";
@@ -2406,18 +2348,11 @@ var vibeusage_usage_daily_default = withRequestLogging2("vibeusage-usage-daily",
     effectiveDate: to
   });
   const { buckets } = initDailyBuckets2(dayKeys);
-  let totals = createTotals3();
+  let totals = createTotals2();
   let sourcesMap = /* @__PURE__ */ new Map();
   let distinctModels = /* @__PURE__ */ new Set();
   const distinctUsageModels = /* @__PURE__ */ new Set();
   const pricingBuckets = hasModelParam ? null : /* @__PURE__ */ new Map();
-  const resetAggregation = () => {
-    totals = createTotals3();
-    sourcesMap = /* @__PURE__ */ new Map();
-    distinctModels = /* @__PURE__ */ new Set();
-    rowCount = 0;
-    rollupHit = false;
-  };
   const ingestRow = (row) => {
     const sourceKey = normalizeSource3(row?.source) || "codex";
     const { billable, hasStoredBillable } = resolveBillableTotals2({ row, source: sourceKey });
@@ -2432,8 +2367,8 @@ var vibeusage_usage_daily_default = withRequestLogging2("vibeusage-usage-daily",
       const usageKey = normalizeUsageModelKey2(normalizedModel) || DEFAULT_MODEL3;
       const dateKey = extractDateKey3(row?.hour_start || row?.day) || to;
       const bucketKey = buildPricingBucketKey3(sourceKey, usageKey, dateKey);
-      const bucket = pricingBuckets.get(bucketKey) || createTotals3();
-      addRowTotals3(bucket, row);
+      const bucket = pricingBuckets.get(bucketKey) || createTotals2();
+      addRowTotals2(bucket, row);
       pricingBuckets.set(bucketKey, bucket);
       distinctUsageModels.add(usageKey);
     }
@@ -2441,11 +2376,9 @@ var vibeusage_usage_daily_default = withRequestLogging2("vibeusage-usage-daily",
   };
   const queryStartMs = Date.now();
   let rowCount = 0;
-  let rollupHit = false;
-  let hourlyError = null;
-  const rollupEnabled = isRollupEnabled2();
+  const rollupHit = false;
   const sumHourlyRange = async () => {
-    const { error } = await forEachPage3({
+    const { error } = await forEachPage2({
       createQuery: () => buildHourlyUsageQuery2({
         edgeClient: auth.edgeClient,
         userId: auth.userId,
@@ -2475,64 +2408,8 @@ var vibeusage_usage_daily_default = withRequestLogging2("vibeusage-usage-daily",
     if (error) return { ok: false, error };
     return { ok: true };
   };
-  const hasHourlyData = async (rangeStartIso, rangeEndIso) => {
-    const { data, error } = await buildHourlyUsageQuery2({
-      edgeClient: auth.edgeClient,
-      userId: auth.userId,
-      source,
-      usageModels,
-      canonicalModel,
-      startIso: rangeStartIso,
-      endIso: rangeEndIso,
-      select: "hour_start"
-    }).limit(1);
-    if (error) return { ok: false, error };
-    return { ok: true, hasRows: Array.isArray(data) && data.length > 0 };
-  };
-  if (rollupEnabled && isUtcTimeZone2(tzContext)) {
-    const rollupRes = await fetchRollupRows2({
-      edgeClient: auth.edgeClient,
-      userId: auth.userId,
-      fromDay: from,
-      toDay: to,
-      source,
-      model: canonicalModel || null
-    });
-    if (rollupRes.ok) {
-      const rows2 = Array.isArray(rollupRes.rows) ? rollupRes.rows : [];
-      rowCount += rows2.length;
-      rollupHit = true;
-      for (const row of rows2) {
-        const day = row?.day;
-        const bucket = buckets.get(day);
-        if (!bucket) continue;
-        if (!shouldIncludeUsageRow2({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) {
-          continue;
-        }
-        const dayValue = row?.day;
-        const rowForBucket = row?.hour_start || !dayValue ? row : { ...row, hour_start: `${dayValue}T00:00:00.000Z` };
-        const billable = ingestRow(row);
-        applyDailyBucket2({ buckets, row: rowForBucket, tzContext, billable });
-      }
-      if (rows2.length === 0) {
-        const hourlyCheck = await hasHourlyData(startIso, endIso);
-        if (!hourlyCheck.ok) {
-          hourlyError = hourlyCheck.error;
-        } else if (hourlyCheck.hasRows) {
-          resetAggregation();
-          const hourlyRes = await sumHourlyRange();
-          if (!hourlyRes.ok) hourlyError = hourlyRes.error;
-        }
-      }
-    } else {
-      resetAggregation();
-      const hourlyRes = await sumHourlyRange();
-      if (!hourlyRes.ok) hourlyError = hourlyRes.error;
-    }
-  } else {
-    const hourlyRes = await sumHourlyRange();
-    if (!hourlyRes.ok) hourlyError = hourlyRes.error;
-  }
+  const hourlyRes = await sumHourlyRange();
+  if (!hourlyRes.ok) return respond({ error: hourlyRes.error.message }, 500, Date.now() - queryStartMs);
   const queryDurationMs = Date.now() - queryStartMs;
   logSlowQuery2(logger, {
     query_label: "usage_daily",
@@ -2545,7 +2422,6 @@ var vibeusage_usage_daily_default = withRequestLogging2("vibeusage-usage-daily",
     tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null,
     rollup_hit: rollupHit
   });
-  if (hourlyError) return respond({ error: hourlyError.message }, 500, queryDurationMs);
   const pricingSummary = await resolveAggregateUsagePricing2({
     edgeClient: auth.edgeClient,
     canonicalModel,

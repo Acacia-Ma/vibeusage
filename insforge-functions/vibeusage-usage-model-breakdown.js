@@ -2178,69 +2178,13 @@ if (!globalThis[CORE_KEY15]) {
   });
 }
 
-// insforge-src/shared/usage-rollup-core.mjs
-var CORE_KEY16 = "__vibeusageUsageRollupCore";
-var canaryCore3 = globalThis.__vibeusageCanaryCore;
-if (!canaryCore3) throw new Error("canary core not initialized");
-var paginationCore = globalThis.__vibeusagePaginationCore;
-if (!paginationCore) throw new Error("pagination core not initialized");
-var usageMetricsCore2 = globalThis.__vibeusageUsageMetricsCore;
-if (!usageMetricsCore2) throw new Error("usage metrics core not initialized");
-var { applyCanaryFilter: applyCanaryFilter4 } = canaryCore3;
-var { forEachPage: forEachPage2 } = paginationCore;
-var { createTotals: createTotals2, addRowTotals: addRowTotals2 } = usageMetricsCore2;
-async function fetchRollupRows({ edgeClient, userId, fromDay, toDay, source, model }) {
-  const rows = [];
-  const { error } = await forEachPage2({
-    createQuery: () => {
-      let query = edgeClient.database.from("vibeusage_tracker_daily_rollup").select(
-        "day,source,model,total_tokens,billable_total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens"
-      ).eq("user_id", userId).gte("day", fromDay).lte("day", toDay);
-      if (source) query = query.eq("source", source);
-      if (model) query = query.eq("model", model);
-      query = applyCanaryFilter4(query, { source, model });
-      return query.order("day", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
-    },
-    onPage: (pageRows) => {
-      if (!Array.isArray(pageRows) || pageRows.length === 0) return;
-      rows.push(...pageRows);
-    }
-  });
-  if (error) return { ok: false, error };
-  return { ok: true, rows };
-}
-function sumRollupRows(rows) {
-  const totals = createTotals2();
-  for (const row of Array.isArray(rows) ? rows : []) {
-    addRowTotals2(totals, row);
-  }
-  return totals;
-}
-function isRollupEnabled() {
-  return false;
-}
-if (!globalThis[CORE_KEY16]) {
-  Object.defineProperty(globalThis, CORE_KEY16, {
-    value: {
-      fetchRollupRows,
-      sumRollupRows,
-      isRollupEnabled
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
-  });
-}
-
 // insforge-src/functions-esm/shared/usage-summary-support.js
 var usageModelCore5 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore5) throw new Error("usage-model core not initialized");
-var usageMetricsCore3 = globalThis.__vibeusageUsageMetricsCore;
-if (!usageMetricsCore3) throw new Error("usage metrics core not initialized");
-var paginationCore2 = globalThis.__vibeusagePaginationCore;
-if (!paginationCore2) throw new Error("pagination core not initialized");
-var usageRollupCore = globalThis.__vibeusageUsageRollupCore;
-if (!usageRollupCore) throw new Error("usage rollup core not initialized");
+var usageMetricsCore2 = globalThis.__vibeusageUsageMetricsCore;
+if (!usageMetricsCore2) throw new Error("usage metrics core not initialized");
+var paginationCore = globalThis.__vibeusagePaginationCore;
+if (!paginationCore) throw new Error("pagination core not initialized");
 var normalizeModel2 = usageModelCore5.normalizeModel;
 var normalizeUsageModel2 = usageModelCore5.normalizeUsageModel;
 var applyUsageModelFilter3 = usageModelCore5.applyUsageModelFilter;
@@ -2255,17 +2199,15 @@ var resolveIdentityAtDate3 = usageModelCore5.resolveIdentityAtDate;
 var matchesCanonicalModelAtDate2 = usageModelCore5.matchesCanonicalModelAtDate;
 var buildAliasTimeline3 = usageModelCore5.buildAliasTimeline;
 var fetchAliasRows3 = usageModelCore5.fetchAliasRows;
-var createTotals3 = usageMetricsCore3.createTotals;
-var addRowTotals3 = usageMetricsCore3.addRowTotals;
-var resolveBillableTotals2 = usageMetricsCore3.resolveBillableTotals;
-var applyTotalsAndBillable2 = usageMetricsCore3.applyTotalsAndBillable;
-var getSourceEntry2 = usageMetricsCore3.getSourceEntry;
-var resolveDisplayName3 = usageMetricsCore3.resolveDisplayName;
-var buildPricingBucketKey3 = usageMetricsCore3.buildPricingBucketKey;
-var parsePricingBucketKey3 = usageMetricsCore3.parsePricingBucketKey;
-var forEachPage3 = paginationCore2.forEachPage;
-var fetchRollupRows2 = usageRollupCore.fetchRollupRows;
-var isRollupEnabled2 = usageRollupCore.isRollupEnabled;
+var createTotals2 = usageMetricsCore2.createTotals;
+var addRowTotals2 = usageMetricsCore2.addRowTotals;
+var resolveBillableTotals2 = usageMetricsCore2.resolveBillableTotals;
+var applyTotalsAndBillable2 = usageMetricsCore2.applyTotalsAndBillable;
+var getSourceEntry2 = usageMetricsCore2.getSourceEntry;
+var resolveDisplayName3 = usageMetricsCore2.resolveDisplayName;
+var buildPricingBucketKey3 = usageMetricsCore2.buildPricingBucketKey;
+var parsePricingBucketKey3 = usageMetricsCore2.parsePricingBucketKey;
+var forEachPage2 = paginationCore.forEachPage;
 
 // insforge-src/functions-esm/vibeusage-usage-model-breakdown.js
 var DEFAULT_SOURCE = "codex";
@@ -2314,7 +2256,7 @@ var vibeusage_usage_model_breakdown_default = withRequestLogging2(
     const distinctModels = /* @__PURE__ */ new Set();
     const queryStartMs = Date.now();
     let rowCount = 0;
-    const { error } = await forEachPage3({
+    const { error } = await forEachPage2({
       createQuery: () => buildHourlyUsageQuery2({
         edgeClient: auth.edgeClient,
         userId: auth.userId,
@@ -2369,11 +2311,11 @@ var vibeusage_usage_model_breakdown_default = withRequestLogging2(
     const aliasTimeline = buildAliasTimeline3({ usageModels, aliasRows });
     const sourcesMap = /* @__PURE__ */ new Map();
     const costBuckets = /* @__PURE__ */ new Map();
-    const grandTotals = createTotals3();
+    const grandTotals = createTotals2();
     for (const row of rowsBuffer) {
       const sourceEntry = getSourceEntry3(sourcesMap, row.source);
-      addRowTotals3(sourceEntry.totals, row);
-      addRowTotals3(grandTotals, row);
+      addRowTotals2(sourceEntry.totals, row);
+      addRowTotals2(grandTotals, row);
       const dateKey = extractDateKey2(row.hour_start) || to;
       const identity = resolveIdentityAtDate3({
         rawModel: row.model,
@@ -2382,13 +2324,13 @@ var vibeusage_usage_model_breakdown_default = withRequestLogging2(
         timeline: aliasTimeline
       });
       const canonicalEntry = getCanonicalEntry(sourceEntry.models, identity);
-      addRowTotals3(canonicalEntry.totals, row);
+      addRowTotals2(canonicalEntry.totals, row);
       const bucketKey = buildPricingBucketKey3(row.source, row.usageKey || DEFAULT_MODEL3, dateKey);
       const bucket = costBuckets.get(bucketKey) || {
         source: row.source,
-        totals: createTotals3()
+        totals: createTotals2()
       };
-      addRowTotals3(bucket.totals, row);
+      addRowTotals2(bucket.totals, row);
       costBuckets.set(bucketKey, bucket);
     }
     const bucketedPricing = await resolveBucketedUsagePricing2({
@@ -2448,7 +2390,7 @@ function getSourceEntry3(map, source) {
   if (map.has(source)) return map.get(source);
   const entry = {
     source,
-    totals: createTotals3(),
+    totals: createTotals2(),
     models: /* @__PURE__ */ new Map()
   };
   map.set(source, entry);
@@ -2460,7 +2402,7 @@ function getCanonicalEntry(map, identity) {
   const entry = {
     model_id: key,
     model: identity?.model || key,
-    totals: createTotals3()
+    totals: createTotals2()
   };
   map.set(key, entry);
   return entry;

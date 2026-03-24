@@ -3,15 +3,11 @@ import { buildHourlyUsageQuery } from "./shared/db/usage-hourly.js";
 import { shouldIncludeUsageRow } from "./shared/core/usage-filter.js";
 import {
   addDatePartsDays,
-  addUtcDays,
-  dateFromPartsUTC,
   formatDateParts,
-  formatDateUTC,
   formatLocalDateKey,
   getLocalParts,
   getUsageMaxDays,
   getUsageTimeZoneContext,
-  isUtcTimeZone,
   listDateStrings,
   localDatePartsToUtc,
   normalizeDateRangeLocal,
@@ -31,11 +27,9 @@ import {
   buildPricingBucketKey,
   createTotals,
   extractDateKey,
-  fetchRollupRows,
   forEachPage,
   getModelParam,
   getSourceEntry,
-  isRollupEnabled,
   normalizeUsageModel,
   normalizeUsageModelKey,
   resolveBillableTotals,
@@ -116,16 +110,6 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
 
   const queryStartMs = Date.now();
   let rowCount = 0;
-  let rollupHit = false;
-  const rollupEnabled = isRollupEnabled();
-
-  const resetAggregation = () => {
-    totals = createTotals();
-    sourcesMap = new Map();
-    distinctModels = new Set();
-    rowCount = 0;
-    rollupHit = false;
-  };
 
   const ingestRow = (row) => {
     if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) return;
@@ -171,54 +155,6 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
     return { ok: true };
   };
 
-  const hasHourlyData = async (rangeStartIso, rangeEndIso) => {
-    const { data, error } = await buildHourlyUsageQuery({
-      edgeClient: auth.edgeClient,
-      userId: auth.userId,
-      source,
-      usageModels,
-      canonicalModel,
-      startIso: rangeStartIso,
-      endIso: rangeEndIso,
-      select: "hour_start",
-    }).limit(1);
-    if (error) return { ok: false, error };
-    return { ok: true, hasRows: Array.isArray(data) && data.length > 0 };
-  };
-
-  const sumRollupRange = async (fromDay, toDay) => {
-    let rows = [];
-    if (hasModelFilter && Array.isArray(usageModels) && usageModels.length > 0) {
-      for (const usageModel of usageModels) {
-        const rollupRes = await fetchRollupRows({
-          edgeClient: auth.edgeClient,
-          userId: auth.userId,
-          fromDay,
-          toDay,
-          source,
-          model: usageModel,
-        });
-        if (!rollupRes.ok) return { ok: false, error: rollupRes.error };
-        rows = rows.concat(Array.isArray(rollupRes.rows) ? rollupRes.rows : []);
-      }
-    } else {
-      const rollupRes = await fetchRollupRows({
-        edgeClient: auth.edgeClient,
-        userId: auth.userId,
-        fromDay,
-        toDay,
-        source,
-        model: canonicalModel || null,
-      });
-      if (!rollupRes.ok) return { ok: false, error: rollupRes.error };
-      rows = Array.isArray(rollupRes.rows) ? rollupRes.rows : [];
-    }
-    rowCount += rows.length;
-    rollupHit = true;
-    for (const row of rows) ingestRow(row);
-    return { ok: true, rowsCount: rows.length };
-  };
-
   const sumHourlyRangeInto = async (rangeStartIso, rangeEndIso, onRow) => {
     const { error } = await forEachPage({
       createQuery: () =>
@@ -241,104 +177,6 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
     return { ok: true };
   };
 
-  const sumRollupRangeInto = async (fromDay, toDay, onRow) => {
-    let rows = [];
-    if (hasModelFilter && Array.isArray(usageModels) && usageModels.length > 0) {
-      for (const usageModel of usageModels) {
-        const rollupRes = await fetchRollupRows({
-          edgeClient: auth.edgeClient,
-          userId: auth.userId,
-          fromDay,
-          toDay,
-          source,
-          model: usageModel,
-        });
-        if (!rollupRes.ok) return { ok: false, error: rollupRes.error };
-        rows = rows.concat(Array.isArray(rollupRes.rows) ? rollupRes.rows : []);
-      }
-    } else {
-      const rollupRes = await fetchRollupRows({
-        edgeClient: auth.edgeClient,
-        userId: auth.userId,
-        fromDay,
-        toDay,
-        source,
-        model: canonicalModel || null,
-      });
-      if (!rollupRes.ok) return { ok: false, error: rollupRes.error };
-      rows = Array.isArray(rollupRes.rows) ? rollupRes.rows : [];
-    }
-    for (const row of rows) onRow(row);
-    return { ok: true, rowsCount: rows.length };
-  };
-
-  const sumRangeWithRollup = async ({
-    rangeStartIso,
-    rangeEndIso,
-    rangeStartUtc,
-    rangeEndUtc,
-    onRow,
-    onReset,
-  }) => {
-    const rangeStartDayUtc = new Date(
-      Date.UTC(
-        rangeStartUtc.getUTCFullYear(),
-        rangeStartUtc.getUTCMonth(),
-        rangeStartUtc.getUTCDate(),
-      ),
-    );
-    const rangeEndDayUtc = new Date(
-      Date.UTC(rangeEndUtc.getUTCFullYear(), rangeEndUtc.getUTCMonth(), rangeEndUtc.getUTCDate()),
-    );
-    const sameUtcDay = rangeStartDayUtc.getTime() === rangeEndDayUtc.getTime();
-    const startIsBoundary = rangeStartUtc.getTime() === rangeStartDayUtc.getTime();
-    const endIsBoundary = rangeEndUtc.getTime() === rangeEndDayUtc.getTime();
-
-    if (!rollupEnabled) return sumHourlyRangeInto(rangeStartIso, rangeEndIso, onRow);
-
-    let hourlyError = null;
-    let rollupEmptyWithHourly = false;
-    if (sameUtcDay) {
-      const hourlyRes = await sumHourlyRangeInto(rangeStartIso, rangeEndIso, onRow);
-      if (!hourlyRes.ok) hourlyError = hourlyRes.error;
-    } else {
-      const rollupStartDate = startIsBoundary ? rangeStartDayUtc : addUtcDays(rangeStartDayUtc, 1);
-      const rollupEndDate = addUtcDays(rangeEndDayUtc, -1);
-
-      if (!startIsBoundary) {
-        const hourlyRes = await sumHourlyRangeInto(rangeStartIso, rollupStartDate.toISOString(), onRow);
-        if (!hourlyRes.ok) hourlyError = hourlyRes.error;
-      }
-      if (!endIsBoundary && !hourlyError) {
-        const hourlyRes = await sumHourlyRangeInto(rangeEndDayUtc.toISOString(), rangeEndIso, onRow);
-        if (!hourlyRes.ok) hourlyError = hourlyRes.error;
-      }
-      if (!hourlyError && rollupStartDate.getTime() <= rollupEndDate.getTime()) {
-        const rollupRes = await sumRollupRangeInto(
-          formatDateUTC(rollupStartDate),
-          formatDateUTC(rollupEndDate),
-          onRow,
-        );
-        if (!rollupRes.ok) {
-          hourlyError = rollupRes.error;
-        } else if (rollupRes.rowsCount === 0) {
-          const hourlyCheck = await hasHourlyData(rangeStartIso, rangeEndIso);
-          if (!hourlyCheck.ok) {
-            hourlyError = hourlyCheck.error;
-          } else if (hourlyCheck.hasRows) {
-            rollupEmptyWithHourly = true;
-          }
-        }
-      }
-    }
-
-    if (hourlyError || rollupEmptyWithHourly) {
-      if (typeof onReset === "function") onReset();
-      return sumHourlyRangeInto(rangeStartIso, rangeEndIso, onRow);
-    }
-    return { ok: true };
-  };
-
   const buildRollingWindow = async ({ fromDay, toDay }) => {
     const rangeStartParts = parseDateParts(fromDay);
     const rangeEndParts = parseDateParts(toDay);
@@ -354,23 +192,10 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
     const rangeEndIso = rangeEndUtc.toISOString();
     const rollingTotals = createTotals();
     const activeByDay = new Map();
-    const shouldUseHourlyForActiveDays = rollupEnabled && !isUtcTimeZone(tzContext);
-    const resetRollingAggregation = () => {
-      rollingTotals.total_tokens = 0n;
-      rollingTotals.billable_total_tokens = 0n;
-      rollingTotals.input_tokens = 0n;
-      rollingTotals.cached_input_tokens = 0n;
-      rollingTotals.output_tokens = 0n;
-      rollingTotals.reasoning_output_tokens = 0n;
-      activeByDay.clear();
-    };
     const updateActiveByDay = ({ row, billable, hasStoredBillable }) => {
       let dayKey = null;
       if (row?.hour_start) {
         dayKey = formatLocalDateKey(new Date(row.hour_start), tzContext);
-      } else if (row?.day) {
-        const dayParts = parseDateParts(row.day);
-        if (dayParts) dayKey = formatLocalDateKey(dateFromPartsUTC(dayParts), tzContext);
       }
       if (!dayKey) return;
       const billableTokens = hasStoredBillable ? toBigInt(row?.billable_total_tokens) : billable;
@@ -383,31 +208,11 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
       const sourceKey = normalizeSource(row?.source) || DEFAULT_SOURCE;
       const { billable, hasStoredBillable } = resolveBillableTotals({ row, source: sourceKey });
       applyTotalsAndBillable({ totals: rollingTotals, row, billable, hasStoredBillable });
-      if (!shouldUseHourlyForActiveDays) {
-        updateActiveByDay({ row, billable, hasStoredBillable });
-      }
+      updateActiveByDay({ row, billable, hasStoredBillable });
     };
 
-    const sumRes = await sumRangeWithRollup({
-      rangeStartIso,
-      rangeEndIso,
-      rangeStartUtc,
-      rangeEndUtc,
-      onRow: ingestRollingRow,
-      onReset: resetRollingAggregation,
-    });
+    const sumRes = await sumHourlyRangeInto(rangeStartIso, rangeEndIso, ingestRollingRow);
     if (!sumRes.ok) return sumRes;
-
-    if (shouldUseHourlyForActiveDays) {
-      activeByDay.clear();
-      const activeRes = await sumHourlyRangeInto(rangeStartIso, rangeEndIso, (row) => {
-        if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) return;
-        const sourceKey = normalizeSource(row?.source) || DEFAULT_SOURCE;
-        const { billable, hasStoredBillable } = resolveBillableTotals({ row, source: sourceKey });
-        updateActiveByDay({ row, billable, hasStoredBillable });
-      });
-      if (!activeRes.ok) return activeRes;
-    }
 
     const windowDays = listDateStrings(fromDay, toDay).length;
     const activeDays = Array.from(activeByDay.values()).filter((value) => value > 0n).length;
@@ -427,55 +232,8 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
     };
   };
 
-  const startDayUtc = new Date(Date.UTC(startUtc.getUTCFullYear(), startUtc.getUTCMonth(), startUtc.getUTCDate()));
-  const endDayUtc = new Date(Date.UTC(endUtc.getUTCFullYear(), endUtc.getUTCMonth(), endUtc.getUTCDate()));
-  const sameUtcDay = startDayUtc.getTime() === endDayUtc.getTime();
-  const startIsBoundary = startUtc.getTime() === startDayUtc.getTime();
-  const endIsBoundary = endUtc.getTime() === endDayUtc.getTime();
-
-  if (!rollupEnabled) {
-    const hourlyRes = await sumHourlyRange(startIso, endIso);
-    if (!hourlyRes.ok) return respond({ error: hourlyRes.error.message }, 500, Date.now() - queryStartMs);
-  } else {
-    let hourlyError = null;
-    let rollupEmptyWithHourly = false;
-    if (sameUtcDay) {
-      const hourlyRes = await sumHourlyRange(startIso, endIso);
-      if (!hourlyRes.ok) hourlyError = hourlyRes.error;
-    } else {
-      const rollupStartDate = startIsBoundary ? startDayUtc : addUtcDays(startDayUtc, 1);
-      const rollupEndDate = addUtcDays(endDayUtc, -1);
-      if (!startIsBoundary) {
-        const hourlyRes = await sumHourlyRange(startIso, rollupStartDate.toISOString());
-        if (!hourlyRes.ok) hourlyError = hourlyRes.error;
-      }
-      if (!endIsBoundary && !hourlyError) {
-        const hourlyRes = await sumHourlyRange(endDayUtc.toISOString(), endIso);
-        if (!hourlyRes.ok) hourlyError = hourlyRes.error;
-      }
-      if (!hourlyError && rollupStartDate.getTime() <= rollupEndDate.getTime()) {
-        const rollupRes = await sumRollupRange(
-          formatDateUTC(rollupStartDate),
-          formatDateUTC(rollupEndDate),
-        );
-        if (!rollupRes.ok) {
-          hourlyError = rollupRes.error;
-        } else if (rollupRes.rowsCount === 0) {
-          const hourlyCheck = await hasHourlyData(startIso, endIso);
-          if (!hourlyCheck.ok) {
-            hourlyError = hourlyCheck.error;
-          } else if (hourlyCheck.hasRows) {
-            rollupEmptyWithHourly = true;
-          }
-        }
-      }
-    }
-    if (hourlyError || rollupEmptyWithHourly) {
-      resetAggregation();
-      const fallbackRes = await sumHourlyRange(startIso, endIso);
-      if (!fallbackRes.ok) return respond({ error: fallbackRes.error.message }, 500, Date.now() - queryStartMs);
-    }
-  }
+  const hourlyRes = await sumHourlyRange(startIso, endIso);
+  if (!hourlyRes.ok) return respond({ error: hourlyRes.error.message }, 500, Date.now() - queryStartMs);
 
   let rollingPayload = null;
   if (rollingEnabled) {
@@ -505,7 +263,7 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
     model: canonicalModel || null,
     tz: tzContext?.timeZone || null,
     tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null,
-    rollup_hit: rollupHit,
+    rollup_hit: false,
   });
 
   const pricingSummary = await resolveAggregateUsagePricing({
