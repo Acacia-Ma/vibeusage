@@ -1206,7 +1206,7 @@
     {
       "id": "test_insforge-src-shared_test_110fa035",
       "type": "text",
-      "text": "**insforge-src-shared.test**\n`test/insforge-src-shared.test.js`\n\nTest module.\n\n包含：\n- insforge-src-shared.test (285 行)\n- createPricingEdgeClient (2 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**insforge-src-shared.test**\n`test/insforge-src-shared.test.js`\n\nTest module.\n\n包含：\n- insforge-src-shared.test (338 行)\n- createPricingEdgeClient (2 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 2620,
       "y": 18756,
       "width": 280,
@@ -1886,7 +1886,7 @@
     {
       "id": "test_ssot-foundations_test_90aa72dd",
       "type": "text",
-      "text": "**ssot-foundations.test**\n`test/ssot-foundations.test.js`\n\nTest module.\n\n包含：\n- ssot-foundations.test (203 行)\n- read (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**ssot-foundations.test**\n`test/ssot-foundations.test.js`\n\nTest module.\n\n包含：\n- ssot-foundations.test (241 行)\n- read (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 4060,
       "y": 19836,
       "width": 280,
@@ -5017,10 +5017,27 @@
       }
     },
     {
+      "id": "utils_usage-pricing-core_ba15ba4f",
+      "type": "text",
+      "text": "**usage-pricing-core**\n`insforge-src/shared/usage-pricing-core.js`\n\nShared utilities.\n\n包含：\n- usage-pricing-core (119 行)\n- resolveBucketedUsagePricing (6 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "x": 1900,
+      "y": 9256,
+      "width": 280,
+      "height": 232,
+      "color": "2",
+      "meta": {
+        "relPath": "insforge-src/shared/usage-pricing-core.js",
+        "category": "utils",
+        "group": "utils",
+        "side": "right",
+        "layerIndex": 5
+      }
+    },
+    {
       "id": "utils_usage-rollup-core_bca373ff",
       "type": "text",
       "text": "**usage-rollup-core**\n`insforge-src/shared/usage-rollup-core.js`\n\nShared utilities.\n\n包含：\n- usage-rollup-core (68 行)\n- fetchRollupRows (6 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
-      "x": 1900,
+      "x": 2260,
       "y": 9256,
       "width": 280,
       "height": 232,
@@ -5037,7 +5054,7 @@
       "id": "utils_usage-rollup_63cc83a9",
       "type": "text",
       "text": "**usage-rollup**\n`insforge-src/shared/usage-rollup.js`\n\nShared utilities.\n\n包含：\n- usage-rollup (23 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
-      "x": 2260,
+      "x": 2620,
       "y": 9256,
       "width": 280,
       "height": 232,
@@ -5054,7 +5071,7 @@
       "id": "utils_user-identity-core_136f88a5",
       "type": "text",
       "text": "**user-identity-core**\n`insforge-src/shared/user-identity-core.js`\n\nShared utilities.\n\n包含：\n- user-identity-core (80 行)\n- resolveUserIdentity (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
-      "x": 2620,
+      "x": 2980,
       "y": 9256,
       "width": 280,
       "height": 232,
@@ -5071,7 +5088,7 @@
       "id": "utils_user-identity_3b91d433",
       "type": "text",
       "text": "**user-identity**\n`insforge-src/shared/user-identity.js`\n\nShared utilities.\n\n包含：\n- user-identity (9 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
-      "x": 2980,
+      "x": 3340,
       "y": 9256,
       "width": 280,
       "height": 232,
@@ -5287,7 +5304,7 @@
     {
       "id": "undefined_vibeusage-usage-daily_ac2410b6",
       "type": "text",
-      "text": "**vibeusage-usage-daily**\n`insforge-src/functions-esm/vibeusage-usage-daily.js`\n\nGeneral module.\n\n包含：\n- vibeusage-usage-daily (408 行)\n- respond (3 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**vibeusage-usage-daily**\n`insforge-src/functions-esm/vibeusage-usage-daily.js`\n\nGeneral module.\n\n包含：\n- vibeusage-usage-daily (387 行)\n- respond (3 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 1180,
       "y": 6736,
       "width": 280,
@@ -5367,7 +5384,7 @@
     {
       "id": "undefined_vibeusage-usage-summary_cd28a23",
       "type": "text",
-      "text": "**vibeusage-usage-summary**\n`insforge-src/functions-esm/vibeusage-usage-summary.js`\n\nGeneral module.\n\n包含：\n- vibeusage-usage-summary (691 行)\n- getSourceParam (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**vibeusage-usage-summary**\n`insforge-src/functions-esm/vibeusage-usage-summary.js`\n\nGeneral module.\n\n包含：\n- vibeusage-usage-summary (650 行)\n- respond (3 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 2980,
       "y": 6736,
       "width": 280,

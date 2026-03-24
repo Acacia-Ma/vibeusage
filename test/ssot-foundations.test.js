@@ -7,6 +7,13 @@ function read(relPath) {
   return fs.readFileSync(path.join(__dirname, "..", relPath), "utf8");
 }
 
+function stripModulePrelude(content) {
+  return content
+    .split("\n")
+    .filter((line) => !line.startsWith('require("./') && !line.startsWith('import "./'))
+    .join("\n");
+}
+
 test("copy registry runtime and tooling reuse the shared parser", () => {
   assert.match(read("dashboard/src/lib/copy.ts"), /src\/shared\/copy-registry\.js/);
   assert.match(read("scripts/validate-copy-registry.cjs"), /src\/shared\/copy-registry/);
@@ -198,5 +205,36 @@ test("backend leaderboard and user identity semantics flow through shared cores"
   assert.match(
     read("insforge-src/functions-esm/vibeusage-leaderboard.js"),
     /shared\/leaderboard-core\.mjs/,
+  );
+});
+
+test("backend usage pricing semantics flow through shared cores", () => {
+  const usagePricingCoreJs = read("insforge-src/shared/usage-pricing-core.js");
+  const usagePricingCoreMjs = read("insforge-src/shared/usage-pricing-core.mjs");
+  assert.equal(stripModulePrelude(usagePricingCoreJs), stripModulePrelude(usagePricingCoreMjs));
+  for (const dependency of [
+    "runtime-primitives-core",
+    "usage-model-core",
+    "env-core",
+    "pricing-core",
+    "usage-metrics-core",
+  ]) {
+    assert.match(usagePricingCoreJs, new RegExp(`require\\(\\\"\\./${dependency}\\\"\\)`));
+    assert.match(
+      usagePricingCoreMjs,
+      new RegExp(`import \\\"\\./${dependency}\\.mjs\\\"`),
+    );
+  }
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
+    /shared\/usage-pricing-core\.mjs/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-daily.js"),
+    /shared\/usage-pricing-core\.mjs/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
+    /shared\/source\.js/,
   );
 });

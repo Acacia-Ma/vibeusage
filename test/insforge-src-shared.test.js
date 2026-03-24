@@ -13,6 +13,13 @@ require("../insforge-src/shared/date-core");
 require("../insforge-src/shared/user-identity-core");
 require("../insforge-src/shared/leaderboard-core");
 const leaderboardCore = globalThis.__vibeusageLeaderboardCore;
+require("../insforge-src/shared/runtime-primitives-core");
+require("../insforge-src/shared/env-core");
+require("../insforge-src/shared/usage-model-core");
+require("../insforge-src/shared/pricing-core");
+require("../insforge-src/shared/usage-metrics-core");
+require("../insforge-src/shared/usage-pricing-core");
+const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 
 if (!globalThis.crypto) {
   globalThis.crypto = webcrypto;
@@ -280,5 +287,51 @@ test("leaderboard core normalizes avatar urls and derives other tokens", () => {
       claudeTokens: 9n,
     }),
     0n,
+  );
+});
+
+test("usage pricing core resolves implied models and summary pricing mode", () => {
+  assert.equal(
+    usagePricingCore.resolveImpliedModelId({
+      canonicalModel: "gpt-5.2-codex",
+      canonicalModels: new Set(["gpt-4o"]),
+    }),
+    "gpt-5.2-codex",
+  );
+  assert.equal(
+    usagePricingCore.resolveImpliedModelId({
+      canonicalModel: null,
+      canonicalModels: new Set(["gpt-4o"]),
+    }),
+    "gpt-4o",
+  );
+  assert.equal(
+    usagePricingCore.resolveImpliedModelId({
+      canonicalModel: null,
+      canonicalModels: new Set(["gpt-4o", "claude-sonnet-4"]),
+    }),
+    null,
+  );
+
+  assert.equal(
+    usagePricingCore.resolveSummaryPricingMode({
+      pricingModes: new Set(),
+      overallPricingMode: "overlap",
+    }),
+    "overlap",
+  );
+  assert.equal(
+    usagePricingCore.resolveSummaryPricingMode({
+      pricingModes: new Set(["add"]),
+      overallPricingMode: "overlap",
+    }),
+    "add",
+  );
+  assert.equal(
+    usagePricingCore.resolveSummaryPricingMode({
+      pricingModes: new Set(["add", "overlap"]),
+      overallPricingMode: "add",
+    }),
+    "mixed",
   );
 });

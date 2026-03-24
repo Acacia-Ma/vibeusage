@@ -40,4 +40,6 @@ Shared pagination, rollup row fetching, daily bucket accumulation, canonical-mod
 
 Shared user identity sanitization now converges through `insforge-src/shared/user-identity-core.js`, and leaderboard period/window math, snapshot token derivation, generated-at normalization, and public display/avatar normalization now converge through `insforge-src/shared/leaderboard-core.js`. CJS `vibeusage-leaderboard-refresh`, `vibeusage-leaderboard-profile`, `shared/user-identity.js`, and the ESM `vibeusage-leaderboard` function now consume those cores instead of keeping separate normalization paths.
 
+Bucketed pricing resolution for aggregate usage endpoints now converges through `insforge-src/shared/usage-pricing-core.js`. The ESM `vibeusage-usage-summary` and `vibeusage-usage-daily` functions now reuse the same alias-timeline pricing resolution, implied-model selection, source-cost fallback, and summary pricing-mode logic instead of maintaining duplicated cost-aggregation flows. `vibeusage-usage-summary` also now uses the shared source-parameter parser instead of a local duplicate.
+
 The ESM edge layer still contains additional duplicated business logic beyond this slice. This change converts immediately reachable contract drift to shared modules and guardrails first, then continues function-by-function backend convergence without changing public slugs.
