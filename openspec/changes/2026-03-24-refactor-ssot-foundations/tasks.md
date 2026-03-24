@@ -37,6 +37,7 @@
 - [x] 4.2.13 Converge summary/monthly row-level canonical-model filtering through `usage-filter` shared backend cores.
 - [x] 4.2.14 Converge raw hourly usage query construction semantics through shared backend cores with mirrored ESM artifacts.
 - [x] 4.2.15 Converge request-time usage model filter context resolution through `usage-model-core` and shared ESM support exports.
+- [x] 4.2.16 Converge aggregate summary/daily pricing resolution through `usage-pricing-core` and shared ESM consumers.
 
 ## 5. Verification
 

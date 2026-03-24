@@ -270,8 +270,16 @@ test("backend usage pricing semantics flow through shared cores", () => {
     /shared\/usage-pricing-core\.mjs/,
   );
   assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
+    /resolveAggregateUsagePricing/,
+  );
+  assert.match(
     read("insforge-src/functions-esm/vibeusage-usage-daily.js"),
     /shared\/usage-pricing-core\.mjs/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-daily.js"),
+    /resolveAggregateUsagePricing/,
   );
   assert.match(
     read("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js"),

@@ -16,8 +16,14 @@ if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
 const pricingCore = globalThis.__vibeusagePricingCore;
 if (!pricingCore) throw new Error("pricing core not initialized");
 
-const { fetchAliasRows, buildAliasTimeline, resolveIdentityAtDate } = usageModelCore;
-const { buildPricingBucketKey, parsePricingBucketKey } = usageMetricsCore;
+const {
+  applyModelIdentity,
+  fetchAliasRows,
+  buildAliasTimeline,
+  resolveIdentityAtDate,
+  resolveModelIdentity,
+} = usageModelCore;
+const { buildPricingBucketKey, parsePricingBucketKey, resolveDisplayName } = usageMetricsCore;
 const { resolvePricingProfile, computeUsageCost } = pricingCore;
 
 async function resolveBucketedUsagePricing({
@@ -113,6 +119,95 @@ function resolveSummaryPricingMode({ pricingModes, overallPricingMode } = {}) {
   return "mixed";
 }
 
+async function resolveAggregateUsagePricing({
+  edgeClient,
+  canonicalModel,
+  distinctModels,
+  distinctUsageModels,
+  pricingBuckets,
+  effectiveDate,
+  sourcesMap,
+  totals,
+  defaultModel = DEFAULT_MODEL,
+} = {}) {
+  const distinctModelList =
+    distinctModels instanceof Set
+      ? Array.from(distinctModels.values())
+      : Array.isArray(distinctModels)
+        ? distinctModels.filter(Boolean)
+        : [];
+  const identityMap = await resolveModelIdentity({
+    edgeClient,
+    usageModels: distinctModelList,
+    effectiveDate,
+  });
+
+  let canonicalModels = new Set();
+  for (const modelValue of distinctModelList) {
+    const identity = applyModelIdentity({ rawModel: modelValue, identityMap });
+    if (identity.model_id && identity.model_id !== defaultModel) {
+      canonicalModels.add(identity.model_id);
+    }
+  }
+
+  let totalCostMicros = 0n;
+  const pricingModes = new Set();
+  const usageModelList =
+    distinctUsageModels instanceof Set
+      ? Array.from(distinctUsageModels.values())
+      : Array.isArray(distinctUsageModels)
+        ? distinctUsageModels.filter(Boolean)
+        : [];
+  if (pricingBuckets instanceof Map && pricingBuckets.size > 0 && usageModelList.length > 0) {
+    const bucketedPricing = await resolveBucketedUsagePricing({
+      edgeClient,
+      pricingBuckets,
+      usageModels: usageModelList,
+      effectiveDate,
+      defaultModel,
+    });
+    totalCostMicros += bucketedPricing.totalCostMicros;
+    canonicalModels = bucketedPricing.canonicalModels;
+    for (const mode of bucketedPricing.pricingModes.values()) {
+      pricingModes.add(mode);
+    }
+  }
+
+  const impliedModelId = resolveImpliedModelId({ canonicalModel, canonicalModels });
+  const impliedModelDisplay = resolveDisplayName(identityMap, impliedModelId);
+  const pricingProfile = await resolvePricingProfile({
+    edgeClient,
+    model: impliedModelId,
+    effectiveDate,
+  });
+
+  if (pricingModes.size === 0) {
+    const sourceCosts = accumulateSourceCostMicros({ sourcesMap, pricingProfile });
+    totalCostMicros += sourceCosts.totalCostMicros;
+    for (const mode of sourceCosts.pricingModes.values()) {
+      pricingModes.add(mode);
+    }
+  }
+
+  const overallCost = computeUsageCost(totals, pricingProfile);
+  const summaryPricingMode = resolveSummaryPricingMode({
+    pricingModes,
+    overallPricingMode: overallCost.pricing_mode,
+  });
+
+  return {
+    canonicalModels,
+    identityMap,
+    impliedModelId,
+    impliedModelDisplay,
+    overallCost,
+    pricingProfile,
+    pricingModes,
+    summaryPricingMode,
+    totalCostMicros,
+  };
+}
+
 if (!globalThis[CORE_KEY]) {
   Object.defineProperty(globalThis, CORE_KEY, {
     value: {
@@ -120,6 +215,7 @@ if (!globalThis[CORE_KEY]) {
       accumulateSourceCostMicros,
       resolveImpliedModelId,
       resolveSummaryPricingMode,
+      resolveAggregateUsagePricing,
     },
     configurable: true,
     enumerable: false,

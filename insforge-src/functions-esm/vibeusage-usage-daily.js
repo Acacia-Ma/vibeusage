@@ -16,13 +16,12 @@ import { isDebugEnabled, withSlowQueryDebugPayload } from "./shared/debug.js";
 import { getBaseUrl } from "./shared/env.js";
 import { handleOptions, json } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
-import { buildPricingMetadata, computeUsageCost, formatUsdFromMicros, resolvePricingProfile } from "./shared/pricing.js";
+import { buildPricingMetadata, formatUsdFromMicros } from "./shared/pricing.js";
 import { getSourceParam, normalizeSource } from "./shared/source.js";
 import "../shared/usage-pricing-core.mjs";
 import {
   addRowTotals,
   applyTotalsAndBillable,
-  applyModelIdentity,
   buildPricingBucketKey,
   createTotals,
   extractDateKey,
@@ -34,20 +33,13 @@ import {
   normalizeUsageModel,
   normalizeUsageModelKey,
   resolveBillableTotals,
-  resolveDisplayName,
-  resolveModelIdentity,
   resolveUsageFilterContext,
 } from "./shared/usage-summary-support.js";
 
 const DEFAULT_MODEL = "unknown";
 const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 if (!usagePricingCore) throw new Error("usage pricing core not initialized");
-const {
-  resolveBucketedUsagePricing,
-  accumulateSourceCostMicros,
-  resolveImpliedModelId,
-  resolveSummaryPricingMode,
-} = usagePricingCore;
+const { resolveAggregateUsagePricing } = usagePricingCore;
 
 export default withRequestLogging("vibeusage-usage-daily", async function (request, logger) {
   const opt = handleOptions(request);
@@ -259,40 +251,17 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
 
   if (hourlyError) return respond({ error: hourlyError.message }, 500, queryDurationMs);
 
-  const identityMap = await resolveModelIdentity({
+  const pricingSummary = await resolveAggregateUsagePricing({
     edgeClient: auth.edgeClient,
-    usageModels: Array.from(distinctModels.values()),
+    canonicalModel,
+    distinctModels,
+    distinctUsageModels,
+    pricingBuckets,
     effectiveDate: to,
+    sourcesMap,
+    totals,
+    defaultModel: DEFAULT_MODEL,
   });
-  let canonicalModels = new Set();
-  for (const modelValue of distinctModels.values()) {
-    const identity = applyModelIdentity({ rawModel: modelValue, identityMap });
-    if (identity.model_id && identity.model_id !== DEFAULT_MODEL) {
-      canonicalModels.add(identity.model_id);
-    }
-  }
-
-  let totalCostMicros = 0n;
-  const pricingModes = new Set();
-  let pricingProfile = null;
-
-  if (!hasModelParam && pricingBuckets && pricingBuckets.size > 0) {
-    const usageModelList = Array.from(distinctUsageModels.values());
-    if (usageModelList.length > 0) {
-      const bucketedPricing = await resolveBucketedUsagePricing({
-        edgeClient: auth.edgeClient,
-        pricingBuckets,
-        usageModels: usageModelList,
-        effectiveDate: to,
-        defaultModel: DEFAULT_MODEL,
-      });
-      totalCostMicros += bucketedPricing.totalCostMicros;
-      canonicalModels = bucketedPricing.canonicalModels;
-      for (const mode of bucketedPricing.pricingModes.values()) {
-        pricingModes.add(mode);
-      }
-    }
-  }
 
   const rows = dayKeys.map((day) => {
     const bucket = buckets.get(day);
@@ -307,31 +276,6 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
     };
   });
 
-  const impliedModelId = resolveImpliedModelId({ canonicalModel, canonicalModels });
-  const impliedModelDisplay = resolveDisplayName(identityMap, impliedModelId);
-  if (!pricingProfile) {
-    pricingProfile = await resolvePricingProfile({
-      edgeClient: auth.edgeClient,
-      model: impliedModelId,
-      effectiveDate: to,
-    });
-  }
-
-  if (pricingModes.size === 0) {
-    const sourceCosts = accumulateSourceCostMicros({ sourcesMap, pricingProfile });
-    totalCostMicros += sourceCosts.totalCostMicros;
-    for (const mode of sourceCosts.pricingModes.values()) {
-      pricingModes.add(mode);
-    }
-  }
-
-  const overallCost = computeUsageCost(totals, pricingProfile);
-
-  const summaryPricingMode = resolveSummaryPricingMode({
-    pricingModes,
-    overallPricingMode: overallCost.pricing_mode,
-  });
-
   const summary = {
     totals: {
       total_tokens: totals.total_tokens.toString(),
@@ -340,11 +284,11 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
       cached_input_tokens: totals.cached_input_tokens.toString(),
       output_tokens: totals.output_tokens.toString(),
       reasoning_output_tokens: totals.reasoning_output_tokens.toString(),
-      total_cost_usd: formatUsdFromMicros(totalCostMicros),
+      total_cost_usd: formatUsdFromMicros(pricingSummary.totalCostMicros),
     },
     pricing: buildPricingMetadata({
-      profile: overallCost.profile,
-      pricingMode: summaryPricingMode,
+      profile: pricingSummary.overallCost.profile,
+      pricingMode: pricingSummary.summaryPricingMode,
     }),
   };
 
@@ -352,8 +296,11 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
     {
       from,
       to,
-      model_id: hasModelParam ? impliedModelId || null : null,
-      model: hasModelParam && impliedModelId ? impliedModelDisplay : null,
+      model_id: hasModelParam ? pricingSummary.impliedModelId || null : null,
+      model:
+        hasModelParam && pricingSummary.impliedModelId
+          ? pricingSummary.impliedModelDisplay
+          : null,
       data: rows,
       summary,
     },

@@ -423,3 +423,74 @@ test("usage pricing core prices bucketed usage with callback attribution", async
     cost_micros: 2000000n,
   });
 });
+
+test("usage pricing core resolves aggregate pricing summary state", async () => {
+  const edgeClient = createPricingEdgeClient({
+    aliasRows: [
+      {
+        usage_model: "gpt-foo",
+        canonical_model: "alpha",
+        display_name: "Alpha",
+        effective_from: "2025-02-01",
+        active: true,
+      },
+    ],
+    profileRows: [
+      {
+        model: "alpha",
+        source: "openrouter",
+        effective_from: "2025-02-01",
+        active: true,
+        input_rate_micro_per_million: 1000000,
+        cached_input_rate_micro_per_million: 0,
+        output_rate_micro_per_million: 1000000,
+        reasoning_output_rate_micro_per_million: 1000000,
+      },
+    ],
+  });
+
+  const totals = usageMetricsCore.createTotals();
+  usageMetricsCore.addRowTotals(totals, {
+    total_tokens: 2000000,
+    billable_total_tokens: 2000000,
+    input_tokens: 1000000,
+    cached_input_tokens: 0,
+    output_tokens: 1000000,
+    reasoning_output_tokens: 0,
+  });
+  const sourcesMap = new Map([
+    [
+      "codex",
+      {
+        source: "codex",
+        totals,
+      },
+    ],
+  ]);
+  const pricingBuckets = new Map([
+    [
+      usageMetricsCore.buildPricingBucketKey("codex", "gpt-foo", "2025-02-15"),
+      {
+        source: "codex",
+        totals,
+      },
+    ],
+  ]);
+
+  const summaryState = await usagePricingCore.resolveAggregateUsagePricing({
+    edgeClient,
+    canonicalModel: null,
+    distinctModels: new Set(["gpt-foo"]),
+    distinctUsageModels: new Set(["gpt-foo"]),
+    pricingBuckets,
+    effectiveDate: "2025-02-15",
+    sourcesMap,
+    totals,
+  });
+
+  assert.equal(summaryState.impliedModelId, "alpha");
+  assert.equal(summaryState.impliedModelDisplay, "Alpha");
+  assert.equal(summaryState.totalCostMicros, 2000000n);
+  assert.equal(summaryState.summaryPricingMode, "overlap");
+  assert.deepEqual(Array.from(summaryState.canonicalModels.values()), ["alpha"]);
+});
