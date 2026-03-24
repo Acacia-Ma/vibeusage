@@ -747,7 +747,7 @@
     {
       "id": "test_edge-functions_test_deffefcc",
       "type": "text",
-      "text": "**edge-functions.test**\n`test/edge-functions.test.js`\n\nTest module.\n\n包含：\n- extends (9216 行)\n- toBase64Url (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**edge-functions.test**\n`test/edge-functions.test.js`\n\nTest module.\n\n包含：\n- extends (9302 行)\n- toBase64Url (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 820,
       "y": 18036,
       "width": 280,
@@ -1886,7 +1886,7 @@
     {
       "id": "test_ssot-foundations_test_90aa72dd",
       "type": "text",
-      "text": "**ssot-foundations.test**\n`test/ssot-foundations.test.js`\n\nTest module.\n\n包含：\n- ssot-foundations.test (293 行)\n- read (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**ssot-foundations.test**\n`test/ssot-foundations.test.js`\n\nTest module.\n\n包含：\n- ssot-foundations.test (296 行)\n- read (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 4060,
       "y": 19836,
       "width": 280,
@@ -5321,7 +5321,7 @@
     {
       "id": "undefined_vibeusage-usage-daily_ac2410b6",
       "type": "text",
-      "text": "**vibeusage-usage-daily**\n`insforge-src/functions-esm/vibeusage-usage-daily.js`\n\nGeneral module.\n\n包含：\n- vibeusage-usage-daily (311 行)\n- respond (3 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**vibeusage-usage-daily**\n`insforge-src/functions-esm/vibeusage-usage-daily.js`\n\nGeneral module.\n\n包含：\n- vibeusage-usage-daily (236 行)\n- respond (3 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 820,
       "y": 6736,
       "width": 280,
@@ -5401,7 +5401,7 @@
     {
       "id": "undefined_vibeusage-usage-summary_cd28a23",
       "type": "text",
-      "text": "**vibeusage-usage-summary**\n`insforge-src/functions-esm/vibeusage-usage-summary.js`\n\nGeneral module.\n\n包含：\n- vibeusage-usage-summary (547 行)\n- respond (3 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**vibeusage-usage-summary**\n`insforge-src/functions-esm/vibeusage-usage-summary.js`\n\nGeneral module.\n\n包含：\n- vibeusage-usage-summary (305 行)\n- respond (3 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 2620,
       "y": 6736,
       "width": 280,
@@ -5688,7 +5688,7 @@
     {
       "id": "utils_usage-summary-support_9cd7b677",
       "type": "text",
-      "text": "**usage-summary-support**\n`insforge-src/functions-esm/shared/usage-summary-support.js`\n\nShared utilities.\n\n包含：\n- usage-summary-support (44 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**usage-summary-support**\n`insforge-src/functions-esm/shared/usage-summary-support.js`\n\nShared utilities.\n\n包含：\n- usage-summary-support (39 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 2980,
       "y": 6376,
       "width": 280,
