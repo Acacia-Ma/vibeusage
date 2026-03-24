@@ -29,11 +29,9 @@ import {
   addRowTotals,
   applyModelIdentity,
   applyTotalsAndBillable,
-  buildAliasTimeline,
   buildPricingBucketKey,
   createTotals,
   extractDateKey,
-  fetchAliasRows,
   fetchRollupRows,
   forEachPage,
   getModelParam,
@@ -44,7 +42,7 @@ import {
   resolveBillableTotals,
   resolveDisplayName,
   resolveModelIdentity,
-  resolveUsageModelsForCanonical,
+  resolveUsageFilterContext,
 } from "./shared/usage-summary-support.js";
 
 const DEFAULT_SOURCE = "codex";
@@ -111,23 +109,12 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
   const endUtc = localDatePartsToUtc(addDatePartsDays(endParts, 1), tzContext);
   const startIso = startUtc.toISOString();
   const endIso = endUtc.toISOString();
-  const modelFilter = await resolveUsageModelsForCanonical({
-    edgeClient: auth.edgeClient,
-    canonicalModel: model,
-    effectiveDate: to,
-  });
-  const canonicalModel = modelFilter.canonical;
-  const usageModels = modelFilter.usageModels;
-  const hasModelFilter = Array.isArray(usageModels) && usageModels.length > 0;
-  let aliasTimeline = null;
-  if (hasModelFilter) {
-    const aliasRows = await fetchAliasRows({
+  const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
+    await resolveUsageFilterContext({
       edgeClient: auth.edgeClient,
-      usageModels,
+      canonicalModel: model,
       effectiveDate: to,
     });
-    aliasTimeline = buildAliasTimeline({ usageModels, aliasRows });
-  }
 
   let totals = createTotals();
   let sourcesMap = new Map();

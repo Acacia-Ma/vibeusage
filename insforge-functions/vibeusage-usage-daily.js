@@ -514,6 +514,35 @@ async function resolveUsageModelsForCanonical({ edgeClient, canonicalModel, effe
   }
   return { canonical, usageModels: Array.from(usageModelsSet.values()) };
 }
+async function resolveUsageFilterContext({ edgeClient, canonicalModel, effectiveDate } = {}) {
+  const modelFilter = await resolveUsageModelsForCanonical({
+    edgeClient,
+    canonicalModel,
+    effectiveDate
+  });
+  const resolvedCanonicalModel = modelFilter.canonical;
+  const usageModels = modelFilter.usageModels;
+  const hasModelFilter = Array.isArray(usageModels) && usageModels.length > 0;
+  if (!hasModelFilter) {
+    return {
+      canonicalModel: resolvedCanonicalModel,
+      usageModels,
+      hasModelFilter,
+      aliasTimeline: null
+    };
+  }
+  const aliasRows = await fetchAliasRows({
+    edgeClient,
+    usageModels,
+    effectiveDate
+  });
+  return {
+    canonicalModel: resolvedCanonicalModel,
+    usageModels,
+    hasModelFilter,
+    aliasTimeline: buildAliasTimeline({ usageModels, aliasRows })
+  };
+}
 function resolveIdentityAtDate({ rawModel, usageKey, dateKey, timeline } = {}) {
   const normalizedKey = usageKey || normalizeUsageModelKey(rawModel) || DEFAULT_MODEL;
   const normalizedDateKey = extractDateKey(dateKey) || dateKey || null;
@@ -598,6 +627,7 @@ if (!globalThis[CORE_KEY3]) {
       applyModelIdentity,
       resolveModelIdentity,
       resolveUsageModelsForCanonical,
+      resolveUsageFilterContext,
       resolveIdentityAtDate,
       matchesCanonicalModelAtDate,
       buildAliasTimeline,
@@ -2229,6 +2259,7 @@ var normalizeUsageModelKey2 = usageModelCore6.normalizeUsageModelKey;
 var applyModelIdentity2 = usageModelCore6.applyModelIdentity;
 var resolveModelIdentity2 = usageModelCore6.resolveModelIdentity;
 var resolveUsageModelsForCanonical2 = usageModelCore6.resolveUsageModelsForCanonical;
+var resolveUsageFilterContext2 = usageModelCore6.resolveUsageFilterContext;
 var extractDateKey3 = usageModelCore6.extractDateKey;
 var resolveIdentityAtDate3 = usageModelCore6.resolveIdentityAtDate;
 var matchesCanonicalModelAtDate3 = usageModelCore6.matchesCanonicalModelAtDate;
@@ -2295,23 +2326,11 @@ var vibeusage_usage_daily_default = withRequestLogging2("vibeusage-usage-daily",
   const endUtc = localDatePartsToUtc2(addDatePartsDays2(endParts, 1), tzContext);
   const startIso = startUtc.toISOString();
   const endIso = endUtc.toISOString();
-  const modelFilter = await resolveUsageModelsForCanonical2({
+  const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } = await resolveUsageFilterContext2({
     edgeClient: auth.edgeClient,
     canonicalModel: model,
     effectiveDate: to
   });
-  const canonicalModel = modelFilter.canonical;
-  const usageModels = modelFilter.usageModels;
-  const hasModelFilter = Array.isArray(usageModels) && usageModels.length > 0;
-  let aliasTimeline = null;
-  if (hasModelFilter) {
-    const aliasRows = await fetchAliasRows3({
-      edgeClient: auth.edgeClient,
-      usageModels,
-      effectiveDate: to
-    });
-    aliasTimeline = buildAliasTimeline3({ usageModels, aliasRows });
-  }
   const { buckets } = initDailyBuckets2(dayKeys);
   let totals = createTotals3();
   let sourcesMap = /* @__PURE__ */ new Map();

@@ -23,11 +23,9 @@ import {
   addRowTotals,
   applyTotalsAndBillable,
   applyModelIdentity,
-  buildAliasTimeline,
   buildPricingBucketKey,
   createTotals,
   extractDateKey,
-  fetchAliasRows,
   fetchRollupRows,
   forEachPage,
   getModelParam,
@@ -38,7 +36,7 @@ import {
   resolveBillableTotals,
   resolveDisplayName,
   resolveModelIdentity,
-  resolveUsageModelsForCanonical,
+  resolveUsageFilterContext,
 } from "./shared/usage-summary-support.js";
 
 const DEFAULT_MODEL = "unknown";
@@ -99,23 +97,12 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
   const endUtc = localDatePartsToUtc(addDatePartsDays(endParts, 1), tzContext);
   const startIso = startUtc.toISOString();
   const endIso = endUtc.toISOString();
-  const modelFilter = await resolveUsageModelsForCanonical({
-    edgeClient: auth.edgeClient,
-    canonicalModel: model,
-    effectiveDate: to,
-  });
-  const canonicalModel = modelFilter.canonical;
-  const usageModels = modelFilter.usageModels;
-  const hasModelFilter = Array.isArray(usageModels) && usageModels.length > 0;
-  let aliasTimeline = null;
-  if (hasModelFilter) {
-    const aliasRows = await fetchAliasRows({
+  const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
+    await resolveUsageFilterContext({
       edgeClient: auth.edgeClient,
-      usageModels,
+      canonicalModel: model,
       effectiveDate: to,
     });
-    aliasTimeline = buildAliasTimeline({ usageModels, aliasRows });
-  }
 
   const { buckets } = initDailyBuckets(dayKeys);
 

@@ -514,6 +514,35 @@ async function resolveUsageModelsForCanonical({ edgeClient, canonicalModel, effe
   }
   return { canonical, usageModels: Array.from(usageModelsSet.values()) };
 }
+async function resolveUsageFilterContext({ edgeClient, canonicalModel, effectiveDate } = {}) {
+  const modelFilter = await resolveUsageModelsForCanonical({
+    edgeClient,
+    canonicalModel,
+    effectiveDate
+  });
+  const resolvedCanonicalModel = modelFilter.canonical;
+  const usageModels = modelFilter.usageModels;
+  const hasModelFilter = Array.isArray(usageModels) && usageModels.length > 0;
+  if (!hasModelFilter) {
+    return {
+      canonicalModel: resolvedCanonicalModel,
+      usageModels,
+      hasModelFilter,
+      aliasTimeline: null
+    };
+  }
+  const aliasRows = await fetchAliasRows({
+    edgeClient,
+    usageModels,
+    effectiveDate
+  });
+  return {
+    canonicalModel: resolvedCanonicalModel,
+    usageModels,
+    hasModelFilter,
+    aliasTimeline: buildAliasTimeline({ usageModels, aliasRows })
+  };
+}
 function resolveIdentityAtDate({ rawModel, usageKey, dateKey, timeline } = {}) {
   const normalizedKey = usageKey || normalizeUsageModelKey(rawModel) || DEFAULT_MODEL;
   const normalizedDateKey = extractDateKey(dateKey) || dateKey || null;
@@ -598,6 +627,7 @@ if (!globalThis[CORE_KEY3]) {
       applyModelIdentity,
       resolveModelIdentity,
       resolveUsageModelsForCanonical,
+      resolveUsageFilterContext,
       resolveIdentityAtDate,
       matchesCanonicalModelAtDate,
       buildAliasTimeline,
@@ -1850,6 +1880,7 @@ var normalizeUsageModelKey2 = usageModelCore3.normalizeUsageModelKey;
 var applyModelIdentity2 = usageModelCore3.applyModelIdentity;
 var resolveModelIdentity2 = usageModelCore3.resolveModelIdentity;
 var resolveUsageModelsForCanonical2 = usageModelCore3.resolveUsageModelsForCanonical;
+var resolveUsageFilterContext2 = usageModelCore3.resolveUsageFilterContext;
 var extractDateKey2 = usageModelCore3.extractDateKey;
 var resolveIdentityAtDate2 = usageModelCore3.resolveIdentityAtDate;
 var matchesCanonicalModelAtDate2 = usageModelCore3.matchesCanonicalModelAtDate;
@@ -1914,23 +1945,11 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
       endUtc: endUtc2,
       tzContext
     });
-    const modelFilter2 = await resolveUsageModelsForCanonical2({
+    const { canonicalModel: canonicalModel2, usageModels: usageModels2, hasModelFilter: hasModelFilter2, aliasTimeline: aliasTimeline2 } = await resolveUsageFilterContext2({
       edgeClient: auth.edgeClient,
       canonicalModel: model,
       effectiveDate: dayLabel
     });
-    const canonicalModel2 = modelFilter2.canonical;
-    const usageModels2 = modelFilter2.usageModels;
-    const hasModelFilter2 = Array.isArray(usageModels2) && usageModels2.length > 0;
-    let aliasTimeline2 = null;
-    if (hasModelFilter2) {
-      const aliasRows = await fetchAliasRows2({
-        edgeClient: auth.edgeClient,
-        usageModels: usageModels2,
-        effectiveDate: dayLabel
-      });
-      aliasTimeline2 = buildAliasTimeline2({ usageModels: usageModels2, aliasRows });
-    }
     const aggregateStartMs = Date.now();
     const aggregateRows = hasModelFilter2 ? null : await tryAggregateHourlyTotals({
       edgeClient: auth.edgeClient,
@@ -2067,23 +2086,11 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
   const dayKey = dayRaw || todayKey;
   const dayParts = parseDateParts2(dayKey);
   if (!dayParts) return respond({ error: "Invalid day" }, 400, 0);
-  const modelFilter = await resolveUsageModelsForCanonical2({
+  const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } = await resolveUsageFilterContext2({
     edgeClient: auth.edgeClient,
     canonicalModel: model,
     effectiveDate: dayKey
   });
-  const canonicalModel = modelFilter.canonical;
-  const usageModels = modelFilter.usageModels;
-  const hasModelFilter = Array.isArray(usageModels) && usageModels.length > 0;
-  let aliasTimeline = null;
-  if (hasModelFilter) {
-    const aliasRows = await fetchAliasRows2({
-      edgeClient: auth.edgeClient,
-      usageModels,
-      effectiveDate: dayKey
-    });
-    aliasTimeline = buildAliasTimeline2({ usageModels, aliasRows });
-  }
   const startUtc = localDatePartsToUtc2({ ...dayParts, hour: 0, minute: 0, second: 0 }, tzContext);
   const endUtc = localDatePartsToUtc2(addDatePartsDays2(dayParts, 1), tzContext);
   const startIso = startUtc.toISOString();

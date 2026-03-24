@@ -11,5 +11,6 @@ module.exports = {
   applyModelIdentity: usageModelCore.applyModelIdentity,
   resolveModelIdentity: usageModelCore.resolveModelIdentity,
   resolveUsageModelsForCanonical: usageModelCore.resolveUsageModelsForCanonical,
+  resolveUsageFilterContext: usageModelCore.resolveUsageFilterContext,
   matchesCanonicalModelAtDate: usageModelCore.matchesCanonicalModelAtDate,
 };

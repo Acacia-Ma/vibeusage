@@ -17,11 +17,9 @@ import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
 import { toPositiveIntOrNull } from "./shared/numbers.js";
 import { getSourceParam } from "./shared/source.js";
 import {
-  buildAliasTimeline,
-  fetchAliasRows,
   forEachPage,
   getModelParam,
-  resolveUsageModelsForCanonical,
+  resolveUsageFilterContext,
 } from "./shared/usage-summary-support.js";
 
 const MAX_MONTHS = 24;
@@ -82,23 +80,12 @@ export default withRequestLogging("vibeusage-usage-monthly", async function (req
   const startIso = startUtc.toISOString();
   const endIso = endUtc.toISOString();
 
-  const modelFilter = await resolveUsageModelsForCanonical({
-    edgeClient: auth.edgeClient,
-    canonicalModel: model,
-    effectiveDate: to,
-  });
-  const canonicalModel = modelFilter.canonical;
-  const usageModels = modelFilter.usageModels;
-  const hasModelFilter = Array.isArray(usageModels) && usageModels.length > 0;
-  let aliasTimeline = null;
-  if (hasModelFilter) {
-    const aliasRows = await fetchAliasRows({
+  const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
+    await resolveUsageFilterContext({
       edgeClient: auth.edgeClient,
-      usageModels,
+      canonicalModel: model,
       effectiveDate: to,
     });
-    aliasTimeline = buildAliasTimeline({ usageModels, aliasRows });
-  }
 
   const { monthKeys, buckets } = initMonthlyBuckets({ startMonthParts, months });
   const queryStartMs = Date.now();

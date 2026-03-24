@@ -21,15 +21,13 @@ import { toBigInt } from "./shared/numbers.js";
 import { getSourceParam } from "./shared/source.js";
 import {
   applyUsageModelFilter,
-  buildAliasTimeline,
   extractDateKey,
-  fetchAliasRows,
   forEachPage,
   getModelParam,
   matchesCanonicalModelAtDate,
   normalizeUsageModel,
   resolveBillableTotals,
-  resolveUsageModelsForCanonical,
+  resolveUsageFilterContext,
 } from "./shared/usage-summary-support.js";
 
 const MIN_INTERVAL_MINUTES = 30;
@@ -89,23 +87,12 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
       tzContext,
     });
 
-    const modelFilter = await resolveUsageModelsForCanonical({
-      edgeClient: auth.edgeClient,
-      canonicalModel: model,
-      effectiveDate: dayLabel,
-    });
-    const canonicalModel = modelFilter.canonical;
-    const usageModels = modelFilter.usageModels;
-    const hasModelFilter = Array.isArray(usageModels) && usageModels.length > 0;
-    let aliasTimeline = null;
-    if (hasModelFilter) {
-      const aliasRows = await fetchAliasRows({
+    const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
+      await resolveUsageFilterContext({
         edgeClient: auth.edgeClient,
-        usageModels,
+        canonicalModel: model,
         effectiveDate: dayLabel,
       });
-      aliasTimeline = buildAliasTimeline({ usageModels, aliasRows });
-    }
 
     const aggregateStartMs = Date.now();
     const aggregateRows = hasModelFilter
@@ -267,23 +254,12 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
   const dayParts = parseDateParts(dayKey);
   if (!dayParts) return respond({ error: "Invalid day" }, 400, 0);
 
-  const modelFilter = await resolveUsageModelsForCanonical({
-    edgeClient: auth.edgeClient,
-    canonicalModel: model,
-    effectiveDate: dayKey,
-  });
-  const canonicalModel = modelFilter.canonical;
-  const usageModels = modelFilter.usageModels;
-  const hasModelFilter = Array.isArray(usageModels) && usageModels.length > 0;
-  let aliasTimeline = null;
-  if (hasModelFilter) {
-    const aliasRows = await fetchAliasRows({
+  const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
+    await resolveUsageFilterContext({
       edgeClient: auth.edgeClient,
-      usageModels,
+      canonicalModel: model,
       effectiveDate: dayKey,
     });
-    aliasTimeline = buildAliasTimeline({ usageModels, aliasRows });
-  }
 
   const startUtc = localDatePartsToUtc({ ...dayParts, hour: 0, minute: 0, second: 0 }, tzContext);
   const endUtc = localDatePartsToUtc(addDatePartsDays(dayParts, 1), tzContext);

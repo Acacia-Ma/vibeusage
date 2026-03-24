@@ -324,6 +324,35 @@ var require_usage_model_core = __commonJS({
       }
       return { canonical, usageModels: Array.from(usageModelsSet.values()) };
     }
+    async function resolveUsageFilterContext({ edgeClient, canonicalModel, effectiveDate } = {}) {
+      const modelFilter = await resolveUsageModelsForCanonical({
+        edgeClient,
+        canonicalModel,
+        effectiveDate
+      });
+      const resolvedCanonicalModel = modelFilter.canonical;
+      const usageModels = modelFilter.usageModels;
+      const hasModelFilter = Array.isArray(usageModels) && usageModels.length > 0;
+      if (!hasModelFilter) {
+        return {
+          canonicalModel: resolvedCanonicalModel,
+          usageModels,
+          hasModelFilter,
+          aliasTimeline: null
+        };
+      }
+      const aliasRows = await fetchAliasRows({
+        edgeClient,
+        usageModels,
+        effectiveDate
+      });
+      return {
+        canonicalModel: resolvedCanonicalModel,
+        usageModels,
+        hasModelFilter,
+        aliasTimeline: buildAliasTimeline({ usageModels, aliasRows })
+      };
+    }
     function resolveIdentityAtDate({ rawModel, usageKey, dateKey, timeline } = {}) {
       const normalizedKey = usageKey || normalizeUsageModelKey(rawModel) || DEFAULT_MODEL;
       const normalizedDateKey = extractDateKey(dateKey) || dateKey || null;
@@ -408,6 +437,7 @@ var require_usage_model_core = __commonJS({
           applyModelIdentity,
           resolveModelIdentity,
           resolveUsageModelsForCanonical,
+          resolveUsageFilterContext,
           resolveIdentityAtDate,
           matchesCanonicalModelAtDate,
           buildAliasTimeline,

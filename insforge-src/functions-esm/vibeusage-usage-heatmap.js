@@ -21,15 +21,13 @@ import { handleOptions, json } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
 import { getSourceParam } from "./shared/source.js";
 import {
-  buildAliasTimeline,
   extractDateKey,
-  fetchAliasRows,
   forEachPage,
   getModelParam,
   matchesCanonicalModelAtDate,
   normalizeUsageModel,
   resolveBillableTotals,
-  resolveUsageModelsForCanonical,
+  resolveUsageFilterContext,
 } from "./shared/usage-summary-support.js";
 
 export default withRequestLogging("vibeusage-usage-heatmap", async function (request, logger) {
@@ -84,23 +82,12 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
     const endUtc = addUtcDays(end, 1);
     const endIso = endUtc.toISOString();
 
-    const modelFilter = await resolveUsageModelsForCanonical({
-      edgeClient: auth.edgeClient,
-      canonicalModel: model,
-      effectiveDate: to,
-    });
-    const canonicalModel = modelFilter.canonical;
-    const usageModels = modelFilter.usageModels;
-    const hasModelFilter = Array.isArray(usageModels) && usageModels.length > 0;
-    let aliasTimeline = null;
-    if (hasModelFilter) {
-      const aliasRows = await fetchAliasRows({
+    const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
+      await resolveUsageFilterContext({
         edgeClient: auth.edgeClient,
-        usageModels,
+        canonicalModel: model,
         effectiveDate: to,
       });
-      aliasTimeline = buildAliasTimeline({ usageModels, aliasRows });
-    }
 
     const valuesByDay = new Map();
     const queryStartMs = Date.now();
@@ -254,23 +241,12 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
   const auth = await getAccessContext({ baseUrl: getBaseUrl(), bearer, allowPublic: true });
   if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
 
-  const modelFilter = await resolveUsageModelsForCanonical({
-    edgeClient: auth.edgeClient,
-    canonicalModel: model,
-    effectiveDate: to,
-  });
-  const canonicalModel = modelFilter.canonical;
-  const usageModels = modelFilter.usageModels;
-  const hasModelFilter = Array.isArray(usageModels) && usageModels.length > 0;
-  let aliasTimeline = null;
-  if (hasModelFilter) {
-    const aliasRows = await fetchAliasRows({
+  const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
+    await resolveUsageFilterContext({
       edgeClient: auth.edgeClient,
-      usageModels,
+      canonicalModel: model,
       effectiveDate: to,
     });
-    aliasTimeline = buildAliasTimeline({ usageModels, aliasRows });
-  }
 
   const valuesByDay = new Map();
   const queryStartMs = Date.now();

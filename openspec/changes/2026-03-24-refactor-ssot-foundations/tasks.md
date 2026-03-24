@@ -36,6 +36,7 @@
 - [x] 4.2.12 Converge alias-timeline canonical-model row matching semantics for hourly/heatmap queries through shared backend cores.
 - [x] 4.2.13 Converge summary/monthly row-level canonical-model filtering through `usage-filter` shared backend cores.
 - [x] 4.2.14 Converge raw hourly usage query construction semantics through shared backend cores with mirrored ESM artifacts.
+- [x] 4.2.15 Converge request-time usage model filter context resolution through `usage-model-core` and shared ESM support exports.
 
 ## 5. Verification
 

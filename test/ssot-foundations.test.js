@@ -48,6 +48,16 @@ test("backend model semantics flow through a single shared core", () => {
     /matchesCanonicalModelAtDate = usageModelCore\.matchesCanonicalModelAtDate/,
   );
   assert.match(
+    read("insforge-src/functions-esm/shared/usage-summary-support.js"),
+    /resolveUsageFilterContext = usageModelCore\.resolveUsageFilterContext/,
+  );
+  assert.match(read("insforge-src/shared/model-identity.js"), /resolveUsageFilterContext/);
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /resolveUsageFilterContext/);
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /resolveUsageFilterContext/);
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-monthly.js"), /resolveUsageFilterContext/);
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /resolveUsageFilterContext/);
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-heatmap.js"), /resolveUsageFilterContext/);
+  assert.match(
     read("insforge-src/functions-esm/vibeusage-usage-hourly.js"),
     /matchesCanonicalModelAtDate/,
   );
