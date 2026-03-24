@@ -1,29 +1,13 @@
 "use strict";
 
 const { applyCanaryFilter } = require("./canary");
-const { toBigInt } = require("./numbers");
 const { forEachPage } = require("./pagination");
+require("./usage-metrics-core");
 
-function createTotals() {
-  return {
-    total_tokens: 0n,
-    billable_total_tokens: 0n,
-    input_tokens: 0n,
-    cached_input_tokens: 0n,
-    output_tokens: 0n,
-    reasoning_output_tokens: 0n,
-  };
-}
+const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
+if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
 
-function addRowTotals(target, row) {
-  if (!target || !row) return;
-  target.total_tokens += toBigInt(row?.total_tokens);
-  target.billable_total_tokens += toBigInt(row?.billable_total_tokens);
-  target.input_tokens += toBigInt(row?.input_tokens);
-  target.cached_input_tokens += toBigInt(row?.cached_input_tokens);
-  target.output_tokens += toBigInt(row?.output_tokens);
-  target.reasoning_output_tokens += toBigInt(row?.reasoning_output_tokens);
-}
+const { createTotals, addRowTotals } = usageMetricsCore;
 
 async function fetchRollupRows({ edgeClient, userId, fromDay, toDay, source, model }) {
   const rows = [];
@@ -60,21 +44,6 @@ function sumRollupRows(rows) {
     addRowTotals(totals, row);
   }
   return totals;
-}
-
-function readEnvValue(key) {
-  try {
-    if (typeof Deno !== "undefined" && Deno?.env?.get) {
-      const value = Deno.env.get(key);
-      if (value !== undefined) return value;
-    }
-  } catch (_e) {}
-  try {
-    if (typeof process !== "undefined" && process?.env) {
-      return process.env[key];
-    }
-  } catch (_e) {}
-  return null;
 }
 
 function isRollupEnabled() {

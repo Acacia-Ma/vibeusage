@@ -924,13 +924,151 @@ if (!globalThis[CORE_KEY]) {
   });
 }
 
-// insforge-src/functions-esm/shared/usage-summary-support.js
-var MAX_PAGE_SIZE = 1e3;
+// insforge-src/shared/usage-metrics-core.mjs
+var CORE_KEY2 = "__vibeusageUsageMetricsCore";
 var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
 var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
 var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
+var MAX_SOURCE_LENGTH2 = 64;
+function toBigInt2(value) {
+  if (typeof value === "bigint") return value >= 0n ? value : 0n;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || value <= 0) return 0n;
+    return BigInt(Math.floor(value));
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!/^[0-9]+$/.test(trimmed)) return 0n;
+    try {
+      return BigInt(trimmed);
+    } catch (_error) {
+      return 0n;
+    }
+  }
+  return 0n;
+}
+function normalizeSource2(value) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized.length > MAX_SOURCE_LENGTH2) return normalized.slice(0, MAX_SOURCE_LENGTH2);
+  return normalized;
+}
+function createTotals() {
+  return {
+    total_tokens: 0n,
+    billable_total_tokens: 0n,
+    input_tokens: 0n,
+    cached_input_tokens: 0n,
+    output_tokens: 0n,
+    reasoning_output_tokens: 0n
+  };
+}
+function addRowTotals(target, row) {
+  if (!target || !row) return;
+  target.total_tokens += toBigInt2(row?.total_tokens);
+  target.billable_total_tokens += toBigInt2(row?.billable_total_tokens);
+  target.input_tokens += toBigInt2(row?.input_tokens);
+  target.cached_input_tokens += toBigInt2(row?.cached_input_tokens);
+  target.output_tokens += toBigInt2(row?.output_tokens);
+  target.reasoning_output_tokens += toBigInt2(row?.reasoning_output_tokens);
+}
+function computeBillableTotalTokens({ source, totals } = {}) {
+  const normalizedSource = normalizeSource2(source) || "unknown";
+  const input = toBigInt2(totals?.input_tokens);
+  const cached = toBigInt2(totals?.cached_input_tokens);
+  const output = toBigInt2(totals?.output_tokens);
+  const reasoning = toBigInt2(totals?.reasoning_output_tokens);
+  const total = toBigInt2(totals?.total_tokens);
+  const hasTotal = Boolean(totals && Object.prototype.hasOwnProperty.call(totals, "total_tokens"));
+  if (BILLABLE_TOTAL.has(normalizedSource)) return total;
+  if (BILLABLE_ADD_ALL.has(normalizedSource)) return input + cached + output + reasoning;
+  if (BILLABLE_INPUT_OUTPUT_REASONING.has(normalizedSource)) return input + output + reasoning;
+  if (hasTotal) return total;
+  return input + output + reasoning;
+}
+function resolveBillableTotals({
+  row,
+  source,
+  totals,
+  billableField = "billable_total_tokens",
+  hasStoredBillable
+} = {}) {
+  const stored = typeof hasStoredBillable === "boolean" ? hasStoredBillable : Boolean(
+    row && Object.prototype.hasOwnProperty.call(row, billableField) && row[billableField] != null
+  );
+  const resolvedTotals = totals || row;
+  const billable = stored ? toBigInt2(row?.[billableField]) : computeBillableTotalTokens({ source, totals: resolvedTotals });
+  return { billable, hasStoredBillable: stored };
+}
+function applyTotalsAndBillable({ totals, row, billable, hasStoredBillable } = {}) {
+  if (!totals || !row) return;
+  addRowTotals(totals, row);
+  if (!hasStoredBillable) {
+    totals.billable_total_tokens += toBigInt2(billable);
+  }
+}
+function getSourceEntry(map, source) {
+  if (map.has(source)) return map.get(source);
+  const entry = { source, totals: createTotals() };
+  map.set(source, entry);
+  return entry;
+}
+function resolveDisplayName(identityMap, modelId) {
+  if (!modelId || !identityMap || typeof identityMap.values !== "function") return modelId || null;
+  for (const entry of identityMap.values()) {
+    if (entry?.model_id === modelId && entry?.model) return entry.model;
+  }
+  return modelId;
+}
+function buildPricingBucketKey(sourceKey, usageKey, dateKey) {
+  return JSON.stringify([sourceKey || "", usageKey || "", dateKey || ""]);
+}
+function parsePricingBucketKey(bucketKey, defaultDate) {
+  if (typeof bucketKey === "string" && bucketKey.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(bucketKey);
+      if (Array.isArray(parsed)) {
+        const usageKey = parsed[1] ?? parsed[0] ?? "";
+        const dateKey = parsed[2] ?? defaultDate;
+        return { usageKey: String(usageKey || ""), dateKey: String(dateKey || defaultDate) };
+      }
+    } catch (_error) {
+    }
+  }
+  if (typeof bucketKey === "string") {
+    const parts = bucketKey.split("::");
+    if (parts.length >= 3) return { usageKey: parts[1], dateKey: parts[2] || defaultDate };
+    if (parts.length === 2) return { usageKey: parts[0], dateKey: parts[1] || defaultDate };
+    return { usageKey: bucketKey, dateKey: defaultDate };
+  }
+  return { usageKey: bucketKey, dateKey: defaultDate };
+}
+if (!globalThis[CORE_KEY2]) {
+  Object.defineProperty(globalThis, CORE_KEY2, {
+    value: {
+      createTotals,
+      addRowTotals,
+      computeBillableTotalTokens,
+      resolveBillableTotals,
+      applyTotalsAndBillable,
+      getSourceEntry,
+      resolveDisplayName,
+      buildPricingBucketKey,
+      parsePricingBucketKey
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/usage-summary-support.js
+var MAX_PAGE_SIZE = 1e3;
 var usageModelCore = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore) throw new Error("usage-model core not initialized");
+var usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
+if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
 var normalizeModel2 = usageModelCore.normalizeModel;
 var normalizeUsageModel2 = usageModelCore.normalizeUsageModel;
 var applyUsageModelFilter2 = usageModelCore.applyUsageModelFilter;
@@ -943,6 +1081,14 @@ var extractDateKey2 = usageModelCore.extractDateKey;
 var resolveIdentityAtDate2 = usageModelCore.resolveIdentityAtDate;
 var buildAliasTimeline2 = usageModelCore.buildAliasTimeline;
 var fetchAliasRows2 = usageModelCore.fetchAliasRows;
+var createTotals2 = usageMetricsCore.createTotals;
+var addRowTotals2 = usageMetricsCore.addRowTotals;
+var resolveBillableTotals2 = usageMetricsCore.resolveBillableTotals;
+var applyTotalsAndBillable2 = usageMetricsCore.applyTotalsAndBillable;
+var getSourceEntry2 = usageMetricsCore.getSourceEntry;
+var resolveDisplayName2 = usageMetricsCore.resolveDisplayName;
+var buildPricingBucketKey2 = usageMetricsCore.buildPricingBucketKey;
+var parsePricingBucketKey2 = usageMetricsCore.parsePricingBucketKey;
 async function forEachPage({ createQuery, pageSize, onPage }) {
   if (typeof createQuery !== "function") throw new Error("createQuery must be a function");
   if (typeof onPage !== "function") throw new Error("onPage must be a function");
@@ -970,34 +1116,6 @@ function normalizePageSize(value) {
   const size = Number(value);
   if (!Number.isFinite(size) || size <= 0) return MAX_PAGE_SIZE;
   return Math.min(MAX_PAGE_SIZE, Math.floor(size));
-}
-function computeBillableTotalTokens({ source, totals } = {}) {
-  const normalizedSource = normalizeSource(source) || "unknown";
-  const input = toBigInt(totals?.input_tokens);
-  const cached = toBigInt(totals?.cached_input_tokens);
-  const output = toBigInt(totals?.output_tokens);
-  const reasoning = toBigInt(totals?.reasoning_output_tokens);
-  const total = toBigInt(totals?.total_tokens);
-  const hasTotal = Boolean(totals && Object.prototype.hasOwnProperty.call(totals, "total_tokens"));
-  if (BILLABLE_TOTAL.has(normalizedSource)) return total;
-  if (BILLABLE_ADD_ALL.has(normalizedSource)) return input + cached + output + reasoning;
-  if (BILLABLE_INPUT_OUTPUT_REASONING.has(normalizedSource)) return input + output + reasoning;
-  if (hasTotal) return total;
-  return input + output + reasoning;
-}
-function resolveBillableTotals({
-  row,
-  source,
-  totals,
-  billableField = "billable_total_tokens",
-  hasStoredBillable
-} = {}) {
-  const stored = typeof hasStoredBillable === "boolean" ? hasStoredBillable : Boolean(
-    row && Object.prototype.hasOwnProperty.call(row, billableField) && row[billableField] != null
-  );
-  const resolvedTotals = totals || row;
-  const billable = stored ? toBigInt(row?.[billableField]) : computeBillableTotalTokens({ source, totals: resolvedTotals });
-  return { billable, hasStoredBillable: stored };
 }
 
 // insforge-src/functions-esm/vibeusage-usage-hourly.js
@@ -1096,7 +1214,7 @@ var vibeusage_usage_hourly_default = withRequestLogging("vibeusage-usage-hourly"
         const billableCount = Number(row?.count_billable_total_tokens);
         const hasCompleteBillable = Number.isFinite(rowCount3) && Number.isFinite(billableCount) && rowCount3 > 0 && billableCount === rowCount3;
         const hasStoredBillable = row && Object.prototype.hasOwnProperty.call(row, "sum_billable_total_tokens") && row.sum_billable_total_tokens != null && hasCompleteBillable;
-        const { billable } = resolveBillableTotals({
+        const { billable } = resolveBillableTotals2({
           row,
           source: row?.source || source,
           billableField: "sum_billable_total_tokens",
@@ -1163,7 +1281,7 @@ var vibeusage_usage_hourly_default = withRequestLogging("vibeusage-usage-hourly"
           if (slot < 0 || slot > 47) continue;
           const bucket = buckets2[slot];
           bucket.total += toBigInt(row?.total_tokens);
-          const { billable } = resolveBillableTotals({
+          const { billable } = resolveBillableTotals2({
             row,
             source: row?.source || source
           });
@@ -1274,7 +1392,7 @@ var vibeusage_usage_hourly_default = withRequestLogging("vibeusage-usage-hourly"
         if (slot < 0 || slot > 47) continue;
         const bucket = buckets[slot];
         bucket.total += toBigInt(row?.total_tokens);
-        const { billable } = resolveBillableTotals({
+        const { billable } = resolveBillableTotals2({
           row,
           source: row?.source || source
         });

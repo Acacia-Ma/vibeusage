@@ -951,63 +951,58 @@ var require_model = __commonJS({
   }
 });
 
-// insforge-src/shared/numbers.js
-var require_numbers = __commonJS({
-  "insforge-src/shared/numbers.js"(exports2, module2) {
+// insforge-src/shared/usage-metrics-core.js
+var require_usage_metrics_core = __commonJS({
+  "insforge-src/shared/usage-metrics-core.js"() {
     "use strict";
-    function toBigInt(v) {
-      if (typeof v === "bigint") return v >= 0n ? v : 0n;
-      if (typeof v === "number") {
-        if (!Number.isFinite(v) || v <= 0) return 0n;
-        return BigInt(Math.floor(v));
+    var CORE_KEY = "__vibeusageUsageMetricsCore";
+    var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
+    var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
+    var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
+    var MAX_SOURCE_LENGTH = 64;
+    function toBigInt(value) {
+      if (typeof value === "bigint") return value >= 0n ? value : 0n;
+      if (typeof value === "number") {
+        if (!Number.isFinite(value) || value <= 0) return 0n;
+        return BigInt(Math.floor(value));
       }
-      if (typeof v === "string") {
-        const s = v.trim();
-        if (!/^[0-9]+$/.test(s)) return 0n;
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!/^[0-9]+$/.test(trimmed)) return 0n;
         try {
-          return BigInt(s);
-        } catch (_e) {
+          return BigInt(trimmed);
+        } catch (_error) {
           return 0n;
         }
       }
       return 0n;
     }
-    function toPositiveIntOrNull(v) {
-      if (typeof v === "number" && Number.isInteger(v) && v > 0) return v;
-      if (typeof v === "string") {
-        const s = v.trim();
-        if (!/^[0-9]+$/.test(s)) return null;
-        const n = Number.parseInt(s, 10);
-        return Number.isFinite(n) && n > 0 ? n : null;
-      }
-      if (typeof v === "bigint") {
-        if (v <= 0n) return null;
-        const n = Number(v);
-        return Number.isFinite(n) && n > 0 ? n : null;
-      }
-      return null;
+    function normalizeSource(value) {
+      if (typeof value !== "string") return null;
+      const normalized = value.trim().toLowerCase();
+      if (!normalized) return null;
+      if (normalized.length > MAX_SOURCE_LENGTH) return normalized.slice(0, MAX_SOURCE_LENGTH);
+      return normalized;
     }
-    function toPositiveInt(v) {
-      const n = toPositiveIntOrNull(v);
-      return n == null ? 0 : n;
+    function createTotals() {
+      return {
+        total_tokens: 0n,
+        billable_total_tokens: 0n,
+        input_tokens: 0n,
+        cached_input_tokens: 0n,
+        output_tokens: 0n,
+        reasoning_output_tokens: 0n
+      };
     }
-    module2.exports = {
-      toBigInt,
-      toPositiveInt,
-      toPositiveIntOrNull
-    };
-  }
-});
-
-// insforge-src/shared/usage-billable.js
-var require_usage_billable = __commonJS({
-  "insforge-src/shared/usage-billable.js"(exports2, module2) {
-    "use strict";
-    var { toBigInt } = require_numbers();
-    var { normalizeSource } = require_source();
-    var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
-    var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
-    var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
+    function addRowTotals(target, row) {
+      if (!target || !row) return;
+      target.total_tokens += toBigInt(row?.total_tokens);
+      target.billable_total_tokens += toBigInt(row?.billable_total_tokens);
+      target.input_tokens += toBigInt(row?.input_tokens);
+      target.cached_input_tokens += toBigInt(row?.cached_input_tokens);
+      target.output_tokens += toBigInt(row?.output_tokens);
+      target.reasoning_output_tokens += toBigInt(row?.reasoning_output_tokens);
+    }
     function computeBillableTotalTokens({ source, totals } = {}) {
       const normalizedSource = normalizeSource(source) || "unknown";
       const input = toBigInt(totals?.input_tokens);
@@ -1022,8 +1017,93 @@ var require_usage_billable = __commonJS({
       if (hasTotal) return total;
       return input + output + reasoning;
     }
+    function resolveBillableTotals({
+      row,
+      source,
+      totals,
+      billableField = "billable_total_tokens",
+      hasStoredBillable
+    } = {}) {
+      const stored = typeof hasStoredBillable === "boolean" ? hasStoredBillable : Boolean(
+        row && Object.prototype.hasOwnProperty.call(row, billableField) && row[billableField] != null
+      );
+      const resolvedTotals = totals || row;
+      const billable = stored ? toBigInt(row?.[billableField]) : computeBillableTotalTokens({ source, totals: resolvedTotals });
+      return { billable, hasStoredBillable: stored };
+    }
+    function applyTotalsAndBillable({ totals, row, billable, hasStoredBillable } = {}) {
+      if (!totals || !row) return;
+      addRowTotals(totals, row);
+      if (!hasStoredBillable) {
+        totals.billable_total_tokens += toBigInt(billable);
+      }
+    }
+    function getSourceEntry(map, source) {
+      if (map.has(source)) return map.get(source);
+      const entry = { source, totals: createTotals() };
+      map.set(source, entry);
+      return entry;
+    }
+    function resolveDisplayName(identityMap, modelId) {
+      if (!modelId || !identityMap || typeof identityMap.values !== "function") return modelId || null;
+      for (const entry of identityMap.values()) {
+        if (entry?.model_id === modelId && entry?.model) return entry.model;
+      }
+      return modelId;
+    }
+    function buildPricingBucketKey(sourceKey, usageKey, dateKey) {
+      return JSON.stringify([sourceKey || "", usageKey || "", dateKey || ""]);
+    }
+    function parsePricingBucketKey(bucketKey, defaultDate) {
+      if (typeof bucketKey === "string" && bucketKey.startsWith("[")) {
+        try {
+          const parsed = JSON.parse(bucketKey);
+          if (Array.isArray(parsed)) {
+            const usageKey = parsed[1] ?? parsed[0] ?? "";
+            const dateKey = parsed[2] ?? defaultDate;
+            return { usageKey: String(usageKey || ""), dateKey: String(dateKey || defaultDate) };
+          }
+        } catch (_error) {
+        }
+      }
+      if (typeof bucketKey === "string") {
+        const parts = bucketKey.split("::");
+        if (parts.length >= 3) return { usageKey: parts[1], dateKey: parts[2] || defaultDate };
+        if (parts.length === 2) return { usageKey: parts[0], dateKey: parts[1] || defaultDate };
+        return { usageKey: bucketKey, dateKey: defaultDate };
+      }
+      return { usageKey: bucketKey, dateKey: defaultDate };
+    }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          createTotals,
+          addRowTotals,
+          computeBillableTotalTokens,
+          resolveBillableTotals,
+          applyTotalsAndBillable,
+          getSourceEntry,
+          resolveDisplayName,
+          buildPricingBucketKey,
+          parsePricingBucketKey
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
+// insforge-src/shared/usage-billable.js
+var require_usage_billable = __commonJS({
+  "insforge-src/shared/usage-billable.js"(exports2, module2) {
+    "use strict";
+    require_usage_metrics_core();
+    var usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
+    if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
     module2.exports = {
-      computeBillableTotalTokens
+      computeBillableTotalTokens: usageMetricsCore.computeBillableTotalTokens
     };
   }
 });

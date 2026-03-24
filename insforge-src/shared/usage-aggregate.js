@@ -1,40 +1,11 @@
 "use strict";
 
-const { toBigInt } = require("./numbers");
-const { computeBillableTotalTokens } = require("./usage-billable");
-const { addRowTotals } = require("./usage-rollup");
+require("./usage-metrics-core");
 
-function resolveBillableTotals({
-  row,
-  source,
-  totals,
-  billableField = "billable_total_tokens",
-  hasStoredBillable,
-} = {}) {
-  const stored =
-    typeof hasStoredBillable === "boolean"
-      ? hasStoredBillable
-      : Boolean(
-          row &&
-          Object.prototype.hasOwnProperty.call(row, billableField) &&
-          row[billableField] != null,
-        );
-  const resolvedTotals = totals || row;
-  const billable = stored
-    ? toBigInt(row?.[billableField])
-    : computeBillableTotalTokens({ source, totals: resolvedTotals });
-  return { billable, hasStoredBillable: stored };
-}
-
-function applyTotalsAndBillable({ totals, row, billable, hasStoredBillable } = {}) {
-  if (!totals || !row) return;
-  addRowTotals(totals, row);
-  if (!hasStoredBillable) {
-    totals.billable_total_tokens += toBigInt(billable);
-  }
-}
+const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
+if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
 
 module.exports = {
-  resolveBillableTotals,
-  applyTotalsAndBillable,
+  resolveBillableTotals: usageMetricsCore.resolveBillableTotals,
+  applyTotalsAndBillable: usageMetricsCore.applyTotalsAndBillable,
 };

@@ -49,12 +49,6 @@ function getSlowQueryThresholdMs() {
   if (n <= 0) return 0;
   return clampInt(n, 1, 6e4);
 }
-function getPricingDefaults() {
-  return {
-    model: readEnvValue("VIBEUSAGE_PRICING_MODEL") || "gpt-5.2-codex",
-    source: readEnvValue("VIBEUSAGE_PRICING_SOURCE") || "openrouter"
-  };
-}
 function clampInt(value, min, max) {
   const n = Number(value);
   if (!Number.isFinite(n)) return min;
@@ -699,16 +693,6 @@ function toBigInt(value) {
   return 0n;
 }
 
-// insforge-src/functions-esm/shared/source.js
-var MAX_SOURCE_LENGTH = 64;
-function normalizeSource(value) {
-  if (typeof value !== "string") return null;
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) return null;
-  if (normalized.length > MAX_SOURCE_LENGTH) return normalized.slice(0, MAX_SOURCE_LENGTH);
-  return normalized;
-}
-
 // insforge-src/shared/usage-model-core.mjs
 var CORE_KEY = "__vibeusageUsageModelCore";
 var DEFAULT_MODEL = "unknown";
@@ -953,169 +937,10 @@ if (!globalThis[CORE_KEY]) {
   });
 }
 
-// insforge-src/functions-esm/shared/usage-summary-support.js
-var MAX_PAGE_SIZE = 1e3;
-var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
-var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
-var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
-var usageModelCore = globalThis.__vibeusageUsageModelCore;
-if (!usageModelCore) throw new Error("usage-model core not initialized");
-var normalizeModel2 = usageModelCore.normalizeModel;
-var normalizeUsageModel2 = usageModelCore.normalizeUsageModel;
-var applyUsageModelFilter2 = usageModelCore.applyUsageModelFilter;
-var getModelParam2 = usageModelCore.getModelParam;
-var normalizeUsageModelKey2 = usageModelCore.normalizeUsageModelKey;
-var applyModelIdentity2 = usageModelCore.applyModelIdentity;
-var resolveModelIdentity2 = usageModelCore.resolveModelIdentity;
-var resolveUsageModelsForCanonical2 = usageModelCore.resolveUsageModelsForCanonical;
-var extractDateKey2 = usageModelCore.extractDateKey;
-var resolveIdentityAtDate2 = usageModelCore.resolveIdentityAtDate;
-var buildAliasTimeline2 = usageModelCore.buildAliasTimeline;
-var fetchAliasRows2 = usageModelCore.fetchAliasRows;
-async function forEachPage({ createQuery, pageSize, onPage }) {
-  if (typeof createQuery !== "function") throw new Error("createQuery must be a function");
-  if (typeof onPage !== "function") throw new Error("onPage must be a function");
-  const size = normalizePageSize(pageSize);
-  let offset = 0;
-  while (true) {
-    const query = createQuery();
-    if (!query || typeof query.range !== "function") {
-      const { data: data2, error: error2 } = await query;
-      if (error2) return { error: error2 };
-      const rows2 = Array.isArray(data2) ? data2 : [];
-      if (rows2.length) await onPage(rows2);
-      return { error: null };
-    }
-    const { data, error } = await query.range(offset, offset + size - 1);
-    if (error) return { error };
-    const rows = Array.isArray(data) ? data : [];
-    if (rows.length) await onPage(rows);
-    if (rows.length < size) break;
-    offset += size;
-  }
-  return { error: null };
-}
-function normalizePageSize(value) {
-  const size = Number(value);
-  if (!Number.isFinite(size) || size <= 0) return MAX_PAGE_SIZE;
-  return Math.min(MAX_PAGE_SIZE, Math.floor(size));
-}
-function createTotals() {
-  return {
-    total_tokens: 0n,
-    billable_total_tokens: 0n,
-    input_tokens: 0n,
-    cached_input_tokens: 0n,
-    output_tokens: 0n,
-    reasoning_output_tokens: 0n
-  };
-}
-function addRowTotals(target, row) {
-  if (!target || !row) return;
-  target.total_tokens += toBigInt(row?.total_tokens);
-  target.billable_total_tokens += toBigInt(row?.billable_total_tokens);
-  target.input_tokens += toBigInt(row?.input_tokens);
-  target.cached_input_tokens += toBigInt(row?.cached_input_tokens);
-  target.output_tokens += toBigInt(row?.output_tokens);
-  target.reasoning_output_tokens += toBigInt(row?.reasoning_output_tokens);
-}
-async function fetchRollupRows({ edgeClient, userId, fromDay, toDay, source, model }) {
-  const rows = [];
-  const { error } = await forEachPage({
-    createQuery: () => {
-      let query = edgeClient.database.from("vibeusage_tracker_daily_rollup").select(
-        "day,source,model,total_tokens,billable_total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens"
-      ).eq("user_id", userId).gte("day", fromDay).lte("day", toDay);
-      if (source) query = query.eq("source", source);
-      if (model) query = query.eq("model", model);
-      query = applyCanaryFilter(query, { source, model });
-      return query.order("day", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
-    },
-    onPage: (pageRows) => {
-      if (Array.isArray(pageRows) && pageRows.length > 0) rows.push(...pageRows);
-    }
-  });
-  if (error) return { ok: false, error };
-  return { ok: true, rows };
-}
-function isRollupEnabled() {
-  return false;
-}
-function computeBillableTotalTokens({ source, totals } = {}) {
-  const normalizedSource = normalizeSource(source) || "unknown";
-  const input = toBigInt(totals?.input_tokens);
-  const cached = toBigInt(totals?.cached_input_tokens);
-  const output = toBigInt(totals?.output_tokens);
-  const reasoning = toBigInt(totals?.reasoning_output_tokens);
-  const total = toBigInt(totals?.total_tokens);
-  const hasTotal = Boolean(totals && Object.prototype.hasOwnProperty.call(totals, "total_tokens"));
-  if (BILLABLE_TOTAL.has(normalizedSource)) return total;
-  if (BILLABLE_ADD_ALL.has(normalizedSource)) return input + cached + output + reasoning;
-  if (BILLABLE_INPUT_OUTPUT_REASONING.has(normalizedSource)) return input + output + reasoning;
-  if (hasTotal) return total;
-  return input + output + reasoning;
-}
-function resolveBillableTotals({
-  row,
-  source,
-  totals,
-  billableField = "billable_total_tokens",
-  hasStoredBillable
-} = {}) {
-  const stored = typeof hasStoredBillable === "boolean" ? hasStoredBillable : Boolean(
-    row && Object.prototype.hasOwnProperty.call(row, billableField) && row[billableField] != null
-  );
-  const resolvedTotals = totals || row;
-  const billable = stored ? toBigInt(row?.[billableField]) : computeBillableTotalTokens({ source, totals: resolvedTotals });
-  return { billable, hasStoredBillable: stored };
-}
-function applyTotalsAndBillable({ totals, row, billable, hasStoredBillable } = {}) {
-  if (!totals || !row) return;
-  addRowTotals(totals, row);
-  if (!hasStoredBillable) {
-    totals.billable_total_tokens += toBigInt(billable);
-  }
-}
-function getSourceEntry(map, source) {
-  if (map.has(source)) return map.get(source);
-  const entry = { source, totals: createTotals() };
-  map.set(source, entry);
-  return entry;
-}
-function resolveDisplayName(identityMap, modelId) {
-  if (!modelId || !identityMap || typeof identityMap.values !== "function") return modelId || null;
-  for (const entry of identityMap.values()) {
-    if (entry?.model_id === modelId && entry?.model) return entry.model;
-  }
-  return modelId;
-}
-function buildPricingBucketKey(sourceKey, usageKey, dateKey) {
-  return JSON.stringify([sourceKey || "", usageKey || "", dateKey || ""]);
-}
-function parsePricingBucketKey(bucketKey, defaultDate) {
-  if (typeof bucketKey === "string" && bucketKey.startsWith("[")) {
-    try {
-      const parsed = JSON.parse(bucketKey);
-      if (Array.isArray(parsed)) {
-        const usageKey = parsed[1] ?? parsed[0] ?? "";
-        const dateKey = parsed[2] ?? defaultDate;
-        return { usageKey: String(usageKey || ""), dateKey: String(dateKey || defaultDate) };
-      }
-    } catch (_error) {
-    }
-  }
-  if (typeof bucketKey === "string") {
-    const parts = bucketKey.split("::");
-    if (parts.length >= 3) return { usageKey: parts[1], dateKey: parts[2] || defaultDate };
-    if (parts.length === 2) return { usageKey: parts[0], dateKey: parts[1] || defaultDate };
-    return { usageKey: bucketKey, dateKey: defaultDate };
-  }
-  return { usageKey: bucketKey, dateKey: defaultDate };
-}
-
-// insforge-src/functions-esm/shared/pricing.js
-var TOKENS_PER_MILLION = 1000000n;
+// insforge-src/shared/pricing-core.mjs
+var CORE_KEY2 = "__vibeusagePricingCore";
 var MICROS_PER_DOLLAR = 1000000n;
+var TOKENS_PER_MILLION = 1000000n;
 var DEFAULT_PROFILE = {
   model: "gpt-5.2-codex",
   source: "openrouter",
@@ -1127,6 +952,34 @@ var DEFAULT_PROFILE = {
     reasoning_output: 14e6
   }
 };
+function readEnvValue2(key) {
+  try {
+    if (typeof Deno !== "undefined" && Deno?.env?.get) {
+      const value = Deno.env.get(key);
+      if (value !== void 0) return value;
+    }
+  } catch (_error) {
+  }
+  try {
+    if (typeof process !== "undefined" && process?.env) {
+      const value = process.env[key];
+      if (value !== void 0) return value;
+    }
+  } catch (_error) {
+  }
+  return null;
+}
+function normalizeSource(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().toLowerCase();
+  return trimmed.length > 0 ? trimmed : null;
+}
+function normalizeModelValue(value) {
+  const usageModelCore2 = globalThis.__vibeusageUsageModelCore;
+  const normalized = usageModelCore2?.normalizeModel?.(value) || null;
+  if (!normalized || normalized.toLowerCase() === "unknown") return null;
+  return normalized;
+}
 function getDefaultPricingProfile() {
   return {
     model: DEFAULT_PROFILE.model,
@@ -1135,34 +988,33 @@ function getDefaultPricingProfile() {
     rates_micro_per_million: { ...DEFAULT_PROFILE.rates_micro_per_million }
   };
 }
-function normalizeSource2(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim().toLowerCase();
-  return trimmed.length > 0 ? trimmed : null;
-}
-function normalizeModelValue(value) {
-  const normalized = normalizeModel2(value);
-  if (!normalized || normalized.toLowerCase() === "unknown") return null;
-  return normalized;
+function getPricingDefaults() {
+  const primaryModel = normalizeModelValue(readEnvValue2("VIBEUSAGE_PRICING_MODEL"));
+  const primarySource = normalizeSource(readEnvValue2("VIBEUSAGE_PRICING_SOURCE"));
+  return {
+    model: primaryModel || DEFAULT_PROFILE.model,
+    source: primarySource || DEFAULT_PROFILE.source
+  };
 }
 async function resolvePricingProfile({ edgeClient, effectiveDate, model, source } = {}) {
   const fallback = getDefaultPricingProfile();
-  if (!edgeClient?.database) return fallback;
+  const database = edgeClient?.database;
+  if (!database || typeof database.from !== "function") return fallback;
   const defaults = getPricingDefaults();
   const requestedModel = normalizeModelValue(model) || defaults.model;
   const requestedModelLower = requestedModel ? requestedModel.toLowerCase() : null;
-  const requestedSource = normalizeSource2(source) || defaults.source;
+  const requestedSource = normalizeSource(source) || defaults.source;
   const dateKey = typeof effectiveDate === "string" && effectiveDate.trim() ? effectiveDate.trim() : (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   try {
     let resolvedModel = requestedModel;
     if (requestedModelLower) {
-      const { data: aliasRows, error: aliasError } = await edgeClient.database.from("vibeusage_pricing_model_aliases").select("pricing_model,effective_from").eq("active", true).eq("pricing_source", requestedSource).eq("usage_model", requestedModelLower).lte("effective_from", dateKey).order("effective_from", { ascending: false }).limit(1);
+      const { data: aliasRows, error: aliasError } = await database.from("vibeusage_pricing_model_aliases").select("pricing_model,effective_from").eq("active", true).eq("pricing_source", requestedSource).eq("usage_model", requestedModelLower).lte("effective_from", dateKey).order("effective_from", { ascending: false }).limit(1);
       if (!aliasError && Array.isArray(aliasRows) && aliasRows.length > 0) {
         const aliasModel = normalizeModelValue(aliasRows[0]?.pricing_model);
         if (aliasModel) resolvedModel = aliasModel;
       }
     }
-    let query = edgeClient.database.from("vibeusage_pricing_profiles").select(
+    let query = database.from("vibeusage_pricing_profiles").select(
       "model,source,effective_from,input_rate_micro_per_million,cached_input_rate_micro_per_million,output_rate_micro_per_million,reasoning_output_rate_micro_per_million"
     ).eq("active", true).eq("source", requestedSource).lte("effective_from", dateKey);
     if (resolvedModel) {
@@ -1192,11 +1044,11 @@ async function resolvePricingProfile({ edgeClient, effectiveDate, model, source 
 }
 function computeUsageCost(totals, profile) {
   const pricing = normalizeProfile(profile || DEFAULT_PROFILE);
-  const input = toBigInt(totals?.input_tokens);
-  const cached = toBigInt(totals?.cached_input_tokens);
-  const output = toBigInt(totals?.output_tokens);
-  const reasoning = toBigInt(totals?.reasoning_output_tokens);
-  const total = toBigInt(totals?.total_tokens);
+  const input = normalizeBigInt(totals?.input_tokens);
+  const cached = normalizeBigInt(totals?.cached_input_tokens);
+  const output = normalizeBigInt(totals?.output_tokens);
+  const reasoning = normalizeBigInt(totals?.reasoning_output_tokens);
+  const total = normalizeBigInt(totals?.total_tokens);
   const sumAdd = input + cached + output + reasoning;
   const sumOverlap = input + output;
   const canOverlap = cached <= input && reasoning <= output;
@@ -1272,6 +1124,245 @@ function normalizeBigInt(value) {
   if (Number.isFinite(n) && n >= 0) return BigInt(Math.floor(n));
   return 0n;
 }
+if (!globalThis[CORE_KEY2]) {
+  Object.defineProperty(globalThis, CORE_KEY2, {
+    value: {
+      getDefaultPricingProfile,
+      getPricingDefaults,
+      resolvePricingProfile,
+      computeUsageCost,
+      buildPricingMetadata,
+      formatUsdFromMicros
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/pricing.js
+var pricingCore = globalThis.__vibeusagePricingCore;
+if (!pricingCore) throw new Error("pricing core not initialized");
+var resolvePricingProfile2 = pricingCore.resolvePricingProfile;
+var computeUsageCost2 = pricingCore.computeUsageCost;
+var buildPricingMetadata2 = pricingCore.buildPricingMetadata;
+var formatUsdFromMicros2 = pricingCore.formatUsdFromMicros;
+
+// insforge-src/shared/usage-metrics-core.mjs
+var CORE_KEY3 = "__vibeusageUsageMetricsCore";
+var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
+var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
+var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
+var MAX_SOURCE_LENGTH = 64;
+function toBigInt2(value) {
+  if (typeof value === "bigint") return value >= 0n ? value : 0n;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || value <= 0) return 0n;
+    return BigInt(Math.floor(value));
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!/^[0-9]+$/.test(trimmed)) return 0n;
+    try {
+      return BigInt(trimmed);
+    } catch (_error) {
+      return 0n;
+    }
+  }
+  return 0n;
+}
+function normalizeSource2(value) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized.length > MAX_SOURCE_LENGTH) return normalized.slice(0, MAX_SOURCE_LENGTH);
+  return normalized;
+}
+function createTotals() {
+  return {
+    total_tokens: 0n,
+    billable_total_tokens: 0n,
+    input_tokens: 0n,
+    cached_input_tokens: 0n,
+    output_tokens: 0n,
+    reasoning_output_tokens: 0n
+  };
+}
+function addRowTotals(target, row) {
+  if (!target || !row) return;
+  target.total_tokens += toBigInt2(row?.total_tokens);
+  target.billable_total_tokens += toBigInt2(row?.billable_total_tokens);
+  target.input_tokens += toBigInt2(row?.input_tokens);
+  target.cached_input_tokens += toBigInt2(row?.cached_input_tokens);
+  target.output_tokens += toBigInt2(row?.output_tokens);
+  target.reasoning_output_tokens += toBigInt2(row?.reasoning_output_tokens);
+}
+function computeBillableTotalTokens({ source, totals } = {}) {
+  const normalizedSource = normalizeSource2(source) || "unknown";
+  const input = toBigInt2(totals?.input_tokens);
+  const cached = toBigInt2(totals?.cached_input_tokens);
+  const output = toBigInt2(totals?.output_tokens);
+  const reasoning = toBigInt2(totals?.reasoning_output_tokens);
+  const total = toBigInt2(totals?.total_tokens);
+  const hasTotal = Boolean(totals && Object.prototype.hasOwnProperty.call(totals, "total_tokens"));
+  if (BILLABLE_TOTAL.has(normalizedSource)) return total;
+  if (BILLABLE_ADD_ALL.has(normalizedSource)) return input + cached + output + reasoning;
+  if (BILLABLE_INPUT_OUTPUT_REASONING.has(normalizedSource)) return input + output + reasoning;
+  if (hasTotal) return total;
+  return input + output + reasoning;
+}
+function resolveBillableTotals({
+  row,
+  source,
+  totals,
+  billableField = "billable_total_tokens",
+  hasStoredBillable
+} = {}) {
+  const stored = typeof hasStoredBillable === "boolean" ? hasStoredBillable : Boolean(
+    row && Object.prototype.hasOwnProperty.call(row, billableField) && row[billableField] != null
+  );
+  const resolvedTotals = totals || row;
+  const billable = stored ? toBigInt2(row?.[billableField]) : computeBillableTotalTokens({ source, totals: resolvedTotals });
+  return { billable, hasStoredBillable: stored };
+}
+function applyTotalsAndBillable({ totals, row, billable, hasStoredBillable } = {}) {
+  if (!totals || !row) return;
+  addRowTotals(totals, row);
+  if (!hasStoredBillable) {
+    totals.billable_total_tokens += toBigInt2(billable);
+  }
+}
+function getSourceEntry(map, source) {
+  if (map.has(source)) return map.get(source);
+  const entry = { source, totals: createTotals() };
+  map.set(source, entry);
+  return entry;
+}
+function resolveDisplayName(identityMap, modelId) {
+  if (!modelId || !identityMap || typeof identityMap.values !== "function") return modelId || null;
+  for (const entry of identityMap.values()) {
+    if (entry?.model_id === modelId && entry?.model) return entry.model;
+  }
+  return modelId;
+}
+function buildPricingBucketKey(sourceKey, usageKey, dateKey) {
+  return JSON.stringify([sourceKey || "", usageKey || "", dateKey || ""]);
+}
+function parsePricingBucketKey(bucketKey, defaultDate) {
+  if (typeof bucketKey === "string" && bucketKey.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(bucketKey);
+      if (Array.isArray(parsed)) {
+        const usageKey = parsed[1] ?? parsed[0] ?? "";
+        const dateKey = parsed[2] ?? defaultDate;
+        return { usageKey: String(usageKey || ""), dateKey: String(dateKey || defaultDate) };
+      }
+    } catch (_error) {
+    }
+  }
+  if (typeof bucketKey === "string") {
+    const parts = bucketKey.split("::");
+    if (parts.length >= 3) return { usageKey: parts[1], dateKey: parts[2] || defaultDate };
+    if (parts.length === 2) return { usageKey: parts[0], dateKey: parts[1] || defaultDate };
+    return { usageKey: bucketKey, dateKey: defaultDate };
+  }
+  return { usageKey: bucketKey, dateKey: defaultDate };
+}
+if (!globalThis[CORE_KEY3]) {
+  Object.defineProperty(globalThis, CORE_KEY3, {
+    value: {
+      createTotals,
+      addRowTotals,
+      computeBillableTotalTokens,
+      resolveBillableTotals,
+      applyTotalsAndBillable,
+      getSourceEntry,
+      resolveDisplayName,
+      buildPricingBucketKey,
+      parsePricingBucketKey
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/usage-summary-support.js
+var MAX_PAGE_SIZE = 1e3;
+var usageModelCore = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore) throw new Error("usage-model core not initialized");
+var usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
+if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
+var normalizeModel2 = usageModelCore.normalizeModel;
+var normalizeUsageModel2 = usageModelCore.normalizeUsageModel;
+var applyUsageModelFilter2 = usageModelCore.applyUsageModelFilter;
+var getModelParam2 = usageModelCore.getModelParam;
+var normalizeUsageModelKey2 = usageModelCore.normalizeUsageModelKey;
+var applyModelIdentity2 = usageModelCore.applyModelIdentity;
+var resolveModelIdentity2 = usageModelCore.resolveModelIdentity;
+var resolveUsageModelsForCanonical2 = usageModelCore.resolveUsageModelsForCanonical;
+var extractDateKey2 = usageModelCore.extractDateKey;
+var resolveIdentityAtDate2 = usageModelCore.resolveIdentityAtDate;
+var buildAliasTimeline2 = usageModelCore.buildAliasTimeline;
+var fetchAliasRows2 = usageModelCore.fetchAliasRows;
+var createTotals2 = usageMetricsCore.createTotals;
+var addRowTotals2 = usageMetricsCore.addRowTotals;
+var resolveBillableTotals2 = usageMetricsCore.resolveBillableTotals;
+var applyTotalsAndBillable2 = usageMetricsCore.applyTotalsAndBillable;
+var getSourceEntry2 = usageMetricsCore.getSourceEntry;
+var resolveDisplayName2 = usageMetricsCore.resolveDisplayName;
+var buildPricingBucketKey2 = usageMetricsCore.buildPricingBucketKey;
+var parsePricingBucketKey2 = usageMetricsCore.parsePricingBucketKey;
+async function forEachPage({ createQuery, pageSize, onPage }) {
+  if (typeof createQuery !== "function") throw new Error("createQuery must be a function");
+  if (typeof onPage !== "function") throw new Error("onPage must be a function");
+  const size = normalizePageSize(pageSize);
+  let offset = 0;
+  while (true) {
+    const query = createQuery();
+    if (!query || typeof query.range !== "function") {
+      const { data: data2, error: error2 } = await query;
+      if (error2) return { error: error2 };
+      const rows2 = Array.isArray(data2) ? data2 : [];
+      if (rows2.length) await onPage(rows2);
+      return { error: null };
+    }
+    const { data, error } = await query.range(offset, offset + size - 1);
+    if (error) return { error };
+    const rows = Array.isArray(data) ? data : [];
+    if (rows.length) await onPage(rows);
+    if (rows.length < size) break;
+    offset += size;
+  }
+  return { error: null };
+}
+function normalizePageSize(value) {
+  const size = Number(value);
+  if (!Number.isFinite(size) || size <= 0) return MAX_PAGE_SIZE;
+  return Math.min(MAX_PAGE_SIZE, Math.floor(size));
+}
+async function fetchRollupRows({ edgeClient, userId, fromDay, toDay, source, model }) {
+  const rows = [];
+  const { error } = await forEachPage({
+    createQuery: () => {
+      let query = edgeClient.database.from("vibeusage_tracker_daily_rollup").select(
+        "day,source,model,total_tokens,billable_total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens"
+      ).eq("user_id", userId).gte("day", fromDay).lte("day", toDay);
+      if (source) query = query.eq("source", source);
+      if (model) query = query.eq("model", model);
+      query = applyCanaryFilter(query, { source, model });
+      return query.order("day", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
+    },
+    onPage: (pageRows) => {
+      if (Array.isArray(pageRows) && pageRows.length > 0) rows.push(...pageRows);
+    }
+  });
+  if (error) return { ok: false, error };
+  return { ok: true, rows };
+}
+function isRollupEnabled() {
+  return false;
+}
 
 // insforge-src/functions-esm/vibeusage-usage-summary.js
 var DEFAULT_SOURCE = "codex";
@@ -1337,7 +1428,7 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
     });
     aliasTimeline = buildAliasTimeline2({ usageModels, aliasRows });
   }
-  let totals = createTotals();
+  let totals = createTotals2();
   let sourcesMap = /* @__PURE__ */ new Map();
   let distinctModels = /* @__PURE__ */ new Set();
   const distinctUsageModels = /* @__PURE__ */ new Set();
@@ -1347,7 +1438,7 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
   let rollupHit = false;
   const rollupEnabled = isRollupEnabled();
   const resetAggregation = () => {
-    totals = createTotals();
+    totals = createTotals2();
     sourcesMap = /* @__PURE__ */ new Map();
     distinctModels = /* @__PURE__ */ new Set();
     rowCount = 0;
@@ -1370,18 +1461,18 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
   const ingestRow = (row) => {
     if (!shouldIncludeRow(row)) return;
     const sourceKey = normalizeSource3(row?.source) || DEFAULT_SOURCE;
-    const { billable, hasStoredBillable } = resolveBillableTotals({ row, source: sourceKey });
-    applyTotalsAndBillable({ totals, row, billable, hasStoredBillable });
-    const sourceEntry = getSourceEntry(sourcesMap, sourceKey);
-    applyTotalsAndBillable({ totals: sourceEntry.totals, row, billable, hasStoredBillable });
+    const { billable, hasStoredBillable } = resolveBillableTotals2({ row, source: sourceKey });
+    applyTotalsAndBillable2({ totals, row, billable, hasStoredBillable });
+    const sourceEntry = getSourceEntry2(sourcesMap, sourceKey);
+    applyTotalsAndBillable2({ totals: sourceEntry.totals, row, billable, hasStoredBillable });
     const normalizedModel = normalizeUsageModel2(row?.model);
     if (normalizedModel && normalizedModel !== "unknown") distinctModels.add(normalizedModel);
     if (!hasModelParam && pricingBuckets) {
       const usageKey = normalizeUsageModelKey2(normalizedModel) || DEFAULT_MODEL2;
       const dateKey = extractDateKey2(row?.hour_start || row?.day) || to;
-      const bucketKey = buildPricingBucketKey(sourceKey, usageKey, dateKey);
-      const bucket = pricingBuckets.get(bucketKey) || createTotals();
-      addRowTotals2(bucket, row);
+      const bucketKey = buildPricingBucketKey2(sourceKey, usageKey, dateKey);
+      const bucket = pricingBuckets.get(bucketKey) || createTotals2();
+      addRowTotals3(bucket, row);
       pricingBuckets.set(bucketKey, bucket);
       distinctUsageModels.add(usageKey);
     }
@@ -1571,7 +1662,7 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
     }
     const rangeStartIso = rangeStartUtc.toISOString();
     const rangeEndIso = rangeEndUtc.toISOString();
-    const rollingTotals = createTotals();
+    const rollingTotals = createTotals2();
     const activeByDay = /* @__PURE__ */ new Map();
     const shouldUseHourlyForActiveDays = rollupEnabled && !isUtcTimeZone(tzContext);
     const resetRollingAggregation = () => {
@@ -1600,8 +1691,8 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
     const ingestRollingRow = (row) => {
       if (!shouldIncludeRow(row)) return;
       const sourceKey = normalizeSource3(row?.source) || DEFAULT_SOURCE;
-      const { billable, hasStoredBillable } = resolveBillableTotals({ row, source: sourceKey });
-      applyTotalsAndBillable({ totals: rollingTotals, row, billable, hasStoredBillable });
+      const { billable, hasStoredBillable } = resolveBillableTotals2({ row, source: sourceKey });
+      applyTotalsAndBillable2({ totals: rollingTotals, row, billable, hasStoredBillable });
       if (!shouldUseHourlyForActiveDays) {
         updateActiveByDay({ row, billable, hasStoredBillable });
       }
@@ -1620,7 +1711,7 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
       const activeRes = await sumHourlyRangeInto(rangeStartIso, rangeEndIso, (row) => {
         if (!shouldIncludeRow(row)) return;
         const sourceKey = normalizeSource3(row?.source) || DEFAULT_SOURCE;
-        const { billable, hasStoredBillable } = resolveBillableTotals({ row, source: sourceKey });
+        const { billable, hasStoredBillable } = resolveBillableTotals2({ row, source: sourceKey });
         updateActiveByDay({ row, billable, hasStoredBillable });
       });
       if (!activeRes.ok) return activeRes;
@@ -1743,9 +1834,9 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
       const rangeCanonicalModels = /* @__PURE__ */ new Set();
       const profileCache = /* @__PURE__ */ new Map();
       const getProfile = async (modelId, dateKey) => {
-        const key = buildPricingBucketKey("profile", modelId || "", dateKey || "");
+        const key = buildPricingBucketKey2("profile", modelId || "", dateKey || "");
         if (profileCache.has(key)) return profileCache.get(key);
-        const profile = await resolvePricingProfile({
+        const profile = await resolvePricingProfile2({
           edgeClient: auth.edgeClient,
           model: modelId,
           effectiveDate: dateKey
@@ -1754,13 +1845,13 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
         return profile;
       };
       for (const [bucketKey, bucketTotals] of pricingBuckets.entries()) {
-        const { usageKey, dateKey } = parsePricingBucketKey(bucketKey, to);
+        const { usageKey, dateKey } = parsePricingBucketKey2(bucketKey, to);
         const identity = resolveIdentityAtDate2({ usageKey, dateKey, timeline });
         if (identity.model_id && identity.model_id !== DEFAULT_MODEL2) {
           rangeCanonicalModels.add(identity.model_id);
         }
         const profile = await getProfile(identity.model_id, dateKey);
-        const cost = computeUsageCost(bucketTotals, profile);
+        const cost = computeUsageCost2(bucketTotals, profile);
         totalCostMicros += cost.cost_micros;
         pricingModes.add(cost.pricing_mode);
       }
@@ -1768,9 +1859,9 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
     }
   }
   const impliedModelId = canonicalModel || (canonicalModels.size === 1 ? Array.from(canonicalModels)[0] : null);
-  const impliedModelDisplay = resolveDisplayName(identityMap, impliedModelId);
+  const impliedModelDisplay = resolveDisplayName2(identityMap, impliedModelId);
   if (!pricingProfile) {
-    pricingProfile = await resolvePricingProfile({
+    pricingProfile = await resolvePricingProfile2({
       edgeClient: auth.edgeClient,
       model: impliedModelId,
       effectiveDate: to
@@ -1778,12 +1869,12 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
   }
   if (pricingModes.size === 0) {
     for (const entry of sourcesMap.values()) {
-      const sourceCost = computeUsageCost(entry.totals, pricingProfile);
+      const sourceCost = computeUsageCost2(entry.totals, pricingProfile);
       totalCostMicros += sourceCost.cost_micros;
       pricingModes.add(sourceCost.pricing_mode);
     }
   }
-  const overallCost = computeUsageCost(
+  const overallCost = computeUsageCost2(
     {
       total_tokens: totals.total_tokens,
       input_tokens: totals.input_tokens,
@@ -1812,9 +1903,9 @@ var vibeusage_usage_summary_default = withRequestLogging("vibeusage-usage-summar
       cached_input_tokens: totals.cached_input_tokens.toString(),
       output_tokens: totals.output_tokens.toString(),
       reasoning_output_tokens: totals.reasoning_output_tokens.toString(),
-      total_cost_usd: formatUsdFromMicros(totalCostMicros)
+      total_cost_usd: formatUsdFromMicros2(totalCostMicros)
     },
-    pricing: buildPricingMetadata({
+    pricing: buildPricingMetadata2({
       profile: overallCost.profile,
       pricingMode: summaryPricingMode
     })
@@ -1837,7 +1928,7 @@ function normalizeSource3(value) {
   const normalized = value.trim().toLowerCase();
   return normalized || null;
 }
-function addRowTotals2(target, row) {
+function addRowTotals3(target, row) {
   if (!target || !row) return;
   target.total_tokens += toBigInt(row?.total_tokens);
   target.billable_total_tokens += toBigInt(row?.billable_total_tokens);

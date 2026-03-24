@@ -37,3 +37,24 @@ test("backend model semantics flow through a single shared core", () => {
     /shared\/usage-model-core\.mjs/,
   );
 });
+
+test("backend pricing and usage metrics semantics flow through shared cores", () => {
+  assert.equal(
+    read("insforge-src/shared/pricing-core.js"),
+    read("insforge-src/shared/pricing-core.mjs"),
+  );
+  assert.equal(
+    read("insforge-src/shared/usage-metrics-core.js"),
+    read("insforge-src/shared/usage-metrics-core.mjs"),
+  );
+  assert.match(read("insforge-src/shared/pricing.js"), /pricing-core/);
+  assert.match(read("insforge-src/shared/usage-billable.js"), /usage-metrics-core/);
+  assert.match(read("insforge-src/shared/usage-aggregate.js"), /usage-metrics-core/);
+  assert.match(read("insforge-src/shared/usage-rollup.js"), /usage-metrics-core/);
+  assert.match(read("insforge-src/shared/core/usage-summary.js"), /usage-metrics-core/);
+  assert.match(read("insforge-src/functions-esm/shared/pricing.js"), /shared\/pricing-core\.mjs/);
+  assert.match(
+    read("insforge-src/functions-esm/shared/usage-summary-support.js"),
+    /shared\/usage-metrics-core\.mjs/,
+  );
+});

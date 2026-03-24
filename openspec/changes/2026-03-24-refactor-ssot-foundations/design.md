@@ -24,4 +24,6 @@
 
 Model normalization, canonical identity resolution, and alias timeline rules now converge through `insforge-src/shared/usage-model-core.js`. The ESM layer consumes a mirrored `.mjs` artifact whose contents are guardrailed to stay byte-for-byte identical, while CJS and ESM wrappers remain thin export layers only.
 
+Pricing resolution, cost computation, billable-total resolution, shared totals helpers, and pricing bucket key parsing now follow the same pattern through `insforge-src/shared/pricing-core.js` and `insforge-src/shared/usage-metrics-core.js`, again with mirrored `.mjs` artifacts for the ESM edge layer.
+
 The ESM edge layer still contains additional duplicated business logic beyond this slice. This change converts immediately reachable contract drift to shared modules and guardrails first, then continues function-by-function backend convergence without changing public slugs.
