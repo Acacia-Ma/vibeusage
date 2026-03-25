@@ -1,17 +1,14 @@
 "use strict";
 
 require("./date-core");
-require("./runtime-primitives-core");
-require("./usage-model-core");
+require("./usage-filter-request-core");
 
 const CORE_KEY = "__vibeusageUsageAggregateRequestCore";
 const dateCore = globalThis.__vibeusageDateCore;
-const runtimePrimitivesCore = globalThis.__vibeusageRuntimePrimitivesCore;
-const usageModelCore = globalThis.__vibeusageUsageModelCore;
+const usageFilterRequestCore = globalThis.__vibeusageUsageFilterRequestCore;
 
 if (!dateCore) throw new Error("date core not initialized");
-if (!runtimePrimitivesCore) throw new Error("runtime primitives core not initialized");
-if (!usageModelCore) throw new Error("usage-model core not initialized");
+if (!usageFilterRequestCore) throw new Error("usage filter request core not initialized");
 
 async function resolveAggregateUsageRequestContext({
   url,
@@ -19,15 +16,8 @@ async function resolveAggregateUsageRequestContext({
   edgeClient,
   auth = null,
 } = {}) {
-  const sourceResult = runtimePrimitivesCore.getSourceParam(url);
-  if (!sourceResult?.ok) {
-    return { ok: false, status: 400, error: sourceResult?.error || "Invalid source" };
-  }
-
-  const modelResult = usageModelCore.getModelParam(url);
-  if (!modelResult?.ok) {
-    return { ok: false, status: 400, error: modelResult?.error || "Invalid model" };
-  }
+  const requestParams = usageFilterRequestCore.resolveUsageFilterRequestParams({ url });
+  if (!requestParams?.ok) return requestParams;
 
   const range = dateCore.resolveUsageDateRangeLocal({
     fromRaw: url?.searchParams?.get("from"),
@@ -39,19 +29,18 @@ async function resolveAggregateUsageRequestContext({
   }
 
   const { from, to, dayKeys, startIso, endIso } = range;
-  const model = modelResult.model;
-  const filterContext = await usageModelCore.resolveUsageFilterContext({
+  const filterContext = await usageFilterRequestCore.resolveUsageFilterRequestContext({
     edgeClient,
-    canonicalModel: model,
+    model: requestParams.model,
     effectiveDate: to,
   });
 
   return {
     ok: true,
     auth,
-    source: sourceResult.source,
-    model,
-    hasModelParam: model != null,
+    source: requestParams.source,
+    model: requestParams.model,
+    hasModelParam: requestParams.hasModelParam,
     from,
     to,
     dayKeys,

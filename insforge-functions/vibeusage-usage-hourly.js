@@ -1325,8 +1325,63 @@ var resolveHalfHourSlot2 = usageHourlyCore.resolveHalfHourSlot;
 var formatHourKeyFromValue2 = usageHourlyCore.formatHourKeyFromValue;
 var buildHourlyResponse2 = usageHourlyCore.buildHourlyResponse;
 
+// insforge-src/shared/usage-filter-request-core.mjs
+var CORE_KEY9 = "__vibeusageUsageFilterRequestCore";
+var runtimePrimitivesCore5 = globalThis.__vibeusageRuntimePrimitivesCore;
+var usageModelCore2 = globalThis.__vibeusageUsageModelCore;
+if (!runtimePrimitivesCore5) throw new Error("runtime primitives core not initialized");
+if (!usageModelCore2) throw new Error("usage-model core not initialized");
+function resolveUsageFilterRequestParams({ url } = {}) {
+  const sourceResult = runtimePrimitivesCore5.getSourceParam(url);
+  if (!sourceResult?.ok) {
+    return { ok: false, status: 400, error: sourceResult?.error || "Invalid source" };
+  }
+  const modelResult = usageModelCore2.getModelParam(url);
+  if (!modelResult?.ok) {
+    return { ok: false, status: 400, error: modelResult?.error || "Invalid model" };
+  }
+  return {
+    ok: true,
+    source: sourceResult.source,
+    model: modelResult.model,
+    hasModelParam: modelResult.model != null
+  };
+}
+async function resolveUsageFilterRequestContext({ edgeClient, model, effectiveDate } = {}) {
+  const filterContext = await usageModelCore2.resolveUsageFilterContext({
+    edgeClient,
+    canonicalModel: model,
+    effectiveDate
+  });
+  return {
+    canonicalModel: filterContext.canonicalModel,
+    usageModels: filterContext.usageModels,
+    hasModelFilter: filterContext.hasModelFilter,
+    aliasTimeline: filterContext.aliasTimeline
+  };
+}
+if (!globalThis[CORE_KEY9]) {
+  Object.defineProperty(globalThis, CORE_KEY9, {
+    value: {
+      resolveUsageFilterRequestParams,
+      resolveUsageFilterRequestContext
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/core/usage-filter-request.js
+var usageFilterRequestCore = globalThis.__vibeusageUsageFilterRequestCore;
+if (!usageFilterRequestCore) {
+  throw new Error("usage filter request core not initialized");
+}
+var resolveUsageFilterRequestParams2 = usageFilterRequestCore.resolveUsageFilterRequestParams;
+var resolveUsageFilterRequestContext2 = usageFilterRequestCore.resolveUsageFilterRequestContext;
+
 // insforge-src/shared/pagination-core.mjs
-var CORE_KEY9 = "__vibeusagePaginationCore";
+var CORE_KEY10 = "__vibeusagePaginationCore";
 var MAX_PAGE_SIZE = 1e3;
 function normalizePageSize(value) {
   const size = Number(value);
@@ -1360,8 +1415,8 @@ async function forEachPage({ createQuery, pageSize, onPage }) {
   }
   return { error: null };
 }
-if (!globalThis[CORE_KEY9]) {
-  Object.defineProperty(globalThis, CORE_KEY9, {
+if (!globalThis[CORE_KEY10]) {
+  Object.defineProperty(globalThis, CORE_KEY10, {
     value: {
       MAX_PAGE_SIZE,
       normalizePageSize,
@@ -1374,10 +1429,10 @@ if (!globalThis[CORE_KEY9]) {
 }
 
 // insforge-src/shared/usage-filter-core.mjs
-var CORE_KEY10 = "__vibeusageUsageFilterCore";
-var usageModelCore2 = globalThis.__vibeusageUsageModelCore;
-if (!usageModelCore2) throw new Error("usage-model core not initialized");
-var { extractDateKey: extractDateKey2, matchesCanonicalModelAtDate: matchesCanonicalModelAtDate2 } = usageModelCore2;
+var CORE_KEY11 = "__vibeusageUsageFilterCore";
+var usageModelCore3 = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore3) throw new Error("usage-model core not initialized");
+var { extractDateKey: extractDateKey2, matchesCanonicalModelAtDate: matchesCanonicalModelAtDate2 } = usageModelCore3;
 function shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to }) {
   if (!hasModelFilter) return true;
   const dateKey = extractDateKey2(row?.hour_start || row?.day) || to;
@@ -1388,8 +1443,8 @@ function shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimel
     timeline: aliasTimeline
   });
 }
-if (!globalThis[CORE_KEY10]) {
-  Object.defineProperty(globalThis, CORE_KEY10, {
+if (!globalThis[CORE_KEY11]) {
+  Object.defineProperty(globalThis, CORE_KEY11, {
     value: {
       shouldIncludeUsageRow
     },
@@ -1400,14 +1455,14 @@ if (!globalThis[CORE_KEY10]) {
 }
 
 // insforge-src/shared/usage-hourly-query-core.mjs
-var CORE_KEY11 = "__vibeusageUsageHourlyQueryCore";
-var usageModelCore3 = globalThis.__vibeusageUsageModelCore;
-if (!usageModelCore3) throw new Error("usage-model core not initialized");
+var CORE_KEY12 = "__vibeusageUsageHourlyQueryCore";
+var usageModelCore4 = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore4) throw new Error("usage-model core not initialized");
 var canaryCore2 = globalThis.__vibeusageCanaryCore;
 if (!canaryCore2) throw new Error("canary core not initialized");
 var paginationCore = globalThis.__vibeusagePaginationCore;
 if (!paginationCore) throw new Error("pagination core not initialized");
-var { applyUsageModelFilter: applyUsageModelFilter2 } = usageModelCore3;
+var { applyUsageModelFilter: applyUsageModelFilter2 } = usageModelCore4;
 var { applyCanaryFilter: applyCanaryFilter3 } = canaryCore2;
 var { forEachPage: forEachPage2 } = paginationCore;
 function buildHourlyUsageQuery({
@@ -1470,8 +1525,8 @@ async function forEachHourlyUsagePage({
   });
   return { error, rowCount };
 }
-if (!globalThis[CORE_KEY11]) {
-  Object.defineProperty(globalThis, CORE_KEY11, {
+if (!globalThis[CORE_KEY12]) {
+  Object.defineProperty(globalThis, CORE_KEY12, {
     value: {
       buildHourlyUsageQuery,
       forEachHourlyUsagePage
@@ -1483,16 +1538,16 @@ if (!globalThis[CORE_KEY11]) {
 }
 
 // insforge-src/shared/usage-row-core.mjs
-var CORE_KEY12 = "__vibeusageUsageRowCore";
+var CORE_KEY13 = "__vibeusageUsageRowCore";
 var DEFAULT_SOURCE = "codex";
 var DEFAULT_MODEL2 = "unknown";
-var runtimePrimitivesCore5 = globalThis.__vibeusageRuntimePrimitivesCore;
-if (!runtimePrimitivesCore5) throw new Error("runtime primitives core not initialized");
-var usageModelCore4 = globalThis.__vibeusageUsageModelCore;
-if (!usageModelCore4) throw new Error("usage-model core not initialized");
+var runtimePrimitivesCore6 = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore6) throw new Error("runtime primitives core not initialized");
+var usageModelCore5 = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore5) throw new Error("usage-model core not initialized");
 var usageMetricsCore2 = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore2) throw new Error("usage metrics core not initialized");
-var { extractDateKey: extractDateKey3, normalizeUsageModel: normalizeUsageModel2, normalizeUsageModelKey: normalizeUsageModelKey2 } = usageModelCore4;
+var { extractDateKey: extractDateKey3, normalizeUsageModel: normalizeUsageModel2, normalizeUsageModelKey: normalizeUsageModelKey2 } = usageModelCore5;
 var { resolveBillableTotals: resolveBillableTotals2 } = usageMetricsCore2;
 function resolveHourlyUsageRowState({
   row,
@@ -1517,7 +1572,7 @@ function resolveHourlyUsageRowState({
   } else if (!allowMissingTimestamp) {
     return null;
   }
-  const sourceKey = runtimePrimitivesCore5.normalizeSource(row?.source) || source || defaultSource;
+  const sourceKey = runtimePrimitivesCore6.normalizeSource(row?.source) || source || defaultSource;
   const billingSource = row?.source || source || (useDefaultSourceForBilling ? defaultSource : null);
   const normalizedModel = normalizeUsageModel2(row?.model) || defaultModel;
   const usageKey = normalizeUsageModelKey2(normalizedModel) || defaultModel;
@@ -1533,8 +1588,8 @@ function resolveHourlyUsageRowState({
     usageKey
   };
 }
-if (!globalThis[CORE_KEY12]) {
-  Object.defineProperty(globalThis, CORE_KEY12, {
+if (!globalThis[CORE_KEY13]) {
+  Object.defineProperty(globalThis, CORE_KEY13, {
     value: {
       resolveHourlyUsageRowState
     },
@@ -1545,7 +1600,7 @@ if (!globalThis[CORE_KEY12]) {
 }
 
 // insforge-src/shared/usage-row-collector-core.mjs
-var CORE_KEY13 = "__vibeusageUsageRowCollectorCore";
+var CORE_KEY14 = "__vibeusageUsageRowCollectorCore";
 var usageFilterCore = globalThis.__vibeusageUsageFilterCore;
 var usageHourlyQueryCore = globalThis.__vibeusageUsageHourlyQueryCore;
 var usageRowCore = globalThis.__vibeusageUsageRowCore;
@@ -1605,8 +1660,8 @@ async function collectHourlyUsageRows({
   });
   return { error, rowCount };
 }
-if (!globalThis[CORE_KEY13]) {
-  Object.defineProperty(globalThis, CORE_KEY13, {
+if (!globalThis[CORE_KEY14]) {
+  Object.defineProperty(globalThis, CORE_KEY14, {
     value: {
       collectHourlyUsageRows
     },
@@ -1622,7 +1677,7 @@ if (!usageRowCollectorCore) throw new Error("usage row collector core not initia
 var collectHourlyUsageRows2 = usageRowCollectorCore.collectHourlyUsageRows;
 
 // insforge-src/shared/debug-core.mjs
-var CORE_KEY14 = "__vibeusageDebugCore";
+var CORE_KEY15 = "__vibeusageDebugCore";
 var envCore2 = globalThis.__vibeusageEnvCore;
 if (!envCore2) throw new Error("env core not initialized");
 function isDebugEnabled(url) {
@@ -1664,8 +1719,8 @@ function withSlowQueryDebugPayload(body, options) {
     debug: buildSlowQueryDebugPayload(options)
   };
 }
-if (!globalThis[CORE_KEY14]) {
-  Object.defineProperty(globalThis, CORE_KEY14, {
+if (!globalThis[CORE_KEY15]) {
+  Object.defineProperty(globalThis, CORE_KEY15, {
     value: {
       isDebugEnabled,
       buildSlowQueryDebugPayload,
@@ -1678,7 +1733,7 @@ if (!globalThis[CORE_KEY14]) {
 }
 
 // insforge-src/shared/http-core.mjs
-var CORE_KEY15 = "__vibeusageHttpCore";
+var CORE_KEY16 = "__vibeusageHttpCore";
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -1715,8 +1770,8 @@ async function readJson(request) {
     return { error: "Invalid JSON", status: 400, data: null };
   }
 }
-if (!globalThis[CORE_KEY15]) {
-  Object.defineProperty(globalThis, CORE_KEY15, {
+if (!globalThis[CORE_KEY16]) {
+  Object.defineProperty(globalThis, CORE_KEY16, {
     value: {
       corsHeaders,
       handleOptions,
@@ -1731,7 +1786,7 @@ if (!globalThis[CORE_KEY15]) {
 }
 
 // insforge-src/shared/usage-response-core.mjs
-var CORE_KEY16 = "__vibeusageUsageResponseCore";
+var CORE_KEY17 = "__vibeusageUsageResponseCore";
 var debugCore = globalThis.__vibeusageDebugCore;
 var httpCore = globalThis.__vibeusageHttpCore;
 if (!debugCore) throw new Error("debug core not initialized");
@@ -1749,8 +1804,8 @@ function createUsageJsonResponder({ url, logger, extraHeaders } = {}) {
     );
   };
 }
-if (!globalThis[CORE_KEY16]) {
-  Object.defineProperty(globalThis, CORE_KEY16, {
+if (!globalThis[CORE_KEY17]) {
+  Object.defineProperty(globalThis, CORE_KEY17, {
     value: {
       createUsageJsonResponder,
       resolveUsageResponseBody
@@ -1768,7 +1823,7 @@ var createUsageJsonResponder2 = usageResponseCore.createUsageJsonResponder;
 var resolveUsageResponseBody2 = usageResponseCore.resolveUsageResponseBody;
 
 // insforge-src/shared/date-core.mjs
-var CORE_KEY17 = "__vibeusageDateCore";
+var CORE_KEY18 = "__vibeusageDateCore";
 var envCore3 = globalThis.__vibeusageEnvCore;
 if (!envCore3) throw new Error("env core not initialized");
 var TIMEZONE_FORMATTERS = /* @__PURE__ */ new Map();
@@ -2072,8 +2127,8 @@ function isWithinInterval(lastSyncAt, minutes, nowIso) {
   if (!Number.isFinite(nowValue)) return false;
   return nowValue - lastMs < windowMs;
 }
-if (!globalThis[CORE_KEY17]) {
-  Object.defineProperty(globalThis, CORE_KEY17, {
+if (!globalThis[CORE_KEY18]) {
+  Object.defineProperty(globalThis, CORE_KEY18, {
     value: {
       isDate,
       toUtcDay,
@@ -2145,7 +2200,7 @@ var requireMethod2 = httpCore2.requireMethod;
 var readJson2 = httpCore2.readJson;
 
 // insforge-src/shared/logging-core.mjs
-var CORE_KEY18 = "__vibeusageLoggingCore";
+var CORE_KEY19 = "__vibeusageLoggingCore";
 var envCore4 = globalThis.__vibeusageEnvCore;
 if (!envCore4) throw new Error("env core not initialized");
 function createRequestId() {
@@ -2243,8 +2298,8 @@ function logSlowQuery(logger, fields) {
 function getSlowQueryThresholdMs3() {
   return envCore4.getSlowQueryThresholdMs();
 }
-if (!globalThis[CORE_KEY18]) {
-  Object.defineProperty(globalThis, CORE_KEY18, {
+if (!globalThis[CORE_KEY19]) {
+  Object.defineProperty(globalThis, CORE_KEY19, {
     value: {
       createLogger,
       withRequestLogging,
@@ -2264,36 +2319,29 @@ var createLogger2 = loggingCore.createLogger;
 var withRequestLogging2 = loggingCore.withRequestLogging;
 var logSlowQuery2 = loggingCore.logSlowQuery;
 
-// insforge-src/functions-esm/shared/source.js
-var runtimePrimitivesCore6 = globalThis.__vibeusageRuntimePrimitivesCore;
-if (!runtimePrimitivesCore6) throw new Error("runtime primitives core not initialized");
-var MAX_SOURCE_LENGTH2 = runtimePrimitivesCore6.MAX_SOURCE_LENGTH;
-var normalizeSource2 = runtimePrimitivesCore6.normalizeSource;
-var getSourceParam2 = runtimePrimitivesCore6.getSourceParam;
-
 // insforge-src/functions-esm/shared/usage-summary-support.js
-var usageModelCore5 = globalThis.__vibeusageUsageModelCore;
-if (!usageModelCore5) throw new Error("usage-model core not initialized");
+var usageModelCore6 = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore6) throw new Error("usage-model core not initialized");
 var usageRowCore2 = globalThis.__vibeusageUsageRowCore;
 if (!usageRowCore2) throw new Error("usage row core not initialized");
 var usageMetricsCore3 = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore3) throw new Error("usage metrics core not initialized");
-var normalizeModel2 = usageModelCore5.normalizeModel;
-var normalizeUsageModel3 = usageModelCore5.normalizeUsageModel;
-var applyUsageModelFilter3 = usageModelCore5.applyUsageModelFilter;
-var getModelParam2 = usageModelCore5.getModelParam;
-var normalizeUsageModelKey3 = usageModelCore5.normalizeUsageModelKey;
-var applyModelIdentity2 = usageModelCore5.applyModelIdentity;
-var resolveModelIdentity2 = usageModelCore5.resolveModelIdentity;
-var resolveUsageModelsForCanonical2 = usageModelCore5.resolveUsageModelsForCanonical;
-var resolveUsageFilterContext2 = usageModelCore5.resolveUsageFilterContext;
-var resolveUsageTimelineContext2 = usageModelCore5.resolveUsageTimelineContext;
+var normalizeModel2 = usageModelCore6.normalizeModel;
+var normalizeUsageModel3 = usageModelCore6.normalizeUsageModel;
+var applyUsageModelFilter3 = usageModelCore6.applyUsageModelFilter;
+var getModelParam2 = usageModelCore6.getModelParam;
+var normalizeUsageModelKey3 = usageModelCore6.normalizeUsageModelKey;
+var applyModelIdentity2 = usageModelCore6.applyModelIdentity;
+var resolveModelIdentity2 = usageModelCore6.resolveModelIdentity;
+var resolveUsageModelsForCanonical2 = usageModelCore6.resolveUsageModelsForCanonical;
+var resolveUsageFilterContext2 = usageModelCore6.resolveUsageFilterContext;
+var resolveUsageTimelineContext2 = usageModelCore6.resolveUsageTimelineContext;
 var resolveHourlyUsageRowState2 = usageRowCore2.resolveHourlyUsageRowState;
-var extractDateKey4 = usageModelCore5.extractDateKey;
-var resolveIdentityAtDate2 = usageModelCore5.resolveIdentityAtDate;
-var matchesCanonicalModelAtDate3 = usageModelCore5.matchesCanonicalModelAtDate;
-var buildAliasTimeline2 = usageModelCore5.buildAliasTimeline;
-var fetchAliasRows2 = usageModelCore5.fetchAliasRows;
+var extractDateKey4 = usageModelCore6.extractDateKey;
+var resolveIdentityAtDate2 = usageModelCore6.resolveIdentityAtDate;
+var matchesCanonicalModelAtDate3 = usageModelCore6.matchesCanonicalModelAtDate;
+var buildAliasTimeline2 = usageModelCore6.buildAliasTimeline;
+var fetchAliasRows2 = usageModelCore6.fetchAliasRows;
 var createTotals2 = usageMetricsCore3.createTotals;
 var addRowTotals2 = usageMetricsCore3.addRowTotals;
 var resolveBillableTotals3 = usageMetricsCore3.resolveBillableTotals;
@@ -2317,12 +2365,9 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
   const auth = await getAccessContext2({ baseUrl, bearer, allowPublic: true });
   if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
   const tzContext = getUsageTimeZoneContext2(url);
-  const sourceResult = getSourceParam2(url);
-  if (!sourceResult.ok) return respond({ error: sourceResult.error }, 400, 0);
-  const source = sourceResult.source;
-  const modelResult = getModelParam2(url);
-  if (!modelResult.ok) return respond({ error: modelResult.error }, 400, 0);
-  const model = modelResult.model;
+  const requestParams = resolveUsageFilterRequestParams2({ url });
+  if (!requestParams.ok) return respond({ error: requestParams.error }, requestParams.status || 400, 0);
+  const { source, model } = requestParams;
   if (isUtcTimeZone2(tzContext)) {
     const dayRaw2 = url.searchParams.get("day");
     const today = parseUtcDateString2(formatDateUTC2(/* @__PURE__ */ new Date()));
@@ -2346,9 +2391,9 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
       endUtc: endUtc2,
       tzContext
     });
-    const { canonicalModel: canonicalModel2, usageModels: usageModels2, hasModelFilter: hasModelFilter2, aliasTimeline: aliasTimeline2 } = await resolveUsageFilterContext2({
+    const { canonicalModel: canonicalModel2, usageModels: usageModels2, hasModelFilter: hasModelFilter2, aliasTimeline: aliasTimeline2 } = await resolveUsageFilterRequestContext2({
       edgeClient: auth.edgeClient,
-      canonicalModel: model,
+      model,
       effectiveDate: dayLabel
     });
     const aggregateStartMs = Date.now();
@@ -2476,9 +2521,9 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
   const dayKey = dayRaw || todayKey;
   const dayParts = parseDateParts2(dayKey);
   if (!dayParts) return respond({ error: "Invalid day" }, 400, 0);
-  const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } = await resolveUsageFilterContext2({
+  const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } = await resolveUsageFilterRequestContext2({
     edgeClient: auth.edgeClient,
-    canonicalModel: model,
+    model,
     effectiveDate: dayKey
   });
   const startUtc = localDatePartsToUtc2({ ...dayParts, hour: 0, minute: 0, second: 0 }, tzContext);

@@ -1,4 +1,8 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
+import {
+  resolveUsageFilterRequestContext,
+  resolveUsageFilterRequestParams,
+} from "./shared/core/usage-filter-request.js";
 import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
 import { initMonthlyBuckets, ingestMonthlyRow } from "./shared/core/usage-monthly.js";
 import { createUsageJsonResponder } from "./shared/core/usage-response.js";
@@ -15,12 +19,7 @@ import { getBaseUrl } from "./shared/env.js";
 import { handleOptions } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
 import { toPositiveIntOrNull } from "./shared/numbers.js";
-import { getSourceParam } from "./shared/source.js";
 import "../shared/usage-metrics-core.mjs";
-import {
-  getModelParam,
-  resolveUsageFilterContext,
-} from "./shared/usage-summary-support.js";
 
 const MAX_MONTHS = 24;
 const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
@@ -42,12 +41,9 @@ export default withRequestLogging("vibeusage-usage-monthly", async function (req
   if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
 
   const tzContext = getUsageTimeZoneContext(url);
-  const sourceResult = getSourceParam(url);
-  if (!sourceResult.ok) return respond({ error: sourceResult.error }, 400, 0);
-  const source = sourceResult.source;
-  const modelResult = getModelParam(url);
-  if (!modelResult.ok) return respond({ error: modelResult.error }, 400, 0);
-  const model = modelResult.model;
+  const requestParams = resolveUsageFilterRequestParams({ url });
+  if (!requestParams.ok) return respond({ error: requestParams.error }, requestParams.status || 400, 0);
+  const { source, model } = requestParams;
 
   const monthsRaw = url.searchParams.get("months");
   const monthsParsed = toPositiveIntOrNull(monthsRaw);
@@ -78,9 +74,9 @@ export default withRequestLogging("vibeusage-usage-monthly", async function (req
   const endIso = endUtc.toISOString();
 
   const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
-    await resolveUsageFilterContext({
+    await resolveUsageFilterRequestContext({
       edgeClient: auth.edgeClient,
-      canonicalModel: model,
+      model,
       effectiveDate: to,
     });
 

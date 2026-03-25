@@ -58,6 +58,7 @@
 - [x] 4.2.34 Converge usage/project summary debug-aware JSON response assembly through `usage-response-core` while keeping endpoint payload envelopes explicit.
 - [x] 4.2.35 Converge hourly/heatmap/model-breakdown normalized hourly row collection through `usage-row-collector-core` while keeping endpoint accumulators explicit.
 - [x] 4.2.36 Converge summary/daily aggregate request context through `usage-aggregate-request-core` while keeping auth handling and endpoint envelopes explicit.
+- [x] 4.2.37 Converge monthly/hourly/heatmap source-model request parsing and filter context through `usage-filter-request-core` while keeping endpoint time windows explicit.
 
 ## 5. Verification
 

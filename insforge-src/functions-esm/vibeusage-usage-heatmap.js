@@ -6,6 +6,10 @@ import {
   normalizeHeatmapWeekStartsOn,
   normalizeHeatmapWeeks,
 } from "./shared/core/usage-heatmap.js";
+import {
+  resolveUsageFilterRequestContext,
+  resolveUsageFilterRequestParams,
+} from "./shared/core/usage-filter-request.js";
 import { collectHourlyUsageRows } from "./shared/core/usage-row-collector.js";
 import { createUsageJsonResponder } from "./shared/core/usage-response.js";
 import {
@@ -25,11 +29,6 @@ import {
 import { getBaseUrl } from "./shared/env.js";
 import { handleOptions } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
-import { getSourceParam } from "./shared/source.js";
-import {
-  getModelParam,
-  resolveUsageFilterContext,
-} from "./shared/usage-summary-support.js";
 
 export default withRequestLogging("vibeusage-usage-heatmap", async function (request, logger) {
   const opt = handleOptions(request);
@@ -44,12 +43,9 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
   if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
 
   const tzContext = getUsageTimeZoneContext(url);
-  const sourceResult = getSourceParam(url);
-  if (!sourceResult.ok) return respond({ error: sourceResult.error }, 400, 0);
-  const source = sourceResult.source;
-  const modelResult = getModelParam(url);
-  if (!modelResult.ok) return respond({ error: modelResult.error }, 400, 0);
-  const model = modelResult.model;
+  const requestParams = resolveUsageFilterRequestParams({ url });
+  if (!requestParams.ok) return respond({ error: requestParams.error }, requestParams.status || 400, 0);
+  const { source, model } = requestParams;
 
   const weeksRaw = url.searchParams.get("weeks");
   const weeks = normalizeHeatmapWeeks(weeksRaw);
@@ -79,9 +75,9 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
     const endIso = endUtc.toISOString();
 
     const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
-      await resolveUsageFilterContext({
+      await resolveUsageFilterRequestContext({
         edgeClient: auth.edgeClient,
-        canonicalModel: model,
+        model,
         effectiveDate: to,
       });
 
@@ -174,9 +170,9 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
   if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
 
   const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
-    await resolveUsageFilterContext({
+    await resolveUsageFilterRequestContext({
       edgeClient: auth.edgeClient,
-      canonicalModel: model,
+      model,
       effectiveDate: to,
     });
 

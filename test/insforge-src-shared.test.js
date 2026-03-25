@@ -30,6 +30,8 @@ require("../insforge-src/shared/usage-row-collector-core");
 const usageRowCollectorCore = globalThis.__vibeusageUsageRowCollectorCore;
 require("../insforge-src/shared/usage-aggregate-request-core");
 const usageAggregateRequestCore = globalThis.__vibeusageUsageAggregateRequestCore;
+require("../insforge-src/shared/usage-filter-request-core");
+const usageFilterRequestCore = globalThis.__vibeusageUsageFilterRequestCore;
 require("../insforge-src/shared/usage-hourly-core");
 const usageHourlyCore = globalThis.__vibeusageUsageHourlyCore;
 require("../insforge-src/shared/usage-heatmap-core");
@@ -42,6 +44,7 @@ require("../insforge-src/shared/usage-pricing-core");
 const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 const usageAggregateCollector = require("../insforge-src/shared/core/usage-aggregate-collector");
 const usageAggregateRequest = require("../insforge-src/shared/core/usage-aggregate-request");
+const usageFilterRequest = require("../insforge-src/shared/core/usage-filter-request");
 const usageRowCollector = require("../insforge-src/shared/core/usage-row-collector");
 const usageResponse = require("../insforge-src/shared/core/usage-response");
 
@@ -1031,6 +1034,48 @@ test("usage aggregate request core resolves local range and filter context", asy
   assert.deepEqual(context.usageModels, ["gpt-foo"]);
   assert.equal(context.hasModelFilter, true);
   assert.equal(context.auth.userId, "user-1");
+  assert.deepEqual(context.aliasTimeline.get("gpt-foo"), [
+    {
+      model_id: "alpha",
+      model: "Alpha",
+      effective_from: "2025-02-01",
+    },
+  ]);
+});
+
+test("usage filter request core resolves source/model params and filter context", async () => {
+  const edgeClient = createPricingEdgeClient({
+    aliasRows: [
+      {
+        usage_model: "gpt-foo",
+        canonical_model: "alpha",
+        display_name: "Alpha",
+        effective_from: "2025-02-01T00:00:00Z",
+        active: true,
+      },
+    ],
+  });
+
+  const params = usageFilterRequest.resolveUsageFilterRequestParams({
+    url: new URL(
+      "https://example.com/functions/v1/vibeusage-usage-monthly?source=openrouter&model=gpt-foo",
+    ),
+  });
+
+  assert.equal(params.ok, true);
+  assert.equal(params.source, "openrouter");
+  assert.equal(params.model, "gpt-foo");
+  assert.equal(params.hasModelParam, true);
+
+  const context = await usageFilterRequest.resolveUsageFilterRequestContext({
+    edgeClient,
+    model: params.model,
+    effectiveDate: "2025-02-16",
+  });
+
+  assert.equal(context.canonicalModel, "gpt-foo");
+  assert.deepEqual(context.usageModels, ["gpt-foo"]);
+  assert.equal(context.hasModelFilter, true);
   assert.deepEqual(context.aliasTimeline.get("gpt-foo"), [
     {
       model_id: "alpha",

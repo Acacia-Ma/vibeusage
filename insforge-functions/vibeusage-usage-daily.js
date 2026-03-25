@@ -2522,20 +2522,13 @@ if (!usageAggregateCollectorCore) {
 }
 var collectAggregateUsageRange2 = usageAggregateCollectorCore.collectAggregateUsageRange;
 
-// insforge-src/shared/usage-aggregate-request-core.mjs
-var CORE_KEY16 = "__vibeusageUsageAggregateRequestCore";
-var dateCore2 = globalThis.__vibeusageDateCore;
+// insforge-src/shared/usage-filter-request-core.mjs
+var CORE_KEY16 = "__vibeusageUsageFilterRequestCore";
 var runtimePrimitivesCore6 = globalThis.__vibeusageRuntimePrimitivesCore;
 var usageModelCore7 = globalThis.__vibeusageUsageModelCore;
-if (!dateCore2) throw new Error("date core not initialized");
 if (!runtimePrimitivesCore6) throw new Error("runtime primitives core not initialized");
 if (!usageModelCore7) throw new Error("usage-model core not initialized");
-async function resolveAggregateUsageRequestContext({
-  url,
-  tzContext,
-  edgeClient,
-  auth = null
-} = {}) {
+function resolveUsageFilterRequestParams({ url } = {}) {
   const sourceResult = runtimePrimitivesCore6.getSourceParam(url);
   if (!sourceResult?.ok) {
     return { ok: false, status: 400, error: sourceResult?.error || "Invalid source" };
@@ -2544,6 +2537,52 @@ async function resolveAggregateUsageRequestContext({
   if (!modelResult?.ok) {
     return { ok: false, status: 400, error: modelResult?.error || "Invalid model" };
   }
+  return {
+    ok: true,
+    source: sourceResult.source,
+    model: modelResult.model,
+    hasModelParam: modelResult.model != null
+  };
+}
+async function resolveUsageFilterRequestContext({ edgeClient, model, effectiveDate } = {}) {
+  const filterContext = await usageModelCore7.resolveUsageFilterContext({
+    edgeClient,
+    canonicalModel: model,
+    effectiveDate
+  });
+  return {
+    canonicalModel: filterContext.canonicalModel,
+    usageModels: filterContext.usageModels,
+    hasModelFilter: filterContext.hasModelFilter,
+    aliasTimeline: filterContext.aliasTimeline
+  };
+}
+if (!globalThis[CORE_KEY16]) {
+  Object.defineProperty(globalThis, CORE_KEY16, {
+    value: {
+      resolveUsageFilterRequestParams,
+      resolveUsageFilterRequestContext
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/shared/usage-aggregate-request-core.mjs
+var CORE_KEY17 = "__vibeusageUsageAggregateRequestCore";
+var dateCore2 = globalThis.__vibeusageDateCore;
+var usageFilterRequestCore = globalThis.__vibeusageUsageFilterRequestCore;
+if (!dateCore2) throw new Error("date core not initialized");
+if (!usageFilterRequestCore) throw new Error("usage filter request core not initialized");
+async function resolveAggregateUsageRequestContext({
+  url,
+  tzContext,
+  edgeClient,
+  auth = null
+} = {}) {
+  const requestParams = usageFilterRequestCore.resolveUsageFilterRequestParams({ url });
+  if (!requestParams?.ok) return requestParams;
   const range = dateCore2.resolveUsageDateRangeLocal({
     fromRaw: url?.searchParams?.get("from"),
     toRaw: url?.searchParams?.get("to"),
@@ -2553,18 +2592,17 @@ async function resolveAggregateUsageRequestContext({
     return { ok: false, status: 400, error: range?.error || "Invalid date range" };
   }
   const { from, to, dayKeys, startIso, endIso } = range;
-  const model = modelResult.model;
-  const filterContext = await usageModelCore7.resolveUsageFilterContext({
+  const filterContext = await usageFilterRequestCore.resolveUsageFilterRequestContext({
     edgeClient,
-    canonicalModel: model,
+    model: requestParams.model,
     effectiveDate: to
   });
   return {
     ok: true,
     auth,
-    source: sourceResult.source,
-    model,
-    hasModelParam: model != null,
+    source: requestParams.source,
+    model: requestParams.model,
+    hasModelParam: requestParams.hasModelParam,
     from,
     to,
     dayKeys,
@@ -2576,8 +2614,8 @@ async function resolveAggregateUsageRequestContext({
     aliasTimeline: filterContext.aliasTimeline
   };
 }
-if (!globalThis[CORE_KEY16]) {
-  Object.defineProperty(globalThis, CORE_KEY16, {
+if (!globalThis[CORE_KEY17]) {
+  Object.defineProperty(globalThis, CORE_KEY17, {
     value: {
       resolveAggregateUsageRequestContext
     },
@@ -2629,7 +2667,7 @@ var toPositiveIntOrNull2 = runtimePrimitivesCore7.toPositiveIntOrNull;
 var toPositiveInt2 = runtimePrimitivesCore7.toPositiveInt;
 
 // insforge-src/shared/usage-daily-core.mjs
-var CORE_KEY17 = "__vibeusageUsageDailyCore";
+var CORE_KEY18 = "__vibeusageUsageDailyCore";
 var dateCore4 = globalThis.__vibeusageDateCore;
 if (!dateCore4) throw new Error("date core not initialized");
 var runtimePrimitivesCore8 = globalThis.__vibeusageRuntimePrimitivesCore;
@@ -2668,8 +2706,8 @@ function applyDailyBucket({ buckets, row, tzContext, billable }) {
   bucket.reasoning += toBigInt3(row?.reasoning_output_tokens);
   return true;
 }
-if (!globalThis[CORE_KEY17]) {
-  Object.defineProperty(globalThis, CORE_KEY17, {
+if (!globalThis[CORE_KEY18]) {
+  Object.defineProperty(globalThis, CORE_KEY18, {
     value: {
       initDailyBuckets,
       applyDailyBucket
@@ -2687,7 +2725,7 @@ var initDailyBuckets2 = usageDailyCore.initDailyBuckets;
 var applyDailyBucket2 = usageDailyCore.applyDailyBucket;
 
 // insforge-src/shared/debug-core.mjs
-var CORE_KEY18 = "__vibeusageDebugCore";
+var CORE_KEY19 = "__vibeusageDebugCore";
 var envCore4 = globalThis.__vibeusageEnvCore;
 if (!envCore4) throw new Error("env core not initialized");
 function isDebugEnabled(url) {
@@ -2729,8 +2767,8 @@ function withSlowQueryDebugPayload(body, options) {
     debug: buildSlowQueryDebugPayload(options)
   };
 }
-if (!globalThis[CORE_KEY18]) {
-  Object.defineProperty(globalThis, CORE_KEY18, {
+if (!globalThis[CORE_KEY19]) {
+  Object.defineProperty(globalThis, CORE_KEY19, {
     value: {
       isDebugEnabled,
       buildSlowQueryDebugPayload,
@@ -2743,7 +2781,7 @@ if (!globalThis[CORE_KEY18]) {
 }
 
 // insforge-src/shared/http-core.mjs
-var CORE_KEY19 = "__vibeusageHttpCore";
+var CORE_KEY20 = "__vibeusageHttpCore";
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -2780,8 +2818,8 @@ async function readJson(request) {
     return { error: "Invalid JSON", status: 400, data: null };
   }
 }
-if (!globalThis[CORE_KEY19]) {
-  Object.defineProperty(globalThis, CORE_KEY19, {
+if (!globalThis[CORE_KEY20]) {
+  Object.defineProperty(globalThis, CORE_KEY20, {
     value: {
       corsHeaders,
       handleOptions,
@@ -2796,7 +2834,7 @@ if (!globalThis[CORE_KEY19]) {
 }
 
 // insforge-src/shared/usage-response-core.mjs
-var CORE_KEY20 = "__vibeusageUsageResponseCore";
+var CORE_KEY21 = "__vibeusageUsageResponseCore";
 var debugCore = globalThis.__vibeusageDebugCore;
 var httpCore = globalThis.__vibeusageHttpCore;
 if (!debugCore) throw new Error("debug core not initialized");
@@ -2814,8 +2852,8 @@ function createUsageJsonResponder({ url, logger, extraHeaders } = {}) {
     );
   };
 }
-if (!globalThis[CORE_KEY20]) {
-  Object.defineProperty(globalThis, CORE_KEY20, {
+if (!globalThis[CORE_KEY21]) {
+  Object.defineProperty(globalThis, CORE_KEY21, {
     value: {
       createUsageJsonResponder,
       resolveUsageResponseBody
@@ -2842,7 +2880,7 @@ var requireMethod2 = httpCore2.requireMethod;
 var readJson2 = httpCore2.readJson;
 
 // insforge-src/shared/logging-core.mjs
-var CORE_KEY21 = "__vibeusageLoggingCore";
+var CORE_KEY22 = "__vibeusageLoggingCore";
 var envCore5 = globalThis.__vibeusageEnvCore;
 if (!envCore5) throw new Error("env core not initialized");
 function createRequestId() {
@@ -2940,8 +2978,8 @@ function logSlowQuery(logger, fields) {
 function getSlowQueryThresholdMs3() {
   return envCore5.getSlowQueryThresholdMs();
 }
-if (!globalThis[CORE_KEY21]) {
-  Object.defineProperty(globalThis, CORE_KEY21, {
+if (!globalThis[CORE_KEY22]) {
+  Object.defineProperty(globalThis, CORE_KEY22, {
     value: {
       createLogger,
       withRequestLogging,
