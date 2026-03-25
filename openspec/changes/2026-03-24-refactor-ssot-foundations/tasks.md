@@ -62,6 +62,7 @@
 - [x] 4.2.38 Converge source/local-range request parsing for model-breakdown and aggregate request contexts through `usage-range-request-core` while keeping auth handling and endpoint envelopes explicit.
 - [x] 4.2.39 Converge heatmap request-window resolution through `usage-heatmap-core` while keeping auth and row collection explicit.
 - [x] 4.2.40 Converge project-usage aggregate/fallback query construction through `project-usage-core` while keeping endpoint envelope and fallback branching explicit.
+- [x] 4.2.41 Converge hourly usage day-window and row-slot normalization through `usage-hourly-core` while keeping UTC aggregate fast-path explicit.
 
 ## 5. Verification
 

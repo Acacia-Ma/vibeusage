@@ -9,3 +9,5 @@ export const addHourlyBucketTotals = usageHourlyCore.addHourlyBucketTotals;
 export const resolveHalfHourSlot = usageHourlyCore.resolveHalfHourSlot;
 export const formatHourKeyFromValue = usageHourlyCore.formatHourKeyFromValue;
 export const buildHourlyResponse = usageHourlyCore.buildHourlyResponse;
+export const resolveUsageHourlyRequestContext = usageHourlyCore.resolveUsageHourlyRequestContext;
+export const resolveUsageHourlyRowSlot = usageHourlyCore.resolveUsageHourlyRowSlot;

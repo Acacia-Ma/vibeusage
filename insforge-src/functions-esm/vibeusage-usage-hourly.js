@@ -5,7 +5,8 @@ import {
   buildHourlyResponse,
   createHourlyBuckets,
   formatHourKeyFromValue,
-  resolveHalfHourSlot,
+  resolveUsageHourlyRequestContext,
+  resolveUsageHourlyRowSlot,
 } from "./shared/core/usage-hourly.js";
 import {
   resolveUsageFilterRequestContext,
@@ -14,17 +15,8 @@ import {
 import { collectHourlyUsageRows } from "./shared/core/usage-row-collector.js";
 import { createUsageJsonResponder } from "./shared/core/usage-response.js";
 import {
-  addDatePartsDays,
-  addUtcDays,
-  formatDateParts,
-  formatDateUTC,
-  getLocalParts,
   getUsageTimeZoneContext,
-  isUtcTimeZone,
-  localDatePartsToUtc,
   normalizeIso,
-  parseDateParts,
-  parseUtcDateString,
 } from "./shared/date.js";
 import { getBaseUrl } from "./shared/env.js";
 import { handleOptions } from "./shared/http.js";
@@ -53,43 +45,32 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
   if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
 
   const tzContext = getUsageTimeZoneContext(url);
+  const requestContext = resolveUsageHourlyRequestContext({ url, tzContext });
+  if (!requestContext.ok) {
+    return respond({ error: requestContext.error }, requestContext.status || 400, 0);
+  }
+  const { timeMode, dayKey, startUtc, endUtc, startIso, endIso } = requestContext;
   const requestParams = resolveUsageFilterRequestParams({ url });
   if (!requestParams.ok) return respond({ error: requestParams.error }, requestParams.status || 400, 0);
   const { source, model } = requestParams;
 
-  if (isUtcTimeZone(tzContext)) {
-    const dayRaw = url.searchParams.get("day");
-    const today = parseUtcDateString(formatDateUTC(new Date()));
-    const day = dayRaw ? parseUtcDateString(dayRaw) : today;
-    if (!day) return respond({ error: "Invalid day" }, 400, 0);
+  const { hourKeys, buckets, bucketMap } = createHourlyBuckets(dayKey);
+  const syncMeta = await getSyncMeta({
+    edgeClient: auth.edgeClient,
+    userId: auth.userId,
+    startUtc,
+    endUtc,
+    tzContext,
+  });
 
-    const startUtc = new Date(
-      Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), 0, 0, 0),
-    );
-    const startIso = startUtc.toISOString();
-    const endDate = addUtcDays(day, 1);
-    const endUtc = new Date(
-      Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate(), 0, 0, 0),
-    );
-    const endIso = endUtc.toISOString();
-
-    const dayLabel = formatDateUTC(day);
-    const { hourKeys, buckets, bucketMap } = createHourlyBuckets(dayLabel);
-    const syncMeta = await getSyncMeta({
+  const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
+    await resolveUsageFilterRequestContext({
       edgeClient: auth.edgeClient,
-      userId: auth.userId,
-      startUtc,
-      endUtc,
-      tzContext,
+      model,
+      effectiveDate: dayKey,
     });
 
-    const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
-      await resolveUsageFilterRequestContext({
-        edgeClient: auth.edgeClient,
-        model,
-        effectiveDate: dayLabel,
-      });
-
+  if (timeMode === "utc") {
     const aggregateStartMs = Date.now();
     const aggregateRows = hasModelFilter
       ? null
@@ -159,7 +140,7 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
 
       return respond(
         {
-          day: dayLabel,
+          day: dayKey,
           data: buildHourlyResponse(hourKeys, bucketMap, syncMeta?.missingAfterSlot),
           sync: buildSyncResponse(syncMeta),
         },
@@ -178,15 +159,17 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
       canonicalModel,
       hasModelFilter,
       aliasTimeline,
-      effectiveDate: dayLabel,
+      effectiveDate: dayKey,
       startIso,
       endIso,
       select:
         "hour_start,model,source,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
       onUsageRow: ({ row, usageRow }) => {
-        const slot = resolveHalfHourSlot({
-          hour: usageRow.date.getUTCHours(),
-          minute: usageRow.date.getUTCMinutes(),
+        const slot = resolveUsageHourlyRowSlot({
+          usageDate: usageRow.date,
+          timeMode,
+          dayKey,
+          tzContext,
         });
         if (!Number.isFinite(slot)) return;
 
@@ -219,7 +202,7 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
 
     return respond(
       {
-        day: dayLabel,
+        day: dayKey,
         data: buildHourlyResponse(hourKeys, bucketMap, syncMeta?.missingAfterSlot),
         sync: buildSyncResponse(syncMeta),
       },
@@ -227,34 +210,6 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
       queryDurationMs,
     );
   }
-
-  const dayRaw = url.searchParams.get("day");
-  const todayKey = formatDateParts(getLocalParts(new Date(), tzContext));
-  if (dayRaw && !parseDateParts(dayRaw)) return respond({ error: "Invalid day" }, 400, 0);
-  const dayKey = dayRaw || todayKey;
-  const dayParts = parseDateParts(dayKey);
-  if (!dayParts) return respond({ error: "Invalid day" }, 400, 0);
-
-  const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
-    await resolveUsageFilterRequestContext({
-      edgeClient: auth.edgeClient,
-      model,
-      effectiveDate: dayKey,
-    });
-
-  const startUtc = localDatePartsToUtc({ ...dayParts, hour: 0, minute: 0, second: 0 }, tzContext);
-  const endUtc = localDatePartsToUtc(addDatePartsDays(dayParts, 1), tzContext);
-  const startIso = startUtc.toISOString();
-  const endIso = endUtc.toISOString();
-
-  const { hourKeys, buckets, bucketMap } = createHourlyBuckets(dayKey);
-  const syncMeta = await getSyncMeta({
-    edgeClient: auth.edgeClient,
-    userId: auth.userId,
-    startUtc,
-    endUtc,
-    tzContext,
-  });
 
   const queryStartMs = Date.now();
   let rowCount = 0;
@@ -272,13 +227,12 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
     select:
       "hour_start,model,source,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
     onUsageRow: ({ row, usageRow }) => {
-      const localParts = getLocalParts(usageRow.date, tzContext);
-      const localDay = formatDateParts(localParts);
-      if (localDay !== dayKey) return;
-      const hour = Number(localParts.hour);
-      const minute = Number(localParts.minute);
-      if (!Number.isFinite(hour) || !Number.isFinite(minute)) return;
-      const slot = resolveHalfHourSlot({ hour, minute });
+      const slot = resolveUsageHourlyRowSlot({
+        usageDate: usageRow.date,
+        timeMode,
+        dayKey,
+        tzContext,
+      });
       if (!Number.isFinite(slot)) return;
 
       const bucket = buckets[slot];

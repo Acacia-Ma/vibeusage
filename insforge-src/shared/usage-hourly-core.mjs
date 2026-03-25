@@ -1,5 +1,6 @@
 "use strict";
 
+import "./date-core.mjs";
 import "./runtime-primitives-core.mjs";
 import "./usage-metrics-core.mjs";
 
@@ -7,8 +8,22 @@ const CORE_KEY = "__vibeusageUsageHourlyCore";
 
 const runtimePrimitivesCore = globalThis.__vibeusageRuntimePrimitivesCore;
 if (!runtimePrimitivesCore) throw new Error("runtime primitives core not initialized");
+const dateCore = globalThis.__vibeusageDateCore;
+if (!dateCore) throw new Error("date core not initialized");
 const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
+
+const {
+  addDatePartsDays,
+  addUtcDays,
+  formatDateParts,
+  formatDateUTC,
+  getLocalParts,
+  isUtcTimeZone,
+  localDatePartsToUtc,
+  parseDateParts,
+  parseUtcDateString,
+} = dateCore;
 
 function createHourlyBucket() {
   return {
@@ -106,6 +121,65 @@ function buildHourlyResponse(hourKeys, bucketMap, missingAfterSlot) {
   });
 }
 
+function resolveUsageHourlyRequestContext({ url, tzContext, now = new Date() } = {}) {
+  const dayRaw = url?.searchParams?.get("day");
+  if (isUtcTimeZone(tzContext)) {
+    const today = parseUtcDateString(formatDateUTC(now));
+    const day = dayRaw ? parseUtcDateString(dayRaw) : today;
+    if (!day) return { ok: false, status: 400, error: "Invalid day" };
+
+    const startUtc = new Date(
+      Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), 0, 0, 0),
+    );
+    const endDate = addUtcDays(day, 1);
+    const endUtc = new Date(
+      Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate(), 0, 0, 0),
+    );
+    return {
+      ok: true,
+      timeMode: "utc",
+      dayKey: formatDateUTC(day),
+      startUtc,
+      endUtc,
+      startIso: startUtc.toISOString(),
+      endIso: endUtc.toISOString(),
+    };
+  }
+
+  if (dayRaw && !parseDateParts(dayRaw)) return { ok: false, status: 400, error: "Invalid day" };
+  const todayKey = formatDateParts(getLocalParts(now, tzContext));
+  const dayKey = dayRaw || todayKey;
+  const dayParts = parseDateParts(dayKey);
+  if (!dayParts) return { ok: false, status: 400, error: "Invalid day" };
+
+  const startUtc = localDatePartsToUtc({ ...dayParts, hour: 0, minute: 0, second: 0 }, tzContext);
+  const endUtc = localDatePartsToUtc(addDatePartsDays(dayParts, 1), tzContext);
+  return {
+    ok: true,
+    timeMode: "local",
+    dayKey,
+    startUtc,
+    endUtc,
+    startIso: startUtc.toISOString(),
+    endIso: endUtc.toISOString(),
+  };
+}
+
+function resolveUsageHourlyRowSlot({ usageDate, timeMode, dayKey, tzContext } = {}) {
+  if (!(usageDate instanceof Date) || !Number.isFinite(usageDate.getTime())) return null;
+  if (timeMode === "utc") {
+    return resolveHalfHourSlot({
+      hour: usageDate.getUTCHours(),
+      minute: usageDate.getUTCMinutes(),
+    });
+  }
+
+  const localParts = getLocalParts(usageDate, tzContext);
+  const localDay = formatDateParts(localParts);
+  if (localDay !== dayKey) return null;
+  return resolveHalfHourSlot({ hour: localParts.hour, minute: localParts.minute });
+}
+
 if (!globalThis[CORE_KEY]) {
   Object.defineProperty(globalThis, CORE_KEY, {
     value: {
@@ -116,6 +190,8 @@ if (!globalThis[CORE_KEY]) {
       formatHourKeyFromValue,
       parseHalfHourSlotFromKey,
       buildHourlyResponse,
+      resolveUsageHourlyRequestContext,
+      resolveUsageHourlyRowSlot,
     },
     configurable: true,
     enumerable: false,

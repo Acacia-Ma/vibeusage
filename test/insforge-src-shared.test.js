@@ -1354,6 +1354,72 @@ test("usage hourly core normalizes hour keys and slots", () => {
   assert.equal(usageHourlyCore.parseHalfHourSlotFromKey("2025-12-21T01:30:00"), 3);
 });
 
+test("usage hourly core resolves request windows and row slots through shared context", () => {
+  const utcContext = usageHourlyCore.resolveUsageHourlyRequestContext({
+    url: new URL("https://example.com/functions/v1/vibeusage-usage-hourly?day=2025-12-21"),
+    tzContext: { offsetMinutes: 0 },
+  });
+  assert.deepEqual(utcContext, {
+    ok: true,
+    timeMode: "utc",
+    dayKey: "2025-12-21",
+    startUtc: new Date("2025-12-21T00:00:00.000Z"),
+    endUtc: new Date("2025-12-22T00:00:00.000Z"),
+    startIso: "2025-12-21T00:00:00.000Z",
+    endIso: "2025-12-22T00:00:00.000Z",
+  });
+
+  const localContext = usageHourlyCore.resolveUsageHourlyRequestContext({
+    url: new URL("https://example.com/functions/v1/vibeusage-usage-hourly?day=2025-12-21"),
+    tzContext: { offsetMinutes: 540 },
+  });
+  assert.deepEqual(localContext, {
+    ok: true,
+    timeMode: "local",
+    dayKey: "2025-12-21",
+    startUtc: new Date("2025-12-20T15:00:00.000Z"),
+    endUtc: new Date("2025-12-21T15:00:00.000Z"),
+    startIso: "2025-12-20T15:00:00.000Z",
+    endIso: "2025-12-21T15:00:00.000Z",
+  });
+
+  assert.deepEqual(
+    usageHourlyCore.resolveUsageHourlyRequestContext({
+      url: new URL("https://example.com/functions/v1/vibeusage-usage-hourly?day=2025-99-21"),
+      tzContext: { offsetMinutes: 0 },
+    }),
+    { ok: false, status: 400, error: "Invalid day" },
+  );
+
+  assert.equal(
+    usageHourlyCore.resolveUsageHourlyRowSlot({
+      usageDate: new Date("2025-12-21T01:44:00.000Z"),
+      timeMode: "utc",
+      dayKey: "2025-12-21",
+      tzContext: { offsetMinutes: 0 },
+    }),
+    3,
+  );
+  assert.equal(
+    usageHourlyCore.resolveUsageHourlyRowSlot({
+      usageDate: new Date("2025-12-20T15:10:00.000Z"),
+      timeMode: "local",
+      dayKey: "2025-12-21",
+      tzContext: { offsetMinutes: 540 },
+    }),
+    0,
+  );
+  assert.equal(
+    usageHourlyCore.resolveUsageHourlyRowSlot({
+      usageDate: new Date("2025-12-21T15:10:00.000Z"),
+      timeMode: "local",
+      dayKey: "2025-12-21",
+      tzContext: { offsetMinutes: 540 },
+    }),
+    null,
+  );
+});
+
 test("usage pricing core accumulates rolling usage rows into shared state", () => {
   const state = usagePricingCore.createRollingUsageState();
 

@@ -442,8 +442,17 @@ test("backend usage rollup and bucket helpers flow through shared cores", () => 
   );
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /createHourlyBuckets/);
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /addHourlyBucketTotals/);
-  assert.match(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /resolveHalfHourSlot/);
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /buildHourlyResponse/);
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /resolveUsageHourlyRequestContext/);
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /resolveUsageHourlyRowSlot/);
+  assert.match(
+    read("insforge-src/functions-esm/shared/core/usage-hourly.js"),
+    /resolveUsageHourlyRequestContext/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/shared/core/usage-hourly.js"),
+    /resolveUsageHourlyRowSlot/,
+  );
   assert.match(read("insforge-src/shared/usage-pricing-core.js"), /buildUsageTotalsPayload/);
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /buildUsageBucketPayload/);
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-monthly.js"), /buildUsageBucketPayload/);
@@ -490,6 +499,14 @@ test("backend usage rollup and bucket helpers flow through shared cores", () => 
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /function buildHourlyResponse/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /function formatHourKeyFromValue/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /function parseHalfHourSlotFromKey/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /parseUtcDateString/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /parseDateParts/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /localDatePartsToUtc/);
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-usage-hourly.js"),
+    /const dayRaw = url\.searchParams\.get\("day"\)/,
+  );
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /isUtcTimeZone/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /bucket\.total\.toString\(\)/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-monthly.js"), /bucket\.total\.toString\(\)/);
   assert.doesNotMatch(read("insforge-src/shared/usage-hourly-core.js"), /bucket\.total\.toString\(\)/);
