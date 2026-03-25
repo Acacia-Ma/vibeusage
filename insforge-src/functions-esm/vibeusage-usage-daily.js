@@ -1,5 +1,5 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
-import { buildHourlyUsageQuery } from "./shared/db/usage-hourly.js";
+import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
 import { applyDailyBucket, initDailyBuckets } from "./shared/core/usage-daily.js";
 import { shouldIncludeUsageRow } from "./shared/core/usage-filter.js";
 import {
@@ -24,7 +24,6 @@ import {
   buildPricingBucketKey,
   createTotals,
   extractDateKey,
-  forEachPage,
   getModelParam,
   getSourceEntry,
   normalizeUsageModel,
@@ -128,23 +127,18 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
   const rollupHit = false;
 
   const sumHourlyRange = async () => {
-    const { error } = await forEachPage({
-      createQuery: () =>
-        buildHourlyUsageQuery({
-          edgeClient: auth.edgeClient,
-          userId: auth.userId,
-          source,
-          usageModels,
-          canonicalModel,
-          startIso,
-          endIso,
-          select:
-            "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-        }),
+    const { error, rowCount: scannedRows } = await forEachHourlyUsagePage({
+      edgeClient: auth.edgeClient,
+      userId: auth.userId,
+      source,
+      usageModels,
+      canonicalModel,
+      startIso,
+      endIso,
+      select:
+        "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
       onPage: (rows) => {
-        const pageRows = Array.isArray(rows) ? rows : [];
-        rowCount += pageRows.length;
-        for (const row of pageRows) {
+        for (const row of rows) {
           const ts = row?.hour_start;
           if (!ts) continue;
           const dt = new Date(ts);
@@ -157,6 +151,7 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
         }
       },
     });
+    rowCount += scannedRows;
     if (error) return { ok: false, error };
     return { ok: true };
   };

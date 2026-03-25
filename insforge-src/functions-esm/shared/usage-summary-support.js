@@ -2,7 +2,6 @@ import { applyCanaryFilter } from "./canary.js";
 import "../../shared/usage-model-core.mjs";
 import "../../shared/runtime-primitives-core.mjs";
 import "../../shared/usage-metrics-core.mjs";
-import "../../shared/pagination-core.mjs";
 
 void applyCanaryFilter;
 
@@ -10,8 +9,6 @@ const usageModelCore = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore) throw new Error("usage-model core not initialized");
 const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
-const paginationCore = globalThis.__vibeusagePaginationCore;
-if (!paginationCore) throw new Error("pagination core not initialized");
 
 export const normalizeModel = usageModelCore.normalizeModel;
 export const normalizeUsageModel = usageModelCore.normalizeUsageModel;
@@ -36,4 +33,3 @@ export const getSourceEntry = usageMetricsCore.getSourceEntry;
 export const resolveDisplayName = usageMetricsCore.resolveDisplayName;
 export const buildPricingBucketKey = usageMetricsCore.buildPricingBucketKey;
 export const parsePricingBucketKey = usageMetricsCore.parsePricingBucketKey;
-export const forEachPage = paginationCore.forEachPage;

@@ -2,6 +2,7 @@
 
 require("../model");
 require("../canary");
+require("../pagination");
 require("../usage-hourly-query-core");
 
 const usageHourlyQueryCore = globalThis.__vibeusageUsageHourlyQueryCore;
@@ -9,4 +10,5 @@ if (!usageHourlyQueryCore) throw new Error("usage hourly query core not initiali
 
 module.exports = {
   buildHourlyUsageQuery: usageHourlyQueryCore.buildHourlyUsageQuery,
+  forEachHourlyUsagePage: usageHourlyQueryCore.forEachHourlyUsagePage,
 };

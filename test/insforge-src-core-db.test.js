@@ -293,6 +293,63 @@ test("buildHourlyUsageQuery throws when edgeClient missing", () => {
   assert.throws(() => usageHourlyDb.buildHourlyUsageQuery({}), /edgeClient/i);
 });
 
+test("forEachHourlyUsagePage paginates through hourly query rows", async () => {
+  const calls = [];
+  const pages = [
+    [{ hour_start: "2026-01-01T00:00:00.000Z" }, { hour_start: "2026-01-01T00:30:00.000Z" }],
+    [{ hour_start: "2026-01-01T01:00:00.000Z" }],
+  ];
+  const edgeClient = {
+    database: {
+      from: (table) => {
+        calls.push(["from", table]);
+        const query = {
+          eq: (field, value) => (calls.push(["eq", field, value]), query),
+          gte: (field, value) => (calls.push(["gte", field, value]), query),
+          lt: (field, value) => (calls.push(["lt", field, value]), query),
+          order: (field, opts) => (calls.push(["order", field, opts]), query),
+          neq: (field, value) => (calls.push(["neq", field, value]), query),
+          or: (value) => (calls.push(["or", value]), query),
+          range: async (from, to) => {
+            calls.push(["range", from, to]);
+            if (from === 0) return { data: pages[0], error: null };
+            if (from === 2) return { data: pages[1], error: null };
+            return { data: [], error: null };
+          },
+        };
+        return {
+          select: (cols) => (calls.push(["select", cols]), query),
+        };
+      },
+    },
+  };
+
+  const seen = [];
+  const result = await usageHourlyDb.forEachHourlyUsagePage({
+    edgeClient,
+    userId: "u1",
+    startIso: "2026-01-01T00:00:00.000Z",
+    endIso: "2026-01-02T00:00:00.000Z",
+    select: "hour_start",
+    pageSize: 2,
+    onPage: (rows) => seen.push(rows.map((row) => row.hour_start)),
+  });
+
+  assert.equal(result.error, null);
+  assert.equal(result.rowCount, 3);
+  assert.deepEqual(seen, [
+    ["2026-01-01T00:00:00.000Z", "2026-01-01T00:30:00.000Z"],
+    ["2026-01-01T01:00:00.000Z"],
+  ]);
+  assert.deepEqual(
+    calls.filter((call) => call[0] === "range"),
+    [
+      ["range", 0, 1],
+      ["range", 2, 3],
+    ],
+  );
+});
+
 test("fetchDeviceTokenRow uses records API and ignores revoked tokens", async () => {
   const calls = [];
   const fakeFetch = async (url, init) => {

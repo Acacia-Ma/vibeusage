@@ -1057,14 +1057,65 @@ if (!canaryCore) throw new Error("canary core not initialized");
 var isCanaryTag2 = canaryCore.isCanaryTag;
 var applyCanaryFilter2 = canaryCore.applyCanaryFilter;
 
+// insforge-src/shared/pagination-core.mjs
+var CORE_KEY7 = "__vibeusagePaginationCore";
+var MAX_PAGE_SIZE = 1e3;
+function normalizePageSize(value) {
+  const size = Number(value);
+  if (!Number.isFinite(size) || size <= 0) return MAX_PAGE_SIZE;
+  return Math.min(MAX_PAGE_SIZE, Math.floor(size));
+}
+async function forEachPage({ createQuery, pageSize, onPage }) {
+  if (typeof createQuery !== "function") {
+    throw new Error("createQuery must be a function");
+  }
+  if (typeof onPage !== "function") {
+    throw new Error("onPage must be a function");
+  }
+  const size = normalizePageSize(pageSize);
+  let offset = 0;
+  while (true) {
+    const query = createQuery();
+    if (!query || typeof query.range !== "function") {
+      const { data: data2, error: error2 } = await query;
+      if (error2) return { error: error2 };
+      const rows2 = Array.isArray(data2) ? data2 : [];
+      if (rows2.length) await onPage(rows2);
+      return { error: null };
+    }
+    const { data, error } = await query.range(offset, offset + size - 1);
+    if (error) return { error };
+    const rows = Array.isArray(data) ? data : [];
+    if (rows.length) await onPage(rows);
+    if (rows.length < size) break;
+    offset += size;
+  }
+  return { error: null };
+}
+if (!globalThis[CORE_KEY7]) {
+  Object.defineProperty(globalThis, CORE_KEY7, {
+    value: {
+      MAX_PAGE_SIZE,
+      normalizePageSize,
+      forEachPage
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
 // insforge-src/shared/usage-hourly-query-core.mjs
-var CORE_KEY7 = "__vibeusageUsageHourlyQueryCore";
+var CORE_KEY8 = "__vibeusageUsageHourlyQueryCore";
 var usageModelCore2 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore2) throw new Error("usage-model core not initialized");
 var canaryCore2 = globalThis.__vibeusageCanaryCore;
 if (!canaryCore2) throw new Error("canary core not initialized");
+var paginationCore = globalThis.__vibeusagePaginationCore;
+if (!paginationCore) throw new Error("pagination core not initialized");
 var { applyUsageModelFilter: applyUsageModelFilter2 } = usageModelCore2;
 var { applyCanaryFilter: applyCanaryFilter3 } = canaryCore2;
+var { forEachPage: forEachPage2 } = paginationCore;
 function buildHourlyUsageQuery({
   edgeClient,
   userId,
@@ -1089,10 +1140,47 @@ function buildHourlyUsageQuery({
   if (endIso) query = query.lt("hour_start", endIso);
   return query.order("hour_start", { ascending: true }).order("device_id", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
 }
-if (!globalThis[CORE_KEY7]) {
-  Object.defineProperty(globalThis, CORE_KEY7, {
+async function forEachHourlyUsagePage({
+  edgeClient,
+  userId,
+  source,
+  usageModels,
+  canonicalModel,
+  startIso,
+  endIso,
+  select,
+  pageSize,
+  onPage
+} = {}) {
+  if (typeof onPage !== "function") {
+    throw new Error("onPage must be a function");
+  }
+  let rowCount = 0;
+  const { error } = await forEachPage2({
+    pageSize,
+    createQuery: () => buildHourlyUsageQuery({
+      edgeClient,
+      userId,
+      source,
+      usageModels,
+      canonicalModel,
+      startIso,
+      endIso,
+      select
+    }),
+    onPage: async (rows) => {
+      const pageRows = Array.isArray(rows) ? rows : [];
+      rowCount += pageRows.length;
+      await onPage(pageRows);
+    }
+  });
+  return { error, rowCount };
+}
+if (!globalThis[CORE_KEY8]) {
+  Object.defineProperty(globalThis, CORE_KEY8, {
     value: {
-      buildHourlyUsageQuery
+      buildHourlyUsageQuery,
+      forEachHourlyUsagePage
     },
     configurable: true,
     enumerable: false,
@@ -1104,9 +1192,10 @@ if (!globalThis[CORE_KEY7]) {
 var usageHourlyQueryCore = globalThis.__vibeusageUsageHourlyQueryCore;
 if (!usageHourlyQueryCore) throw new Error("usage hourly query core not initialized");
 var buildHourlyUsageQuery2 = usageHourlyQueryCore.buildHourlyUsageQuery;
+var forEachHourlyUsagePage2 = usageHourlyQueryCore.forEachHourlyUsagePage;
 
 // insforge-src/shared/usage-filter-core.mjs
-var CORE_KEY8 = "__vibeusageUsageFilterCore";
+var CORE_KEY9 = "__vibeusageUsageFilterCore";
 var usageModelCore3 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore3) throw new Error("usage-model core not initialized");
 var { extractDateKey: extractDateKey2, matchesCanonicalModelAtDate: matchesCanonicalModelAtDate2 } = usageModelCore3;
@@ -1120,8 +1209,8 @@ function shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimel
     timeline: aliasTimeline
   });
 }
-if (!globalThis[CORE_KEY8]) {
-  Object.defineProperty(globalThis, CORE_KEY8, {
+if (!globalThis[CORE_KEY9]) {
+  Object.defineProperty(globalThis, CORE_KEY9, {
     value: {
       shouldIncludeUsageRow
     },
@@ -1137,7 +1226,7 @@ if (!usageFilterCore) throw new Error("usage filter core not initialized");
 var shouldIncludeUsageRow2 = usageFilterCore.shouldIncludeUsageRow;
 
 // insforge-src/shared/date-core.mjs
-var CORE_KEY9 = "__vibeusageDateCore";
+var CORE_KEY10 = "__vibeusageDateCore";
 var envCore2 = globalThis.__vibeusageEnvCore;
 if (!envCore2) throw new Error("env core not initialized");
 var TIMEZONE_FORMATTERS = /* @__PURE__ */ new Map();
@@ -1382,8 +1471,8 @@ function listDateStrings(from, to) {
 function getUsageMaxDays3() {
   return envCore2.getUsageMaxDays();
 }
-if (!globalThis[CORE_KEY9]) {
-  Object.defineProperty(globalThis, CORE_KEY9, {
+if (!globalThis[CORE_KEY10]) {
+  Object.defineProperty(globalThis, CORE_KEY10, {
     value: {
       isDate,
       toUtcDay,
@@ -1440,7 +1529,7 @@ var listDateStrings2 = dateCore.listDateStrings;
 var getUsageMaxDays4 = dateCore.getUsageMaxDays;
 
 // insforge-src/shared/debug-core.mjs
-var CORE_KEY10 = "__vibeusageDebugCore";
+var CORE_KEY11 = "__vibeusageDebugCore";
 var envCore3 = globalThis.__vibeusageEnvCore;
 if (!envCore3) throw new Error("env core not initialized");
 function isDebugEnabled(url) {
@@ -1482,8 +1571,8 @@ function withSlowQueryDebugPayload(body, options) {
     debug: buildSlowQueryDebugPayload(options)
   };
 }
-if (!globalThis[CORE_KEY10]) {
-  Object.defineProperty(globalThis, CORE_KEY10, {
+if (!globalThis[CORE_KEY11]) {
+  Object.defineProperty(globalThis, CORE_KEY11, {
     value: {
       isDebugEnabled,
       buildSlowQueryDebugPayload,
@@ -1503,7 +1592,7 @@ var buildSlowQueryDebugPayload2 = debugCore.buildSlowQueryDebugPayload;
 var withSlowQueryDebugPayload2 = debugCore.withSlowQueryDebugPayload;
 
 // insforge-src/shared/http-core.mjs
-var CORE_KEY11 = "__vibeusageHttpCore";
+var CORE_KEY12 = "__vibeusageHttpCore";
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -1540,8 +1629,8 @@ async function readJson(request) {
     return { error: "Invalid JSON", status: 400, data: null };
   }
 }
-if (!globalThis[CORE_KEY11]) {
-  Object.defineProperty(globalThis, CORE_KEY11, {
+if (!globalThis[CORE_KEY12]) {
+  Object.defineProperty(globalThis, CORE_KEY12, {
     value: {
       corsHeaders,
       handleOptions,
@@ -1565,7 +1654,7 @@ var requireMethod2 = httpCore.requireMethod;
 var readJson2 = httpCore.readJson;
 
 // insforge-src/shared/logging-core.mjs
-var CORE_KEY12 = "__vibeusageLoggingCore";
+var CORE_KEY13 = "__vibeusageLoggingCore";
 var envCore4 = globalThis.__vibeusageEnvCore;
 if (!envCore4) throw new Error("env core not initialized");
 function createRequestId() {
@@ -1663,8 +1752,8 @@ function logSlowQuery(logger, fields) {
 function getSlowQueryThresholdMs3() {
   return envCore4.getSlowQueryThresholdMs();
 }
-if (!globalThis[CORE_KEY12]) {
-  Object.defineProperty(globalThis, CORE_KEY12, {
+if (!globalThis[CORE_KEY13]) {
+  Object.defineProperty(globalThis, CORE_KEY13, {
     value: {
       createLogger,
       withRequestLogging,
@@ -1692,7 +1781,7 @@ var toPositiveIntOrNull2 = runtimePrimitivesCore2.toPositiveIntOrNull;
 var toPositiveInt2 = runtimePrimitivesCore2.toPositiveInt;
 
 // insforge-src/shared/pricing-core.mjs
-var CORE_KEY13 = "__vibeusagePricingCore";
+var CORE_KEY14 = "__vibeusagePricingCore";
 var MICROS_PER_DOLLAR = 1000000n;
 var TOKENS_PER_MILLION = 1000000n;
 var DEFAULT_PROFILE = {
@@ -1853,8 +1942,8 @@ function normalizeProfile(profile) {
     }
   };
 }
-if (!globalThis[CORE_KEY13]) {
-  Object.defineProperty(globalThis, CORE_KEY13, {
+if (!globalThis[CORE_KEY14]) {
+  Object.defineProperty(globalThis, CORE_KEY14, {
     value: {
       getDefaultPricingProfile,
       getPricingDefaults: getPricingDefaults3,
@@ -1885,7 +1974,7 @@ var normalizeSource3 = runtimePrimitivesCore4.normalizeSource;
 var getSourceParam2 = runtimePrimitivesCore4.getSourceParam;
 
 // insforge-src/shared/usage-metrics-core.mjs
-var CORE_KEY14 = "__vibeusageUsageMetricsCore";
+var CORE_KEY15 = "__vibeusageUsageMetricsCore";
 var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
 var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
 var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
@@ -1981,8 +2070,8 @@ function parsePricingBucketKey(bucketKey, defaultDate) {
   }
   return { usageKey: bucketKey, dateKey: defaultDate };
 }
-if (!globalThis[CORE_KEY14]) {
-  Object.defineProperty(globalThis, CORE_KEY14, {
+if (!globalThis[CORE_KEY15]) {
+  Object.defineProperty(globalThis, CORE_KEY15, {
     value: {
       createTotals,
       addRowTotals,
@@ -2001,7 +2090,7 @@ if (!globalThis[CORE_KEY14]) {
 }
 
 // insforge-src/shared/usage-pricing-core.mjs
-var CORE_KEY15 = "__vibeusageUsagePricingCore";
+var CORE_KEY16 = "__vibeusageUsagePricingCore";
 var DEFAULT_MODEL2 = "unknown";
 var usageModelCore5 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore5) throw new Error("usage-model core not initialized");
@@ -2171,8 +2260,8 @@ async function resolveAggregateUsagePricing({
     totalCostMicros
   };
 }
-if (!globalThis[CORE_KEY15]) {
-  Object.defineProperty(globalThis, CORE_KEY15, {
+if (!globalThis[CORE_KEY16]) {
+  Object.defineProperty(globalThis, CORE_KEY16, {
     value: {
       resolveBucketedUsagePricing,
       accumulateSourceCostMicros,
@@ -2186,61 +2275,11 @@ if (!globalThis[CORE_KEY15]) {
   });
 }
 
-// insforge-src/shared/pagination-core.mjs
-var CORE_KEY16 = "__vibeusagePaginationCore";
-var MAX_PAGE_SIZE = 1e3;
-function normalizePageSize(value) {
-  const size = Number(value);
-  if (!Number.isFinite(size) || size <= 0) return MAX_PAGE_SIZE;
-  return Math.min(MAX_PAGE_SIZE, Math.floor(size));
-}
-async function forEachPage({ createQuery, pageSize, onPage }) {
-  if (typeof createQuery !== "function") {
-    throw new Error("createQuery must be a function");
-  }
-  if (typeof onPage !== "function") {
-    throw new Error("onPage must be a function");
-  }
-  const size = normalizePageSize(pageSize);
-  let offset = 0;
-  while (true) {
-    const query = createQuery();
-    if (!query || typeof query.range !== "function") {
-      const { data: data2, error: error2 } = await query;
-      if (error2) return { error: error2 };
-      const rows2 = Array.isArray(data2) ? data2 : [];
-      if (rows2.length) await onPage(rows2);
-      return { error: null };
-    }
-    const { data, error } = await query.range(offset, offset + size - 1);
-    if (error) return { error };
-    const rows = Array.isArray(data) ? data : [];
-    if (rows.length) await onPage(rows);
-    if (rows.length < size) break;
-    offset += size;
-  }
-  return { error: null };
-}
-if (!globalThis[CORE_KEY16]) {
-  Object.defineProperty(globalThis, CORE_KEY16, {
-    value: {
-      MAX_PAGE_SIZE,
-      normalizePageSize,
-      forEachPage
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
-  });
-}
-
 // insforge-src/functions-esm/shared/usage-summary-support.js
 var usageModelCore6 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore6) throw new Error("usage-model core not initialized");
 var usageMetricsCore2 = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore2) throw new Error("usage metrics core not initialized");
-var paginationCore = globalThis.__vibeusagePaginationCore;
-if (!paginationCore) throw new Error("pagination core not initialized");
 var normalizeModel2 = usageModelCore6.normalizeModel;
 var normalizeUsageModel2 = usageModelCore6.normalizeUsageModel;
 var applyUsageModelFilter3 = usageModelCore6.applyUsageModelFilter;
@@ -2264,7 +2303,6 @@ var getSourceEntry2 = usageMetricsCore2.getSourceEntry;
 var resolveDisplayName3 = usageMetricsCore2.resolveDisplayName;
 var buildPricingBucketKey3 = usageMetricsCore2.buildPricingBucketKey;
 var parsePricingBucketKey3 = usageMetricsCore2.parsePricingBucketKey;
-var forEachPage2 = paginationCore.forEachPage;
 
 // insforge-src/functions-esm/vibeusage-usage-summary.js
 var DEFAULT_SOURCE = "codex";
@@ -2348,40 +2386,35 @@ var vibeusage_usage_summary_default = withRequestLogging2("vibeusage-usage-summa
     }
   };
   const sumHourlyRange = async (rangeStartIso, rangeEndIso) => {
-    const { error } = await forEachPage2({
-      createQuery: () => buildHourlyUsageQuery2({
-        edgeClient: auth.edgeClient,
-        userId: auth.userId,
-        source,
-        usageModels,
-        canonicalModel,
-        startIso: rangeStartIso,
-        endIso: rangeEndIso,
-        select: "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens"
-      }),
+    const { error, rowCount: scannedRows } = await forEachHourlyUsagePage2({
+      edgeClient: auth.edgeClient,
+      userId: auth.userId,
+      source,
+      usageModels,
+      canonicalModel,
+      startIso: rangeStartIso,
+      endIso: rangeEndIso,
+      select: "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
       onPage: (rows) => {
-        const pageRows = Array.isArray(rows) ? rows : [];
-        rowCount += pageRows.length;
-        for (const row of pageRows) ingestRow(row);
+        for (const row of rows) ingestRow(row);
       }
     });
+    rowCount += scannedRows;
     if (error) return { ok: false, error };
     return { ok: true };
   };
   const sumHourlyRangeInto = async (rangeStartIso, rangeEndIso, onRow) => {
-    const { error } = await forEachPage2({
-      createQuery: () => buildHourlyUsageQuery2({
-        edgeClient: auth.edgeClient,
-        userId: auth.userId,
-        source,
-        usageModels,
-        canonicalModel,
-        startIso: rangeStartIso,
-        endIso: rangeEndIso,
-        select: "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens"
-      }),
+    const { error } = await forEachHourlyUsagePage2({
+      edgeClient: auth.edgeClient,
+      userId: auth.userId,
+      source,
+      usageModels,
+      canonicalModel,
+      startIso: rangeStartIso,
+      endIso: rangeEndIso,
+      select: "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
       onPage: (rows) => {
-        for (const row of Array.isArray(rows) ? rows : []) onRow(row);
+        for (const row of rows) onRow(row);
       }
     });
     if (error) return { ok: false, error };

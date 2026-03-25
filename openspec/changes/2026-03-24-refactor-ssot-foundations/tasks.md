@@ -40,6 +40,7 @@
 - [x] 4.2.16 Converge aggregate summary/daily pricing resolution through `usage-pricing-core` and shared ESM consumers.
 - [x] 4.2.17 Converge summary/daily runtime aggregation onto the hourly-only path while rollup remains explicitly disabled in shared core.
 - [x] 4.2.18 Converge usage-model alias timeline resolution through `usage-model-core` for pricing and model-breakdown consumers.
+- [x] 4.2.19 Converge hourly usage row pagination/orchestration through `usage-hourly-query-core` and shared db wrappers.
 
 ## 5. Verification
 

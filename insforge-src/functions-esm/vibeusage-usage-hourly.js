@@ -1,6 +1,6 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
 import { applyCanaryFilter } from "./shared/canary.js";
-import { buildHourlyUsageQuery } from "./shared/db/usage-hourly.js";
+import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
 import {
   addDatePartsDays,
   addUtcDays,
@@ -22,7 +22,6 @@ import { getSourceParam } from "./shared/source.js";
 import {
   applyUsageModelFilter,
   extractDateKey,
-  forEachPage,
   getModelParam,
   matchesCanonicalModelAtDate,
   normalizeUsageModel,
@@ -171,23 +170,18 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
 
     const queryStartMs = Date.now();
     let rowCount = 0;
-    const { error } = await forEachPage({
-      createQuery: () =>
-        buildHourlyUsageQuery({
-          edgeClient: auth.edgeClient,
-          userId: auth.userId,
-          source,
-          usageModels,
-          canonicalModel,
-          startIso,
-          endIso,
-          select:
-            "hour_start,model,source,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-        }),
+    const { error, rowCount: scannedRows } = await forEachHourlyUsagePage({
+      edgeClient: auth.edgeClient,
+      userId: auth.userId,
+      source,
+      usageModels,
+      canonicalModel,
+      startIso,
+      endIso,
+      select:
+        "hour_start,model,source,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
       onPage: (rows) => {
-        const pageRows = Array.isArray(rows) ? rows : [];
-        rowCount += pageRows.length;
-        for (const row of pageRows) {
+        for (const row of rows) {
           const ts = row?.hour_start;
           if (!ts) continue;
           const dt = new Date(ts);
@@ -222,6 +216,7 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
         }
       },
     });
+    rowCount += scannedRows;
     const queryDurationMs = Date.now() - queryStartMs;
     logSlowQuery(logger, {
       query_label: "usage_hourly_raw",
@@ -277,23 +272,18 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
 
   const queryStartMs = Date.now();
   let rowCount = 0;
-  const { error } = await forEachPage({
-    createQuery: () =>
-      buildHourlyUsageQuery({
-        edgeClient: auth.edgeClient,
-        userId: auth.userId,
-        source,
-        usageModels,
-        canonicalModel,
-        startIso,
-        endIso,
-        select:
-          "hour_start,model,source,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-      }),
+  const { error, rowCount: scannedRows } = await forEachHourlyUsagePage({
+    edgeClient: auth.edgeClient,
+    userId: auth.userId,
+    source,
+    usageModels,
+    canonicalModel,
+    startIso,
+    endIso,
+    select:
+      "hour_start,model,source,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
     onPage: (rows) => {
-      const pageRows = Array.isArray(rows) ? rows : [];
-      rowCount += pageRows.length;
-      for (const row of pageRows) {
+      for (const row of rows) {
         const ts = row?.hour_start;
         if (!ts) continue;
         const dt = new Date(ts);
@@ -333,6 +323,7 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
       }
     },
   });
+  rowCount += scannedRows;
   const queryDurationMs = Date.now() - queryStartMs;
   logSlowQuery(logger, {
     query_label: "usage_hourly_raw",

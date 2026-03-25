@@ -5,9 +5,12 @@ const usageModelCore = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore) throw new Error("usage-model core not initialized");
 const canaryCore = globalThis.__vibeusageCanaryCore;
 if (!canaryCore) throw new Error("canary core not initialized");
+const paginationCore = globalThis.__vibeusagePaginationCore;
+if (!paginationCore) throw new Error("pagination core not initialized");
 
 const { applyUsageModelFilter } = usageModelCore;
 const { applyCanaryFilter } = canaryCore;
+const { forEachPage } = paginationCore;
 
 function buildHourlyUsageQuery({
   edgeClient,
@@ -43,10 +46,51 @@ function buildHourlyUsageQuery({
     .order("model", { ascending: true });
 }
 
+async function forEachHourlyUsagePage({
+  edgeClient,
+  userId,
+  source,
+  usageModels,
+  canonicalModel,
+  startIso,
+  endIso,
+  select,
+  pageSize,
+  onPage,
+} = {}) {
+  if (typeof onPage !== "function") {
+    throw new Error("onPage must be a function");
+  }
+
+  let rowCount = 0;
+  const { error } = await forEachPage({
+    pageSize,
+    createQuery: () =>
+      buildHourlyUsageQuery({
+        edgeClient,
+        userId,
+        source,
+        usageModels,
+        canonicalModel,
+        startIso,
+        endIso,
+        select,
+      }),
+    onPage: async (rows) => {
+      const pageRows = Array.isArray(rows) ? rows : [];
+      rowCount += pageRows.length;
+      await onPage(pageRows);
+    },
+  });
+
+  return { error, rowCount };
+}
+
 if (!globalThis[CORE_KEY]) {
   Object.defineProperty(globalThis, CORE_KEY, {
     value: {
       buildHourlyUsageQuery,
+      forEachHourlyUsagePage,
     },
     configurable: true,
     enumerable: false,

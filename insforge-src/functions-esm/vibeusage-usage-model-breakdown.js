@@ -1,5 +1,5 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
-import { buildHourlyUsageQuery } from "./shared/db/usage-hourly.js";
+import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
 import {
   addDatePartsDays,
   getUsageMaxDays,
@@ -22,7 +22,6 @@ import {
   buildPricingBucketKey,
   createTotals,
   extractDateKey,
-  forEachPage,
   getModelParam,
   normalizeUsageModel,
   normalizeUsageModelKey,
@@ -91,21 +90,16 @@ export default withRequestLogging(
 
     const queryStartMs = Date.now();
     let rowCount = 0;
-    const { error } = await forEachPage({
-      createQuery: () =>
-        buildHourlyUsageQuery({
-          edgeClient: auth.edgeClient,
-          userId: auth.userId,
-          source: sourceFilter,
-          startIso,
-          endIso,
-          select:
-            "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-        }),
+    const { error, rowCount: scannedRows } = await forEachHourlyUsagePage({
+      edgeClient: auth.edgeClient,
+      userId: auth.userId,
+      source: sourceFilter,
+      startIso,
+      endIso,
+      select:
+        "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
       onPage: (rows) => {
-        const pageRows = Array.isArray(rows) ? rows : [];
-        rowCount += pageRows.length;
-        for (const row of pageRows) {
+        for (const row of rows) {
           const source = normalizeSource(row?.source) || DEFAULT_SOURCE;
           const model = normalizeUsageModel(row?.model) || DEFAULT_MODEL;
           const usageKey = normalizeUsageModelKey(model);
@@ -128,6 +122,7 @@ export default withRequestLogging(
         }
       },
     });
+    rowCount += scannedRows;
     const queryDurationMs = Date.now() - queryStartMs;
     logSlowQuery(logger, {
       query_label: "usage_model_breakdown",

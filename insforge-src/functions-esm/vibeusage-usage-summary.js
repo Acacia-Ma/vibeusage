@@ -1,5 +1,5 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
-import { buildHourlyUsageQuery } from "./shared/db/usage-hourly.js";
+import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
 import { shouldIncludeUsageRow } from "./shared/core/usage-filter.js";
 import {
   addDatePartsDays,
@@ -27,7 +27,6 @@ import {
   buildPricingBucketKey,
   createTotals,
   extractDateKey,
-  forEachPage,
   getModelParam,
   getSourceEntry,
   normalizeUsageModel,
@@ -132,45 +131,38 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
   };
 
   const sumHourlyRange = async (rangeStartIso, rangeEndIso) => {
-    const { error } = await forEachPage({
-      createQuery: () =>
-        buildHourlyUsageQuery({
-          edgeClient: auth.edgeClient,
-          userId: auth.userId,
-          source,
-          usageModels,
-          canonicalModel,
-          startIso: rangeStartIso,
-          endIso: rangeEndIso,
-          select:
-            "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-        }),
+    const { error, rowCount: scannedRows } = await forEachHourlyUsagePage({
+      edgeClient: auth.edgeClient,
+      userId: auth.userId,
+      source,
+      usageModels,
+      canonicalModel,
+      startIso: rangeStartIso,
+      endIso: rangeEndIso,
+      select:
+        "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
       onPage: (rows) => {
-        const pageRows = Array.isArray(rows) ? rows : [];
-        rowCount += pageRows.length;
-        for (const row of pageRows) ingestRow(row);
+        for (const row of rows) ingestRow(row);
       },
     });
+    rowCount += scannedRows;
     if (error) return { ok: false, error };
     return { ok: true };
   };
 
   const sumHourlyRangeInto = async (rangeStartIso, rangeEndIso, onRow) => {
-    const { error } = await forEachPage({
-      createQuery: () =>
-        buildHourlyUsageQuery({
-          edgeClient: auth.edgeClient,
-          userId: auth.userId,
-          source,
-          usageModels,
-          canonicalModel,
-          startIso: rangeStartIso,
-          endIso: rangeEndIso,
-          select:
-            "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-        }),
+    const { error } = await forEachHourlyUsagePage({
+      edgeClient: auth.edgeClient,
+      userId: auth.userId,
+      source,
+      usageModels,
+      canonicalModel,
+      startIso: rangeStartIso,
+      endIso: rangeEndIso,
+      select:
+        "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
       onPage: (rows) => {
-        for (const row of Array.isArray(rows) ? rows : []) onRow(row);
+        for (const row of rows) onRow(row);
       },
     });
     if (error) return { ok: false, error };

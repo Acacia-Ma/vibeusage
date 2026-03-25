@@ -1,5 +1,5 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
-import { buildHourlyUsageQuery } from "./shared/db/usage-hourly.js";
+import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
 import { initMonthlyBuckets, ingestMonthlyRow } from "./shared/core/usage-monthly.js";
 import {
   addDatePartsDays,
@@ -17,7 +17,6 @@ import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
 import { toPositiveIntOrNull } from "./shared/numbers.js";
 import { getSourceParam } from "./shared/source.js";
 import {
-  forEachPage,
   getModelParam,
   resolveUsageFilterContext,
 } from "./shared/usage-summary-support.js";
@@ -90,23 +89,18 @@ export default withRequestLogging("vibeusage-usage-monthly", async function (req
   const { monthKeys, buckets } = initMonthlyBuckets({ startMonthParts, months });
   const queryStartMs = Date.now();
   let rowCount = 0;
-  const { error } = await forEachPage({
-    createQuery: () =>
-      buildHourlyUsageQuery({
-        edgeClient: auth.edgeClient,
-        userId: auth.userId,
-        source,
-        usageModels,
-        canonicalModel,
-        startIso,
-        endIso,
-        select:
-          "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-      }),
+  const { error, rowCount: scannedRows } = await forEachHourlyUsagePage({
+    edgeClient: auth.edgeClient,
+    userId: auth.userId,
+    source,
+    usageModels,
+    canonicalModel,
+    startIso,
+    endIso,
+    select:
+      "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
     onPage: (rows) => {
-      const pageRows = Array.isArray(rows) ? rows : [];
-      rowCount += pageRows.length;
-      for (const row of pageRows) {
+      for (const row of rows) {
         ingestMonthlyRow({
           buckets,
           row,
@@ -120,6 +114,7 @@ export default withRequestLogging("vibeusage-usage-monthly", async function (req
       }
     },
   });
+  rowCount += scannedRows;
   const queryDurationMs = Date.now() - queryStartMs;
   logSlowQuery(logger, {
     query_label: "usage_monthly",
