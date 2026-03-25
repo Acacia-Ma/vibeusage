@@ -2067,14 +2067,84 @@ var usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
 var pricingCore2 = globalThis.__vibeusagePricingCore;
 if (!pricingCore2) throw new Error("pricing core not initialized");
+var runtimePrimitivesCore6 = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore6) throw new Error("runtime primitives core not initialized");
 var {
   applyModelIdentity: applyModelIdentity2,
+  extractDateKey: extractDateKey2,
+  normalizeUsageModel: normalizeUsageModel2,
+  normalizeUsageModelKey: normalizeUsageModelKey2,
   resolveIdentityAtDate: resolveIdentityAtDate2,
   resolveModelIdentity: resolveModelIdentity2,
   resolveUsageTimelineContext: resolveUsageTimelineContext2
 } = usageModelCore4;
-var { buildPricingBucketKey: buildPricingBucketKey2, parsePricingBucketKey: parsePricingBucketKey2, resolveDisplayName: resolveDisplayName2 } = usageMetricsCore;
+var {
+  addRowTotals: addRowTotals2,
+  applyTotalsAndBillable: applyTotalsAndBillable2,
+  buildPricingBucketKey: buildPricingBucketKey2,
+  createTotals: createTotals2,
+  getSourceEntry: getSourceEntry2,
+  parsePricingBucketKey: parsePricingBucketKey2,
+  resolveBillableTotals: resolveBillableTotals2,
+  resolveDisplayName: resolveDisplayName2
+} = usageMetricsCore;
 var { resolvePricingProfile: resolvePricingProfile3, computeUsageCost: computeUsageCost3 } = pricingCore2;
+function createAggregateUsageState({
+  hasModelParam = false,
+  defaultModel = DEFAULT_MODEL2
+} = {}) {
+  return {
+    totals: createTotals2(),
+    sourcesMap: /* @__PURE__ */ new Map(),
+    distinctModels: /* @__PURE__ */ new Set(),
+    distinctUsageModels: /* @__PURE__ */ new Set(),
+    pricingBuckets: hasModelParam ? null : /* @__PURE__ */ new Map(),
+    hasModelParam: Boolean(hasModelParam),
+    defaultModel
+  };
+}
+function accumulateAggregateUsageRow({
+  state,
+  row,
+  effectiveDate,
+  defaultSource = "codex"
+} = {}) {
+  if (!state || !row) {
+    return {
+      billable: 0n,
+      hasStoredBillable: false,
+      normalizedModel: null,
+      sourceKey: defaultSource
+    };
+  }
+  const sourceKey = runtimePrimitivesCore6.normalizeSource(row?.source) || defaultSource;
+  const { billable, hasStoredBillable } = resolveBillableTotals2({ row, source: sourceKey });
+  applyTotalsAndBillable2({ totals: state.totals, row, billable, hasStoredBillable });
+  const sourceEntry = getSourceEntry2(state.sourcesMap, sourceKey);
+  applyTotalsAndBillable2({ totals: sourceEntry.totals, row, billable, hasStoredBillable });
+  const normalizedModel = normalizeUsageModel2(row?.model);
+  if (normalizedModel && normalizedModel !== DEFAULT_MODEL2) {
+    state.distinctModels.add(normalizedModel);
+  }
+  let bucketKey = null;
+  let dateKey = extractDateKey2(row?.hour_start || row?.day) || effectiveDate || null;
+  if (!state.hasModelParam && state.pricingBuckets instanceof Map) {
+    const usageKey = normalizeUsageModelKey2(normalizedModel) || state.defaultModel || DEFAULT_MODEL2;
+    bucketKey = buildPricingBucketKey2(sourceKey, usageKey, dateKey);
+    const bucket = state.pricingBuckets.get(bucketKey) || createTotals2();
+    addRowTotals2(bucket, row);
+    state.pricingBuckets.set(bucketKey, bucket);
+    state.distinctUsageModels.add(usageKey);
+  }
+  return {
+    billable,
+    bucketKey,
+    dateKey,
+    hasStoredBillable,
+    normalizedModel,
+    sourceKey
+  };
+}
 async function resolveBucketedUsagePricing({
   edgeClient,
   pricingBuckets,
@@ -2232,6 +2302,8 @@ async function resolveAggregateUsagePricing({
 if (!globalThis[CORE_KEY15]) {
   Object.defineProperty(globalThis, CORE_KEY15, {
     value: {
+      createAggregateUsageState,
+      accumulateAggregateUsageRow,
       resolveBucketedUsagePricing,
       accumulateSourceCostMicros,
       resolveImpliedModelId,
@@ -2250,25 +2322,25 @@ if (!usageModelCore5) throw new Error("usage-model core not initialized");
 var usageMetricsCore2 = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore2) throw new Error("usage metrics core not initialized");
 var normalizeModel2 = usageModelCore5.normalizeModel;
-var normalizeUsageModel2 = usageModelCore5.normalizeUsageModel;
+var normalizeUsageModel3 = usageModelCore5.normalizeUsageModel;
 var applyUsageModelFilter3 = usageModelCore5.applyUsageModelFilter;
 var getModelParam2 = usageModelCore5.getModelParam;
-var normalizeUsageModelKey2 = usageModelCore5.normalizeUsageModelKey;
+var normalizeUsageModelKey3 = usageModelCore5.normalizeUsageModelKey;
 var applyModelIdentity3 = usageModelCore5.applyModelIdentity;
 var resolveModelIdentity3 = usageModelCore5.resolveModelIdentity;
 var resolveUsageModelsForCanonical2 = usageModelCore5.resolveUsageModelsForCanonical;
 var resolveUsageFilterContext2 = usageModelCore5.resolveUsageFilterContext;
 var resolveUsageTimelineContext3 = usageModelCore5.resolveUsageTimelineContext;
-var extractDateKey2 = usageModelCore5.extractDateKey;
+var extractDateKey3 = usageModelCore5.extractDateKey;
 var resolveIdentityAtDate3 = usageModelCore5.resolveIdentityAtDate;
 var matchesCanonicalModelAtDate2 = usageModelCore5.matchesCanonicalModelAtDate;
 var buildAliasTimeline2 = usageModelCore5.buildAliasTimeline;
 var fetchAliasRows2 = usageModelCore5.fetchAliasRows;
-var createTotals2 = usageMetricsCore2.createTotals;
-var addRowTotals2 = usageMetricsCore2.addRowTotals;
-var resolveBillableTotals2 = usageMetricsCore2.resolveBillableTotals;
-var applyTotalsAndBillable2 = usageMetricsCore2.applyTotalsAndBillable;
-var getSourceEntry2 = usageMetricsCore2.getSourceEntry;
+var createTotals3 = usageMetricsCore2.createTotals;
+var addRowTotals3 = usageMetricsCore2.addRowTotals;
+var resolveBillableTotals3 = usageMetricsCore2.resolveBillableTotals;
+var applyTotalsAndBillable3 = usageMetricsCore2.applyTotalsAndBillable;
+var getSourceEntry3 = usageMetricsCore2.getSourceEntry;
 var resolveDisplayName3 = usageMetricsCore2.resolveDisplayName;
 var buildPricingBucketKey3 = usageMetricsCore2.buildPricingBucketKey;
 var parsePricingBucketKey3 = usageMetricsCore2.parsePricingBucketKey;
@@ -2330,9 +2402,9 @@ var vibeusage_usage_model_breakdown_default = withRequestLogging2(
       onPage: (rows) => {
         for (const row of rows) {
           const source = normalizeSource3(row?.source) || DEFAULT_SOURCE;
-          const model = normalizeUsageModel2(row?.model) || DEFAULT_MODEL3;
-          const usageKey = normalizeUsageModelKey2(model);
-          const { billable, hasStoredBillable } = resolveBillableTotals2({ row, source });
+          const model = normalizeUsageModel3(row?.model) || DEFAULT_MODEL3;
+          const usageKey = normalizeUsageModelKey3(model);
+          const { billable, hasStoredBillable } = resolveBillableTotals3({ row, source });
           rowsBuffer.push({
             source,
             model,
@@ -2372,12 +2444,12 @@ var vibeusage_usage_model_breakdown_default = withRequestLogging2(
     const aliasTimeline = timelineContext.aliasTimeline;
     const sourcesMap = /* @__PURE__ */ new Map();
     const costBuckets = /* @__PURE__ */ new Map();
-    const grandTotals = createTotals2();
+    const grandTotals = createTotals3();
     for (const row of rowsBuffer) {
-      const sourceEntry = getSourceEntry3(sourcesMap, row.source);
-      addRowTotals2(sourceEntry.totals, row);
-      addRowTotals2(grandTotals, row);
-      const dateKey = extractDateKey2(row.hour_start) || to;
+      const sourceEntry = getSourceEntry4(sourcesMap, row.source);
+      addRowTotals3(sourceEntry.totals, row);
+      addRowTotals3(grandTotals, row);
+      const dateKey = extractDateKey3(row.hour_start) || to;
       const identity = resolveIdentityAtDate3({
         rawModel: row.model,
         usageKey: row.usageKey,
@@ -2385,13 +2457,13 @@ var vibeusage_usage_model_breakdown_default = withRequestLogging2(
         timeline: aliasTimeline
       });
       const canonicalEntry = getCanonicalEntry(sourceEntry.models, identity);
-      addRowTotals2(canonicalEntry.totals, row);
+      addRowTotals3(canonicalEntry.totals, row);
       const bucketKey = buildPricingBucketKey3(row.source, row.usageKey || DEFAULT_MODEL3, dateKey);
       const bucket = costBuckets.get(bucketKey) || {
         source: row.source,
-        totals: createTotals2()
+        totals: createTotals3()
       };
-      addRowTotals2(bucket.totals, row);
+      addRowTotals3(bucket.totals, row);
       costBuckets.set(bucketKey, bucket);
     }
     const bucketedPricing = await resolveBucketedUsagePricing2({
@@ -2447,11 +2519,11 @@ var vibeusage_usage_model_breakdown_default = withRequestLogging2(
     );
   }
 );
-function getSourceEntry3(map, source) {
+function getSourceEntry4(map, source) {
   if (map.has(source)) return map.get(source);
   const entry = {
     source,
-    totals: createTotals2(),
+    totals: createTotals3(),
     models: /* @__PURE__ */ new Map()
   };
   map.set(source, entry);
@@ -2463,7 +2535,7 @@ function getCanonicalEntry(map, identity) {
   const entry = {
     model_id: key,
     model: identity?.model || key,
-    totals: createTotals2()
+    totals: createTotals3()
   };
   map.set(key, entry);
   return entry;

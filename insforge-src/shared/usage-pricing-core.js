@@ -15,15 +15,91 @@ const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
 const pricingCore = globalThis.__vibeusagePricingCore;
 if (!pricingCore) throw new Error("pricing core not initialized");
+const runtimePrimitivesCore = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore) throw new Error("runtime primitives core not initialized");
 
 const {
   applyModelIdentity,
+  extractDateKey,
+  normalizeUsageModel,
+  normalizeUsageModelKey,
   resolveIdentityAtDate,
   resolveModelIdentity,
   resolveUsageTimelineContext,
 } = usageModelCore;
-const { buildPricingBucketKey, parsePricingBucketKey, resolveDisplayName } = usageMetricsCore;
+const {
+  addRowTotals,
+  applyTotalsAndBillable,
+  buildPricingBucketKey,
+  createTotals,
+  getSourceEntry,
+  parsePricingBucketKey,
+  resolveBillableTotals,
+  resolveDisplayName,
+} = usageMetricsCore;
 const { resolvePricingProfile, computeUsageCost } = pricingCore;
+
+function createAggregateUsageState({
+  hasModelParam = false,
+  defaultModel = DEFAULT_MODEL,
+} = {}) {
+  return {
+    totals: createTotals(),
+    sourcesMap: new Map(),
+    distinctModels: new Set(),
+    distinctUsageModels: new Set(),
+    pricingBuckets: hasModelParam ? null : new Map(),
+    hasModelParam: Boolean(hasModelParam),
+    defaultModel,
+  };
+}
+
+function accumulateAggregateUsageRow({
+  state,
+  row,
+  effectiveDate,
+  defaultSource = "codex",
+} = {}) {
+  if (!state || !row) {
+    return {
+      billable: 0n,
+      hasStoredBillable: false,
+      normalizedModel: null,
+      sourceKey: defaultSource,
+    };
+  }
+
+  const sourceKey = runtimePrimitivesCore.normalizeSource(row?.source) || defaultSource;
+  const { billable, hasStoredBillable } = resolveBillableTotals({ row, source: sourceKey });
+  applyTotalsAndBillable({ totals: state.totals, row, billable, hasStoredBillable });
+  const sourceEntry = getSourceEntry(state.sourcesMap, sourceKey);
+  applyTotalsAndBillable({ totals: sourceEntry.totals, row, billable, hasStoredBillable });
+
+  const normalizedModel = normalizeUsageModel(row?.model);
+  if (normalizedModel && normalizedModel !== DEFAULT_MODEL) {
+    state.distinctModels.add(normalizedModel);
+  }
+
+  let bucketKey = null;
+  let dateKey = extractDateKey(row?.hour_start || row?.day) || effectiveDate || null;
+  if (!state.hasModelParam && state.pricingBuckets instanceof Map) {
+    const usageKey = normalizeUsageModelKey(normalizedModel) || state.defaultModel || DEFAULT_MODEL;
+    bucketKey = buildPricingBucketKey(sourceKey, usageKey, dateKey);
+    const bucket = state.pricingBuckets.get(bucketKey) || createTotals();
+    addRowTotals(bucket, row);
+    state.pricingBuckets.set(bucketKey, bucket);
+    state.distinctUsageModels.add(usageKey);
+  }
+
+  return {
+    billable,
+    bucketKey,
+    dateKey,
+    hasStoredBillable,
+    normalizedModel,
+    sourceKey,
+  };
+}
 
 async function resolveBucketedUsagePricing({
   edgeClient,
@@ -211,6 +287,8 @@ async function resolveAggregateUsagePricing({
 if (!globalThis[CORE_KEY]) {
   Object.defineProperty(globalThis, CORE_KEY, {
     value: {
+      createAggregateUsageState,
+      accumulateAggregateUsageRow,
       resolveBucketedUsagePricing,
       accumulateSourceCostMicros,
       resolveImpliedModelId,

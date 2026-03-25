@@ -16,26 +16,21 @@ import { getBaseUrl } from "./shared/env.js";
 import { handleOptions, json } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
 import { buildPricingMetadata, formatUsdFromMicros } from "./shared/pricing.js";
-import { getSourceParam, normalizeSource } from "./shared/source.js";
+import { getSourceParam } from "./shared/source.js";
 import "../shared/usage-pricing-core.mjs";
 import {
-  addRowTotals,
-  applyTotalsAndBillable,
-  buildPricingBucketKey,
-  createTotals,
-  extractDateKey,
   getModelParam,
-  getSourceEntry,
-  normalizeUsageModel,
-  normalizeUsageModelKey,
-  resolveBillableTotals,
   resolveUsageFilterContext,
 } from "./shared/usage-summary-support.js";
 
 const DEFAULT_MODEL = "unknown";
 const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 if (!usagePricingCore) throw new Error("usage pricing core not initialized");
-const { resolveAggregateUsagePricing } = usagePricingCore;
+const {
+  createAggregateUsageState,
+  accumulateAggregateUsageRow,
+  resolveAggregateUsagePricing,
+} = usagePricingCore;
 
 export default withRequestLogging("vibeusage-usage-daily", async function (request, logger) {
   const opt = handleOptions(request);
@@ -93,33 +88,17 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
     });
 
   const { buckets } = initDailyBuckets(dayKeys);
-
-  let totals = createTotals();
-  let sourcesMap = new Map();
-  let distinctModels = new Set();
-  const distinctUsageModels = new Set();
-  const pricingBuckets = hasModelParam ? null : new Map();
+  const aggregateState = createAggregateUsageState({
+    hasModelParam,
+    defaultModel: DEFAULT_MODEL,
+  });
 
   const ingestRow = (row) => {
-    const sourceKey = normalizeSource(row?.source) || "codex";
-    const { billable, hasStoredBillable } = resolveBillableTotals({ row, source: sourceKey });
-    applyTotalsAndBillable({ totals, row, billable, hasStoredBillable });
-    const sourceEntry = getSourceEntry(sourcesMap, sourceKey);
-    applyTotalsAndBillable({ totals: sourceEntry.totals, row, billable, hasStoredBillable });
-    const normalizedModel = normalizeUsageModel(row?.model);
-    if (normalizedModel && normalizedModel !== "unknown") {
-      distinctModels.add(normalizedModel);
-    }
-    if (!hasModelParam && pricingBuckets) {
-      const usageKey = normalizeUsageModelKey(normalizedModel) || DEFAULT_MODEL;
-      const dateKey = extractDateKey(row?.hour_start || row?.day) || to;
-      const bucketKey = buildPricingBucketKey(sourceKey, usageKey, dateKey);
-      const bucket = pricingBuckets.get(bucketKey) || createTotals();
-      addRowTotals(bucket, row);
-      pricingBuckets.set(bucketKey, bucket);
-      distinctUsageModels.add(usageKey);
-    }
-    return billable;
+    return accumulateAggregateUsageRow({
+      state: aggregateState,
+      row,
+      effectiveDate: to,
+    }).billable;
   };
 
   const queryStartMs = Date.now();
@@ -174,12 +153,12 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
   const pricingSummary = await resolveAggregateUsagePricing({
     edgeClient: auth.edgeClient,
     canonicalModel,
-    distinctModels,
-    distinctUsageModels,
-    pricingBuckets,
+    distinctModels: aggregateState.distinctModels,
+    distinctUsageModels: aggregateState.distinctUsageModels,
+    pricingBuckets: aggregateState.pricingBuckets,
     effectiveDate: to,
-    sourcesMap,
-    totals,
+    sourcesMap: aggregateState.sourcesMap,
+    totals: aggregateState.totals,
     defaultModel: DEFAULT_MODEL,
   });
 
@@ -198,12 +177,12 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
 
   const summary = {
     totals: {
-      total_tokens: totals.total_tokens.toString(),
-      billable_total_tokens: totals.billable_total_tokens.toString(),
-      input_tokens: totals.input_tokens.toString(),
-      cached_input_tokens: totals.cached_input_tokens.toString(),
-      output_tokens: totals.output_tokens.toString(),
-      reasoning_output_tokens: totals.reasoning_output_tokens.toString(),
+      total_tokens: aggregateState.totals.total_tokens.toString(),
+      billable_total_tokens: aggregateState.totals.billable_total_tokens.toString(),
+      input_tokens: aggregateState.totals.input_tokens.toString(),
+      cached_input_tokens: aggregateState.totals.cached_input_tokens.toString(),
+      output_tokens: aggregateState.totals.output_tokens.toString(),
+      reasoning_output_tokens: aggregateState.totals.reasoning_output_tokens.toString(),
       total_cost_usd: formatUsdFromMicros(pricingSummary.totalCostMicros),
     },
     pricing: buildPricingMetadata({

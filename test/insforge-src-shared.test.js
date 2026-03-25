@@ -494,3 +494,35 @@ test("usage pricing core resolves aggregate pricing summary state", async () => 
   assert.equal(summaryState.summaryPricingMode, "overlap");
   assert.deepEqual(Array.from(summaryState.canonicalModels.values()), ["alpha"]);
 });
+
+test("usage pricing core accumulates aggregate usage rows into shared state", () => {
+  const state = usagePricingCore.createAggregateUsageState({
+    hasModelParam: false,
+    defaultModel: "unknown",
+  });
+
+  const accumulation = usagePricingCore.accumulateAggregateUsageRow({
+    state,
+    row: {
+      hour_start: "2025-02-15T00:00:00.000Z",
+      source: "codex",
+      model: " GPT-Foo ",
+      total_tokens: 10,
+      input_tokens: 6,
+      cached_input_tokens: 0,
+      output_tokens: 4,
+      reasoning_output_tokens: 0,
+    },
+    effectiveDate: "2025-02-15",
+  });
+
+  assert.equal(accumulation.sourceKey, "codex");
+  assert.equal(accumulation.normalizedModel, "gpt-foo");
+  assert.equal(accumulation.billable, 10n);
+  assert.equal(state.totals.total_tokens, 10n);
+  assert.equal(state.totals.billable_total_tokens, 10n);
+  assert.equal(state.sourcesMap.get("codex")?.totals?.total_tokens, 10n);
+  assert.deepEqual(Array.from(state.distinctModels.values()), ["gpt-foo"]);
+  assert.deepEqual(Array.from(state.distinctUsageModels.values()), ["gpt-foo"]);
+  assert.equal(state.pricingBuckets.size, 1);
+});

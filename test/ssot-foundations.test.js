@@ -318,6 +318,21 @@ test("backend usage pricing semantics flow through shared cores", () => {
     read("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js"),
     /shared\/usage-pricing-core\.mjs/,
   );
+  assert.match(read("insforge-src/shared/usage-pricing-core.js"), /createAggregateUsageState/);
+  assert.match(read("insforge-src/shared/usage-pricing-core.js"), /accumulateAggregateUsageRow/);
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
+    /accumulateAggregateUsageRow/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-daily.js"),
+    /accumulateAggregateUsageRow/,
+  );
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /getSourceEntry/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /buildPricingBucketKey/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /applyTotalsAndBillable/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /getSourceEntry/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /buildPricingBucketKey/);
   assert.match(
     read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
     /shared\/source\.js/,
