@@ -522,3 +522,56 @@ test("backend hourly usage row semantics flow through shared core", () => {
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /normalizeUsageModel/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-heatmap.js"), /normalizeUsageModel/);
 });
+
+test("backend project usage summary semantics flow through shared core", () => {
+  const projectUsageCoreJs = read("insforge-src/shared/project-usage-core.js");
+  const projectUsageCoreMjs = read("insforge-src/shared/project-usage-core.mjs");
+  assert.equal(stripModulePrelude(projectUsageCoreJs), stripModulePrelude(projectUsageCoreMjs));
+  assert.match(projectUsageCoreJs, /require\("\.\/runtime-primitives-core"\)/);
+  assert.match(projectUsageCoreMjs, /import "\.\/runtime-primitives-core\.mjs"/);
+  assert.match(read("insforge-src/shared/project-usage.js"), /project-usage-core/);
+  assert.match(
+    read("insforge-src/functions-esm/shared/project-usage.js"),
+    /shared\/project-usage-core\.mjs/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-project-usage-summary.js"),
+    /shared\/project-usage\.js/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-project-usage-summary.js"),
+    /normalizeProjectUsageLimit/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-project-usage-summary.js"),
+    /normalizeProjectUsageRows/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-project-usage-summary.js"),
+    /aggregateProjectUsageRows/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-project-usage-summary.js"),
+    /shouldFallbackProjectUsageAggregate/,
+  );
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-project-usage-summary.js"),
+    /function normalizeLimit/,
+  );
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-project-usage-summary.js"),
+    /function normalizeAggregateValue/,
+  );
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-project-usage-summary.js"),
+    /function resolveBillableTotal/,
+  );
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-project-usage-summary.js"),
+    /function shouldFallbackAggregate/,
+  );
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-project-usage-summary.js"),
+    /function aggregateProjectRows/,
+  );
+});

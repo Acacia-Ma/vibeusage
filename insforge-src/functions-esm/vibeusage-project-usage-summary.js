@@ -4,11 +4,13 @@ import { isDebugEnabled, withSlowQueryDebugPayload } from "./shared/debug.js";
 import { getBaseUrl } from "./shared/env.js";
 import { handleOptions, json } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
-import { toBigInt } from "./shared/numbers.js";
+import {
+  aggregateProjectUsageRows,
+  normalizeProjectUsageLimit,
+  normalizeProjectUsageRows,
+  shouldFallbackProjectUsageAggregate,
+} from "./shared/project-usage.js";
 import { getSourceParam } from "./shared/source.js";
-
-const DEFAULT_LIMIT = 3;
-const MAX_LIMIT = 10;
 
 export default withRequestLogging(
   "vibeusage-project-usage-summary",
@@ -41,7 +43,7 @@ export default withRequestLogging(
     const source = sourceResult.source;
     const from = null;
     const to = null;
-    const limit = normalizeLimit(url.searchParams.get("limit"));
+    const limit = normalizeProjectUsageLimit(url.searchParams.get("limit"));
     const queryStartMs = Date.now();
 
     let query = auth.edgeClient.database
@@ -59,7 +61,7 @@ export default withRequestLogging(
 
     const { data, error } = await query;
     let entries = null;
-    if (error && shouldFallbackAggregate(error?.message)) {
+    if (error && shouldFallbackProjectUsageAggregate(error?.message)) {
       const fallback = await fetchProjectUsageFallback({
         edgeClient: auth.edgeClient,
         userId: auth.userId,
@@ -75,17 +77,7 @@ export default withRequestLogging(
       const queryDurationMs = Date.now() - queryStartMs;
       return respond({ error: error.message }, 500, queryDurationMs);
     } else {
-      entries = (Array.isArray(data) ? data : [])
-        .map((row) => {
-          const totalTokens = normalizeAggregateValue(row?.sum_total_tokens);
-          return {
-            project_key: row?.project_key || null,
-            project_ref: row?.project_ref || null,
-            total_tokens: totalTokens,
-            billable_total_tokens: resolveBillableTotal(totalTokens, row?.sum_billable_total_tokens),
-          };
-        })
-        .filter((row) => row.project_key && row.project_ref);
+      entries = normalizeProjectUsageRows(data);
     }
 
     const queryDurationMs = Date.now() - queryStartMs;
@@ -113,35 +105,6 @@ export default withRequestLogging(
   },
 );
 
-function normalizeLimit(raw) {
-  if (typeof raw !== "string" || raw.trim().length === 0) return DEFAULT_LIMIT;
-  const i = Math.floor(Number(raw));
-  if (!Number.isFinite(i)) return DEFAULT_LIMIT;
-  if (i < 1) return 1;
-  if (i > MAX_LIMIT) return MAX_LIMIT;
-  return i;
-}
-
-function normalizeAggregateValue(value) {
-  if (value == null) return "0";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  if (typeof value === "bigint") return value.toString();
-  return String(value);
-}
-
-function resolveBillableTotal(totalTokens, billableRaw) {
-  if (billableRaw == null) return totalTokens;
-  return normalizeAggregateValue(billableRaw);
-}
-
-function shouldFallbackAggregate(message) {
-  if (typeof message !== "string") return false;
-  const normalized = message.toLowerCase();
-  if (normalized.includes("aggregate functions is not allowed")) return true;
-  return normalized.includes("schema cache") && normalized.includes("relationship") && normalized.includes("'sum'");
-}
-
 async function fetchProjectUsageFallback({ edgeClient, userId, source, limit }) {
   try {
     let query = edgeClient.database
@@ -152,49 +115,8 @@ async function fetchProjectUsageFallback({ edgeClient, userId, source, limit }) 
     if (!isCanaryTag(source)) query = query.neq("source", "canary");
     const { data, error } = await query;
     if (error) return { ok: false, error: error.message };
-    return { ok: true, entries: aggregateProjectRows(data, limit) };
+    return { ok: true, entries: aggregateProjectUsageRows(data, limit) };
   } catch (error) {
     return { ok: false, error: error?.message || "Fallback query failed" };
   }
-}
-
-function aggregateProjectRows(rows, limit) {
-  const map = new Map();
-  for (const row of Array.isArray(rows) ? rows : []) {
-    const projectKey = typeof row?.project_key === "string" ? row.project_key : null;
-    const projectRef = typeof row?.project_ref === "string" ? row.project_ref : null;
-    if (!projectKey || !projectRef) continue;
-    const key = `${projectKey}::${projectRef}`;
-    let entry = map.get(key);
-    if (!entry) {
-      entry = { project_key: projectKey, project_ref: projectRef, total: 0n, billable: 0n };
-      map.set(key, entry);
-    }
-    entry.total += toBigInt(row?.total_tokens);
-    const billableRaw =
-      row && Object.prototype.hasOwnProperty.call(row, "billable_total_tokens")
-        ? row.billable_total_tokens
-        : null;
-    const billable = billableRaw == null ? row?.total_tokens : billableRaw;
-    entry.billable += toBigInt(billable);
-  }
-  const entries = Array.from(map.values()).map((entry) => ({
-    project_key: entry.project_key,
-    project_ref: entry.project_ref,
-    total_tokens: entry.total.toString(),
-    billable_total_tokens: entry.billable.toString(),
-  }));
-  entries.sort((a, b) => {
-    const aBillable = toBigInt(a.billable_total_tokens);
-    const bBillable = toBigInt(b.billable_total_tokens);
-    if (aBillable === bBillable) {
-      const aTotal = toBigInt(a.total_tokens);
-      const bTotal = toBigInt(b.total_tokens);
-      if (aTotal === bTotal) return 0;
-      return aTotal > bTotal ? -1 : 1;
-    }
-    return aBillable > bBillable ? -1 : 1;
-  });
-  if (!Number.isFinite(limit)) return entries;
-  return entries.slice(0, Math.max(1, Math.floor(limit)));
 }

@@ -30,6 +30,8 @@ require("../insforge-src/shared/usage-hourly-core");
 const usageHourlyCore = globalThis.__vibeusageUsageHourlyCore;
 require("../insforge-src/shared/usage-heatmap-core");
 const usageHeatmapCore = globalThis.__vibeusageUsageHeatmapCore;
+require("../insforge-src/shared/project-usage-core");
+const projectUsageCore = globalThis.__vibeusageProjectUsageCore;
 require("../insforge-src/shared/usage-pricing-core");
 const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 
@@ -978,4 +980,90 @@ test("usage heatmap core normalizes request params and accumulates day values", 
   assert.equal(usageHeatmapCore.normalizeHeatmapWeekStartsOn("fri"), null);
   assert.equal(usageHeatmapCore.normalizeHeatmapToDate("2025-03-01"), "2025-03-01");
   assert.equal(usageHeatmapCore.normalizeHeatmapToDate("2025-03-40"), null);
+});
+
+test("project usage core normalizes aggregate rows and fallback detection", () => {
+  assert.equal(projectUsageCore.normalizeProjectUsageLimit(undefined), 3);
+  assert.equal(projectUsageCore.normalizeProjectUsageLimit("12"), 10);
+  assert.equal(projectUsageCore.normalizeProjectUsageLimit("2"), 2);
+
+  assert.deepEqual(
+    projectUsageCore.normalizeProjectUsageRows([
+      {
+        project_key: "acme/alpha",
+        project_ref: "https://github.com/acme/alpha",
+        sum_total_tokens: 17,
+        sum_billable_total_tokens: null,
+      },
+      {
+        project_key: "",
+        project_ref: "https://github.com/acme/missing",
+        sum_total_tokens: 5,
+        sum_billable_total_tokens: 5,
+      },
+    ]),
+    [
+      {
+        project_key: "acme/alpha",
+        project_ref: "https://github.com/acme/alpha",
+        total_tokens: "17",
+        billable_total_tokens: "17",
+      },
+    ],
+  );
+
+  assert.equal(
+    projectUsageCore.shouldFallbackProjectUsageAggregate(
+      "Could not find a relationship between 'vibeusage_project_usage_hourly' and 'sum' in the schema cache",
+    ),
+    true,
+  );
+  assert.equal(
+    projectUsageCore.shouldFallbackProjectUsageAggregate(
+      "Use of aggregate functions is not allowed",
+    ),
+    true,
+  );
+  assert.equal(projectUsageCore.shouldFallbackProjectUsageAggregate("boom"), false);
+});
+
+test("project usage core aggregates and sorts fallback rows", () => {
+  assert.deepEqual(
+    projectUsageCore.aggregateProjectUsageRows(
+      [
+        {
+          project_key: "acme/alpha",
+          project_ref: "https://github.com/acme/alpha",
+          total_tokens: "10",
+          billable_total_tokens: "5",
+        },
+        {
+          project_key: "acme/bravo",
+          project_ref: "https://github.com/acme/bravo",
+          total_tokens: "7",
+        },
+        {
+          project_key: "acme/alpha",
+          project_ref: "https://github.com/acme/alpha",
+          total_tokens: "4",
+          billable_total_tokens: "4",
+        },
+      ],
+      2,
+    ),
+    [
+      {
+        project_key: "acme/alpha",
+        project_ref: "https://github.com/acme/alpha",
+        total_tokens: "14",
+        billable_total_tokens: "9",
+      },
+      {
+        project_key: "acme/bravo",
+        project_ref: "https://github.com/acme/bravo",
+        total_tokens: "7",
+        billable_total_tokens: "7",
+      },
+    ],
+  );
 });

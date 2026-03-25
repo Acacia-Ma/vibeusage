@@ -1302,145 +1302,58 @@ var createLogger2 = loggingCore.createLogger;
 var withRequestLogging2 = loggingCore.withRequestLogging;
 var logSlowQuery2 = loggingCore.logSlowQuery;
 
-// insforge-src/functions-esm/shared/numbers.js
+// insforge-src/shared/project-usage-core.mjs
+var CORE_KEY10 = "__vibeusageProjectUsageCore";
 var runtimePrimitivesCore2 = globalThis.__vibeusageRuntimePrimitivesCore;
 if (!runtimePrimitivesCore2) throw new Error("runtime primitives core not initialized");
-var toBigInt2 = runtimePrimitivesCore2.toBigInt;
-var toPositiveIntOrNull2 = runtimePrimitivesCore2.toPositiveIntOrNull;
-var toPositiveInt2 = runtimePrimitivesCore2.toPositiveInt;
-
-// insforge-src/functions-esm/shared/source.js
-var runtimePrimitivesCore3 = globalThis.__vibeusageRuntimePrimitivesCore;
-if (!runtimePrimitivesCore3) throw new Error("runtime primitives core not initialized");
-var MAX_SOURCE_LENGTH2 = runtimePrimitivesCore3.MAX_SOURCE_LENGTH;
-var normalizeSource2 = runtimePrimitivesCore3.normalizeSource;
-var getSourceParam2 = runtimePrimitivesCore3.getSourceParam;
-
-// insforge-src/functions-esm/vibeusage-project-usage-summary.js
-var DEFAULT_LIMIT = 3;
-var MAX_LIMIT = 10;
-var vibeusage_project_usage_summary_default = withRequestLogging2(
-  "vibeusage-project-usage-summary",
-  async function(request, logger) {
-    const opt = handleOptions2(request);
-    if (opt) return opt;
-    const url = new URL(request.url);
-    const debugEnabled = isDebugEnabled2(url);
-    const respond = (body, status, durationMs) => json2(
-      debugEnabled ? withSlowQueryDebugPayload2(body, { logger, durationMs, status }) : body,
-      status
-    );
-    if (request.method !== "GET") return respond({ error: "Method not allowed" }, 405, 0);
-    const bearer = getBearerToken2(request.headers.get("Authorization"));
-    if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
-    const auth = await getAccessContext2({
-      baseUrl: getBaseUrl2(),
-      bearer,
-      allowPublic: true
-    });
-    if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
-    const sourceResult = getSourceParam2(url);
-    if (!sourceResult.ok) return respond({ error: sourceResult.error }, 400, 0);
-    const source = sourceResult.source;
-    const from = null;
-    const to = null;
-    const limit = normalizeLimit(url.searchParams.get("limit"));
-    const queryStartMs = Date.now();
-    let query = auth.edgeClient.database.from("vibeusage_project_usage_hourly").select(
-      "project_key,project_ref,sum_total_tokens:sum(total_tokens),sum_billable_total_tokens:sum(billable_total_tokens)"
-    ).eq("user_id", auth.userId);
-    if (source) query = query.eq("source", source);
-    if (!isCanaryTag2(source)) query = query.neq("source", "canary");
-    query = query.order("sum_billable_total_tokens", { ascending: false }).order("sum_total_tokens", { ascending: false }).limit(limit);
-    const { data, error } = await query;
-    let entries = null;
-    if (error && shouldFallbackAggregate(error?.message)) {
-      const fallback = await fetchProjectUsageFallback({
-        edgeClient: auth.edgeClient,
-        userId: auth.userId,
-        source,
-        limit
-      });
-      if (!fallback.ok) {
-        const queryDurationMs2 = Date.now() - queryStartMs;
-        return respond({ error: fallback.error }, 500, queryDurationMs2);
-      }
-      entries = fallback.entries;
-    } else if (error) {
-      const queryDurationMs2 = Date.now() - queryStartMs;
-      return respond({ error: error.message }, 500, queryDurationMs2);
-    } else {
-      entries = (Array.isArray(data) ? data : []).map((row) => {
-        const totalTokens = normalizeAggregateValue(row?.sum_total_tokens);
-        return {
-          project_key: row?.project_key || null,
-          project_ref: row?.project_ref || null,
-          total_tokens: totalTokens,
-          billable_total_tokens: resolveBillableTotal(totalTokens, row?.sum_billable_total_tokens)
-        };
-      }).filter((row) => row.project_key && row.project_ref);
-    }
-    const queryDurationMs = Date.now() - queryStartMs;
-    logSlowQuery2(logger, {
-      query_label: "project_usage_summary",
-      duration_ms: queryDurationMs,
-      row_count: entries.length,
-      range_days: null,
-      source: source || null,
-      tz: null,
-      tz_offset_minutes: null
-    });
-    return respond(
-      {
-        from,
-        to,
-        all_time: true,
-        generated_at: (/* @__PURE__ */ new Date()).toISOString(),
-        entries: entries || []
-      },
-      200,
-      queryDurationMs
-    );
-  }
-);
-function normalizeLimit(raw) {
-  if (typeof raw !== "string" || raw.trim().length === 0) return DEFAULT_LIMIT;
-  const i = Math.floor(Number(raw));
-  if (!Number.isFinite(i)) return DEFAULT_LIMIT;
-  if (i < 1) return 1;
-  if (i > MAX_LIMIT) return MAX_LIMIT;
-  return i;
+var { toBigInt: toBigInt2, toPositiveIntOrNull: toPositiveIntOrNull2 } = runtimePrimitivesCore2;
+var DEFAULT_PROJECT_USAGE_LIMIT = 3;
+var MAX_PROJECT_USAGE_LIMIT = 10;
+function normalizeProjectUsageLimit(raw) {
+  const parsed = toPositiveIntOrNull2(raw);
+  if (parsed == null) return DEFAULT_PROJECT_USAGE_LIMIT;
+  if (parsed < 1) return 1;
+  if (parsed > MAX_PROJECT_USAGE_LIMIT) return MAX_PROJECT_USAGE_LIMIT;
+  return parsed;
 }
-function normalizeAggregateValue(value) {
+function normalizeProjectUsageAggregateValue(value) {
   if (value == null) return "0";
   if (typeof value === "string") return value;
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   if (typeof value === "bigint") return value.toString();
   return String(value);
 }
-function resolveBillableTotal(totalTokens, billableRaw) {
+function resolveProjectUsageBillableTotal(totalTokens, billableRaw) {
   if (billableRaw == null) return totalTokens;
-  return normalizeAggregateValue(billableRaw);
+  return normalizeProjectUsageAggregateValue(billableRaw);
 }
-function shouldFallbackAggregate(message) {
+function normalizeProjectUsageEntry({ projectKey, projectRef, totalTokens, billableTotalTokens } = {}) {
+  if (!projectKey || !projectRef) return null;
+  const normalizedTotal = normalizeProjectUsageAggregateValue(totalTokens);
+  return {
+    project_key: projectKey,
+    project_ref: projectRef,
+    total_tokens: normalizedTotal,
+    billable_total_tokens: resolveProjectUsageBillableTotal(normalizedTotal, billableTotalTokens)
+  };
+}
+function normalizeProjectUsageRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map(
+    (row) => normalizeProjectUsageEntry({
+      projectKey: row?.project_key || null,
+      projectRef: row?.project_ref || null,
+      totalTokens: row?.sum_total_tokens,
+      billableTotalTokens: row?.sum_billable_total_tokens
+    })
+  ).filter(Boolean);
+}
+function shouldFallbackProjectUsageAggregate(message) {
   if (typeof message !== "string") return false;
   const normalized = message.toLowerCase();
   if (normalized.includes("aggregate functions is not allowed")) return true;
   return normalized.includes("schema cache") && normalized.includes("relationship") && normalized.includes("'sum'");
 }
-async function fetchProjectUsageFallback({ edgeClient, userId, source, limit }) {
-  try {
-    let query = edgeClient.database.from("vibeusage_project_usage_hourly").select("project_key,project_ref,total_tokens,billable_total_tokens").eq("user_id", userId);
-    if (source) query = query.eq("source", source);
-    if (!isCanaryTag2(source)) query = query.neq("source", "canary");
-    const { data, error } = await query;
-    if (error) return { ok: false, error: error.message };
-    return { ok: true, entries: aggregateProjectRows(data, limit) };
-  } catch (error) {
-    return { ok: false, error: error?.message || "Fallback query failed" };
-  }
-}
-function aggregateProjectRows(rows, limit) {
+function aggregateProjectUsageRows(rows, limit) {
   const map = /* @__PURE__ */ new Map();
   for (const row of Array.isArray(rows) ? rows : []) {
     const projectKey = typeof row?.project_key === "string" ? row.project_key : null;
@@ -1476,6 +1389,134 @@ function aggregateProjectRows(rows, limit) {
   });
   if (!Number.isFinite(limit)) return entries;
   return entries.slice(0, Math.max(1, Math.floor(limit)));
+}
+if (!globalThis[CORE_KEY10]) {
+  Object.defineProperty(globalThis, CORE_KEY10, {
+    value: {
+      DEFAULT_PROJECT_USAGE_LIMIT,
+      MAX_PROJECT_USAGE_LIMIT,
+      aggregateProjectUsageRows,
+      normalizeProjectUsageAggregateValue,
+      normalizeProjectUsageEntry,
+      normalizeProjectUsageLimit,
+      normalizeProjectUsageRows,
+      resolveProjectUsageBillableTotal,
+      shouldFallbackProjectUsageAggregate
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/project-usage.js
+var projectUsageCore = globalThis.__vibeusageProjectUsageCore;
+if (!projectUsageCore) throw new Error("project usage core not initialized");
+var DEFAULT_PROJECT_USAGE_LIMIT2 = projectUsageCore.DEFAULT_PROJECT_USAGE_LIMIT;
+var MAX_PROJECT_USAGE_LIMIT2 = projectUsageCore.MAX_PROJECT_USAGE_LIMIT;
+var aggregateProjectUsageRows2 = projectUsageCore.aggregateProjectUsageRows;
+var normalizeProjectUsageAggregateValue2 = projectUsageCore.normalizeProjectUsageAggregateValue;
+var normalizeProjectUsageEntry2 = projectUsageCore.normalizeProjectUsageEntry;
+var normalizeProjectUsageLimit2 = projectUsageCore.normalizeProjectUsageLimit;
+var normalizeProjectUsageRows2 = projectUsageCore.normalizeProjectUsageRows;
+var resolveProjectUsageBillableTotal2 = projectUsageCore.resolveProjectUsageBillableTotal;
+var shouldFallbackProjectUsageAggregate2 = projectUsageCore.shouldFallbackProjectUsageAggregate;
+
+// insforge-src/functions-esm/shared/source.js
+var runtimePrimitivesCore3 = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore3) throw new Error("runtime primitives core not initialized");
+var MAX_SOURCE_LENGTH2 = runtimePrimitivesCore3.MAX_SOURCE_LENGTH;
+var normalizeSource2 = runtimePrimitivesCore3.normalizeSource;
+var getSourceParam2 = runtimePrimitivesCore3.getSourceParam;
+
+// insforge-src/functions-esm/vibeusage-project-usage-summary.js
+var vibeusage_project_usage_summary_default = withRequestLogging2(
+  "vibeusage-project-usage-summary",
+  async function(request, logger) {
+    const opt = handleOptions2(request);
+    if (opt) return opt;
+    const url = new URL(request.url);
+    const debugEnabled = isDebugEnabled2(url);
+    const respond = (body, status, durationMs) => json2(
+      debugEnabled ? withSlowQueryDebugPayload2(body, { logger, durationMs, status }) : body,
+      status
+    );
+    if (request.method !== "GET") return respond({ error: "Method not allowed" }, 405, 0);
+    const bearer = getBearerToken2(request.headers.get("Authorization"));
+    if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
+    const auth = await getAccessContext2({
+      baseUrl: getBaseUrl2(),
+      bearer,
+      allowPublic: true
+    });
+    if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
+    const sourceResult = getSourceParam2(url);
+    if (!sourceResult.ok) return respond({ error: sourceResult.error }, 400, 0);
+    const source = sourceResult.source;
+    const from = null;
+    const to = null;
+    const limit = normalizeProjectUsageLimit2(url.searchParams.get("limit"));
+    const queryStartMs = Date.now();
+    let query = auth.edgeClient.database.from("vibeusage_project_usage_hourly").select(
+      "project_key,project_ref,sum_total_tokens:sum(total_tokens),sum_billable_total_tokens:sum(billable_total_tokens)"
+    ).eq("user_id", auth.userId);
+    if (source) query = query.eq("source", source);
+    if (!isCanaryTag2(source)) query = query.neq("source", "canary");
+    query = query.order("sum_billable_total_tokens", { ascending: false }).order("sum_total_tokens", { ascending: false }).limit(limit);
+    const { data, error } = await query;
+    let entries = null;
+    if (error && shouldFallbackProjectUsageAggregate2(error?.message)) {
+      const fallback = await fetchProjectUsageFallback({
+        edgeClient: auth.edgeClient,
+        userId: auth.userId,
+        source,
+        limit
+      });
+      if (!fallback.ok) {
+        const queryDurationMs2 = Date.now() - queryStartMs;
+        return respond({ error: fallback.error }, 500, queryDurationMs2);
+      }
+      entries = fallback.entries;
+    } else if (error) {
+      const queryDurationMs2 = Date.now() - queryStartMs;
+      return respond({ error: error.message }, 500, queryDurationMs2);
+    } else {
+      entries = normalizeProjectUsageRows2(data);
+    }
+    const queryDurationMs = Date.now() - queryStartMs;
+    logSlowQuery2(logger, {
+      query_label: "project_usage_summary",
+      duration_ms: queryDurationMs,
+      row_count: entries.length,
+      range_days: null,
+      source: source || null,
+      tz: null,
+      tz_offset_minutes: null
+    });
+    return respond(
+      {
+        from,
+        to,
+        all_time: true,
+        generated_at: (/* @__PURE__ */ new Date()).toISOString(),
+        entries: entries || []
+      },
+      200,
+      queryDurationMs
+    );
+  }
+);
+async function fetchProjectUsageFallback({ edgeClient, userId, source, limit }) {
+  try {
+    let query = edgeClient.database.from("vibeusage_project_usage_hourly").select("project_key,project_ref,total_tokens,billable_total_tokens").eq("user_id", userId);
+    if (source) query = query.eq("source", source);
+    if (!isCanaryTag2(source)) query = query.neq("source", "canary");
+    const { data, error } = await query;
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, entries: aggregateProjectUsageRows2(data, limit) };
+  } catch (error) {
+    return { ok: false, error: error?.message || "Fallback query failed" };
+  }
 }
 export {
   vibeusage_project_usage_summary_default as default
