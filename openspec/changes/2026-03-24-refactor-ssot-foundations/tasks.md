@@ -59,6 +59,7 @@
 - [x] 4.2.35 Converge hourly/heatmap/model-breakdown normalized hourly row collection through `usage-row-collector-core` while keeping endpoint accumulators explicit.
 - [x] 4.2.36 Converge summary/daily aggregate request context through `usage-aggregate-request-core` while keeping auth handling and endpoint envelopes explicit.
 - [x] 4.2.37 Converge monthly/hourly/heatmap source-model request parsing and filter context through `usage-filter-request-core` while keeping endpoint time windows explicit.
+- [x] 4.2.38 Converge source/local-range request parsing for model-breakdown and aggregate request contexts through `usage-range-request-core` while keeping auth handling and endpoint envelopes explicit.
 
 ## 5. Verification
 

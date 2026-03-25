@@ -1,15 +1,12 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
+import { resolveUsageRangeRequestContext } from "./shared/core/usage-range-request.js";
 import { collectHourlyUsageRows } from "./shared/core/usage-row-collector.js";
 import { createUsageJsonResponder } from "./shared/core/usage-response.js";
-import {
-  getUsageTimeZoneContext,
-  resolveUsageDateRangeLocal,
-} from "./shared/date.js";
+import { getUsageTimeZoneContext } from "./shared/date.js";
 import { getBaseUrl } from "./shared/env.js";
 import { handleOptions } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
 import { buildPricingMetadata, computeUsageCost, resolvePricingProfile } from "./shared/pricing.js";
-import { getSourceParam } from "./shared/source.js";
 import "../shared/usage-pricing-core.mjs";
 import {
   addRowTotals,
@@ -48,17 +45,11 @@ export default withRequestLogging(
     if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
 
     const tzContext = getUsageTimeZoneContext(url);
-    const sourceResult = getSourceParam(url);
-    if (!sourceResult.ok) return respond({ error: sourceResult.error }, 400, 0);
-    const sourceFilter = sourceResult.source;
-
-    const range = resolveUsageDateRangeLocal({
-      fromRaw: url.searchParams.get("from"),
-      toRaw: url.searchParams.get("to"),
-      tzContext,
-    });
-    if (!range.ok) return respond({ error: range.error }, 400, 0);
-    const { from, to, dayKeys, startIso, endIso } = range;
+    const requestContext = resolveUsageRangeRequestContext({ url, tzContext });
+    if (!requestContext.ok) {
+      return respond({ error: requestContext.error }, requestContext.status || 400, 0);
+    }
+    const { source: sourceFilter, from, to, dayKeys, startIso, endIso } = requestContext;
 
     const auth = await getAccessContext({ baseUrl: getBaseUrl(), bearer, allowPublic: true });
     if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);

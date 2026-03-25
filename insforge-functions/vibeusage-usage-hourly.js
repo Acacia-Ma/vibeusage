@@ -1331,20 +1331,29 @@ var runtimePrimitivesCore5 = globalThis.__vibeusageRuntimePrimitivesCore;
 var usageModelCore2 = globalThis.__vibeusageUsageModelCore;
 if (!runtimePrimitivesCore5) throw new Error("runtime primitives core not initialized");
 if (!usageModelCore2) throw new Error("usage-model core not initialized");
-function resolveUsageFilterRequestParams({ url } = {}) {
-  const sourceResult = runtimePrimitivesCore5.getSourceParam(url);
-  if (!sourceResult?.ok) {
-    return { ok: false, status: 400, error: sourceResult?.error || "Invalid source" };
-  }
+function resolveUsageModelRequestParams({ url } = {}) {
   const modelResult = usageModelCore2.getModelParam(url);
   if (!modelResult?.ok) {
     return { ok: false, status: 400, error: modelResult?.error || "Invalid model" };
   }
   return {
     ok: true,
-    source: sourceResult.source,
     model: modelResult.model,
     hasModelParam: modelResult.model != null
+  };
+}
+function resolveUsageFilterRequestParams({ url } = {}) {
+  const sourceResult = runtimePrimitivesCore5.getSourceParam(url);
+  if (!sourceResult?.ok) {
+    return { ok: false, status: 400, error: sourceResult?.error || "Invalid source" };
+  }
+  const modelParams = resolveUsageModelRequestParams({ url });
+  if (!modelParams?.ok) return modelParams;
+  return {
+    ok: true,
+    source: sourceResult.source,
+    model: modelParams.model,
+    hasModelParam: modelParams.hasModelParam
   };
 }
 async function resolveUsageFilterRequestContext({ edgeClient, model, effectiveDate } = {}) {
@@ -1363,6 +1372,7 @@ async function resolveUsageFilterRequestContext({ edgeClient, model, effectiveDa
 if (!globalThis[CORE_KEY9]) {
   Object.defineProperty(globalThis, CORE_KEY9, {
     value: {
+      resolveUsageModelRequestParams,
       resolveUsageFilterRequestParams,
       resolveUsageFilterRequestContext
     },
@@ -1378,6 +1388,7 @@ if (!usageFilterRequestCore) {
   throw new Error("usage filter request core not initialized");
 }
 var resolveUsageFilterRequestParams2 = usageFilterRequestCore.resolveUsageFilterRequestParams;
+var resolveUsageModelRequestParams2 = usageFilterRequestCore.resolveUsageModelRequestParams;
 var resolveUsageFilterRequestContext2 = usageFilterRequestCore.resolveUsageFilterRequestContext;
 
 // insforge-src/shared/pagination-core.mjs

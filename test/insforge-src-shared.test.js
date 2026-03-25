@@ -30,6 +30,8 @@ require("../insforge-src/shared/usage-row-collector-core");
 const usageRowCollectorCore = globalThis.__vibeusageUsageRowCollectorCore;
 require("../insforge-src/shared/usage-aggregate-request-core");
 const usageAggregateRequestCore = globalThis.__vibeusageUsageAggregateRequestCore;
+require("../insforge-src/shared/usage-range-request-core");
+const usageRangeRequestCore = globalThis.__vibeusageUsageRangeRequestCore;
 require("../insforge-src/shared/usage-filter-request-core");
 const usageFilterRequestCore = globalThis.__vibeusageUsageFilterRequestCore;
 require("../insforge-src/shared/usage-hourly-core");
@@ -44,6 +46,7 @@ require("../insforge-src/shared/usage-pricing-core");
 const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 const usageAggregateCollector = require("../insforge-src/shared/core/usage-aggregate-collector");
 const usageAggregateRequest = require("../insforge-src/shared/core/usage-aggregate-request");
+const usageRangeRequest = require("../insforge-src/shared/core/usage-range-request");
 const usageFilterRequest = require("../insforge-src/shared/core/usage-filter-request");
 const usageRowCollector = require("../insforge-src/shared/core/usage-row-collector");
 const usageResponse = require("../insforge-src/shared/core/usage-response");
@@ -310,6 +313,28 @@ test("date helpers resolve local usage date ranges through shared core", () => {
     ok: false,
     error: "Date range too large (max 2 days)",
   });
+});
+
+test("usage range request core resolves source and local date range through shared wrapper", () => {
+  assert.equal(
+    usageRangeRequest.resolveUsageRangeRequestContext,
+    usageRangeRequestCore.resolveUsageRangeRequestContext,
+  );
+
+  const context = usageRangeRequest.resolveUsageRangeRequestContext({
+    url: new URL(
+      "https://example.com/functions/v1/vibeusage-usage-model-breakdown?source=openrouter&from=2025-02-15&to=2025-02-16",
+    ),
+    tzContext: { offsetMinutes: 540 },
+  });
+
+  assert.equal(context.ok, true);
+  assert.equal(context.source, "openrouter");
+  assert.equal(context.from, "2025-02-15");
+  assert.equal(context.to, "2025-02-16");
+  assert.deepEqual(context.dayKeys, ["2025-02-15", "2025-02-16"]);
+  assert.equal(context.startIso, "2025-02-14T15:00:00.000Z");
+  assert.equal(context.endIso, "2025-02-16T15:00:00.000Z");
 });
 
 test("usage response helper appends debug payload only when requested", async () => {
@@ -1055,6 +1080,16 @@ test("usage filter request core resolves source/model params and filter context"
       },
     ],
   });
+
+  const modelParams = usageFilterRequest.resolveUsageModelRequestParams({
+    url: new URL(
+      "https://example.com/functions/v1/vibeusage-usage-monthly?source=openrouter&model=gpt-foo",
+    ),
+  });
+
+  assert.equal(modelParams.ok, true);
+  assert.equal(modelParams.model, "gpt-foo");
+  assert.equal(modelParams.hasModelParam, true);
 
   const params = usageFilterRequest.resolveUsageFilterRequestParams({
     url: new URL(

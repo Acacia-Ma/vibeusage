@@ -7,5 +7,7 @@ if (!usageFilterRequestCore) {
 
 export const resolveUsageFilterRequestParams =
   usageFilterRequestCore.resolveUsageFilterRequestParams;
+export const resolveUsageModelRequestParams =
+  usageFilterRequestCore.resolveUsageModelRequestParams;
 export const resolveUsageFilterRequestContext =
   usageFilterRequestCore.resolveUsageFilterRequestContext;

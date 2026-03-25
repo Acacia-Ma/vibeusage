@@ -1,11 +1,11 @@
-import "./date-core.mjs";
+import "./usage-range-request-core.mjs";
 import "./usage-filter-request-core.mjs";
 
 const CORE_KEY = "__vibeusageUsageAggregateRequestCore";
-const dateCore = globalThis.__vibeusageDateCore;
+const usageRangeRequestCore = globalThis.__vibeusageUsageRangeRequestCore;
 const usageFilterRequestCore = globalThis.__vibeusageUsageFilterRequestCore;
 
-if (!dateCore) throw new Error("date core not initialized");
+if (!usageRangeRequestCore) throw new Error("usage range request core not initialized");
 if (!usageFilterRequestCore) throw new Error("usage filter request core not initialized");
 
 async function resolveAggregateUsageRequestContext({
@@ -14,31 +14,25 @@ async function resolveAggregateUsageRequestContext({
   edgeClient,
   auth = null,
 } = {}) {
-  const requestParams = usageFilterRequestCore.resolveUsageFilterRequestParams({ url });
-  if (!requestParams?.ok) return requestParams;
+  const rangeContext = usageRangeRequestCore.resolveUsageRangeRequestContext({ url, tzContext });
+  if (!rangeContext?.ok) return rangeContext;
 
-  const range = dateCore.resolveUsageDateRangeLocal({
-    fromRaw: url?.searchParams?.get("from"),
-    toRaw: url?.searchParams?.get("to"),
-    tzContext,
-  });
-  if (!range?.ok) {
-    return { ok: false, status: 400, error: range?.error || "Invalid date range" };
-  }
+  const modelParams = usageFilterRequestCore.resolveUsageModelRequestParams({ url });
+  if (!modelParams?.ok) return modelParams;
 
-  const { from, to, dayKeys, startIso, endIso } = range;
+  const { from, to, dayKeys, startIso, endIso } = rangeContext;
   const filterContext = await usageFilterRequestCore.resolveUsageFilterRequestContext({
     edgeClient,
-    model: requestParams.model,
+    model: modelParams.model,
     effectiveDate: to,
   });
 
   return {
     ok: true,
     auth,
-    source: requestParams.source,
-    model: requestParams.model,
-    hasModelParam: requestParams.hasModelParam,
+    source: rangeContext.source,
+    model: modelParams.model,
+    hasModelParam: modelParams.hasModelParam,
     from,
     to,
     dayKeys,
