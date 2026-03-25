@@ -1389,7 +1389,35 @@ var isWithinInterval2 = dateCore.isWithinInterval;
 var CORE_KEY8 = "__vibeusageUsageHeatmapCore";
 var dateCore2 = globalThis.__vibeusageDateCore;
 if (!dateCore2) throw new Error("date core not initialized");
-var { addUtcDays: addUtcDays3 } = dateCore2;
+var { addUtcDays: addUtcDays3, formatDateUTC: formatDateUTC3, parseUtcDateString: parseUtcDateString3 } = dateCore2;
+function accumulateHeatmapDayValue({ valuesByDay, dayKey, billable } = {}) {
+  if (!(valuesByDay instanceof Map)) throw new Error("valuesByDay map is required");
+  if (typeof dayKey !== "string" || !dayKey) throw new Error("valid dayKey is required");
+  if (typeof billable !== "bigint") throw new Error("billable bigint is required");
+  const nextValue = (valuesByDay.get(dayKey) || 0n) + billable;
+  valuesByDay.set(dayKey, nextValue);
+  return nextValue;
+}
+function normalizeHeatmapWeeks(raw) {
+  if (raw == null || raw === "") return 52;
+  const value = String(raw).trim();
+  if (!/^[0-9]+$/.test(value)) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  if (parsed < 1 || parsed > 104) return null;
+  return parsed;
+}
+function normalizeHeatmapWeekStartsOn(raw) {
+  const value = (raw == null || raw === "" ? "sun" : String(raw)).trim().toLowerCase();
+  if (value === "sun" || value === "mon") return value;
+  return null;
+}
+function normalizeHeatmapToDate(raw) {
+  if (raw == null || raw === "") return formatDateUTC3(/* @__PURE__ */ new Date());
+  const value = String(raw).trim();
+  const dt = parseUtcDateString3(value);
+  return dt ? formatDateUTC3(dt) : null;
+}
 function quantileNearestRank(sortedBigints, q) {
   if (!Array.isArray(sortedBigints) || sortedBigints.length === 0) return 0n;
   const n = sortedBigints.length;
@@ -1485,8 +1513,12 @@ function buildUsageHeatmapPayload({
 if (!globalThis[CORE_KEY8]) {
   Object.defineProperty(globalThis, CORE_KEY8, {
     value: {
+      accumulateHeatmapDayValue,
       buildUsageHeatmapPayload,
       computeActiveStreakDays,
+      normalizeHeatmapToDate,
+      normalizeHeatmapWeekStartsOn,
+      normalizeHeatmapWeeks,
       quantileNearestRank
     },
     configurable: true,
@@ -1498,7 +1530,11 @@ if (!globalThis[CORE_KEY8]) {
 // insforge-src/functions-esm/shared/core/usage-heatmap.js
 var usageHeatmapCore = globalThis.__vibeusageUsageHeatmapCore;
 if (!usageHeatmapCore) throw new Error("usage heatmap core not initialized");
+var accumulateHeatmapDayValue2 = usageHeatmapCore.accumulateHeatmapDayValue;
 var buildUsageHeatmapPayload2 = usageHeatmapCore.buildUsageHeatmapPayload;
+var normalizeHeatmapToDate2 = usageHeatmapCore.normalizeHeatmapToDate;
+var normalizeHeatmapWeekStartsOn2 = usageHeatmapCore.normalizeHeatmapWeekStartsOn;
+var normalizeHeatmapWeeks2 = usageHeatmapCore.normalizeHeatmapWeeks;
 
 // insforge-src/shared/canary-core.mjs
 var CORE_KEY9 = "__vibeusageCanaryCore";
@@ -2175,14 +2211,14 @@ var vibeusage_usage_heatmap_default = withRequestLogging2("vibeusage-usage-heatm
   if (!modelResult.ok) return respond({ error: modelResult.error }, 400, 0);
   const model = modelResult.model;
   const weeksRaw = url.searchParams.get("weeks");
-  const weeks = normalizeWeeks(weeksRaw);
+  const weeks = normalizeHeatmapWeeks2(weeksRaw);
   if (!weeks) return respond({ error: "Invalid weeks" }, 400, 0);
   const weekStartsOnRaw = url.searchParams.get("week_starts_on");
-  const weekStartsOn = normalizeWeekStartsOn(weekStartsOnRaw);
+  const weekStartsOn = normalizeHeatmapWeekStartsOn2(weekStartsOnRaw);
   if (!weekStartsOn) return respond({ error: "Invalid week_starts_on" }, 400, 0);
   const toRaw = url.searchParams.get("to");
   if (isUtcTimeZone2(tzContext)) {
-    const to2 = normalizeToDate(toRaw);
+    const to2 = normalizeHeatmapToDate2(toRaw);
     if (!to2) return respond({ error: "Invalid to" }, 400, 0);
     const { from: from2, gridStart: gridStart2, end: end2 } = computeHeatmapWindowUtc2({
       weeks,
@@ -2220,9 +2256,11 @@ var vibeusage_usage_heatmap_default = withRequestLogging2("vibeusage-usage-heatm
           });
           if (!usageRow) continue;
           if (!shouldIncludeUsageRow2({ row, canonicalModel: canonicalModel2, hasModelFilter: hasModelFilter2, aliasTimeline: aliasTimeline2, to: to2 })) continue;
-          const day = formatDateUTC2(usageRow.date);
-          const prev = valuesByDay2.get(day) || 0n;
-          valuesByDay2.set(day, prev + usageRow.billable);
+          accumulateHeatmapDayValue2({
+            valuesByDay: valuesByDay2,
+            dayKey: formatDateUTC2(usageRow.date),
+            billable: usageRow.billable
+          });
         }
       }
     });
@@ -2305,9 +2343,11 @@ var vibeusage_usage_heatmap_default = withRequestLogging2("vibeusage-usage-heatm
         });
         if (!usageRow) continue;
         if (!shouldIncludeUsageRow2({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) continue;
-        const key = formatLocalDateKey2(usageRow.date, tzContext);
-        const prev = valuesByDay.get(key) || 0n;
-        valuesByDay.set(key, prev + usageRow.billable);
+        accumulateHeatmapDayValue2({
+          valuesByDay,
+          dayKey: formatLocalDateKey2(usageRow.date, tzContext),
+          billable: usageRow.billable
+        });
       }
     }
   });
@@ -2341,26 +2381,6 @@ var vibeusage_usage_heatmap_default = withRequestLogging2("vibeusage-usage-heatm
     queryDurationMs
   );
 });
-function normalizeWeeks(raw) {
-  if (raw == null || raw === "") return 52;
-  const value = String(raw).trim();
-  if (!/^[0-9]+$/.test(value)) return null;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return null;
-  if (parsed < 1 || parsed > 104) return null;
-  return parsed;
-}
-function normalizeWeekStartsOn(raw) {
-  const value = (raw == null || raw === "" ? "sun" : String(raw)).trim().toLowerCase();
-  if (value === "sun" || value === "mon") return value;
-  return null;
-}
-function normalizeToDate(raw) {
-  if (raw == null || raw === "") return formatDateUTC2(/* @__PURE__ */ new Date());
-  const value = String(raw).trim();
-  const dt = parseUtcDateString2(value);
-  return dt ? formatDateUTC2(dt) : null;
-}
 export {
   vibeusage_usage_heatmap_default as default
 };

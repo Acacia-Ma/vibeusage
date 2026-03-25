@@ -923,3 +923,28 @@ test("usage heatmap core builds thresholds, streak, and grid from shared values"
   assert.deepEqual(payload.weeks[0][0], { day: "2025-02-09", value: "5", level: 1 });
   assert.deepEqual(payload.weeks[0][6], { day: "2025-02-15", value: "100", level: 4 });
 });
+
+test("usage heatmap core normalizes request params and accumulates day values", () => {
+  const valuesByDay = new Map();
+
+  usageHeatmapCore.accumulateHeatmapDayValue({
+    valuesByDay,
+    dayKey: "2025-03-01",
+    billable: 7n,
+  });
+  usageHeatmapCore.accumulateHeatmapDayValue({
+    valuesByDay,
+    dayKey: "2025-03-01",
+    billable: 5n,
+  });
+
+  assert.equal(valuesByDay.get("2025-03-01"), 12n);
+  assert.equal(usageHeatmapCore.normalizeHeatmapWeeks(undefined), 52);
+  assert.equal(usageHeatmapCore.normalizeHeatmapWeeks("8"), 8);
+  assert.equal(usageHeatmapCore.normalizeHeatmapWeeks("0"), null);
+  assert.equal(usageHeatmapCore.normalizeHeatmapWeekStartsOn(undefined), "sun");
+  assert.equal(usageHeatmapCore.normalizeHeatmapWeekStartsOn("MON"), "mon");
+  assert.equal(usageHeatmapCore.normalizeHeatmapWeekStartsOn("fri"), null);
+  assert.equal(usageHeatmapCore.normalizeHeatmapToDate("2025-03-01"), "2025-03-01");
+  assert.equal(usageHeatmapCore.normalizeHeatmapToDate("2025-03-40"), null);
+});

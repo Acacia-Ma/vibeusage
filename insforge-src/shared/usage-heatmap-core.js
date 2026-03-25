@@ -6,7 +6,39 @@ const CORE_KEY = "__vibeusageUsageHeatmapCore";
 const dateCore = globalThis.__vibeusageDateCore;
 if (!dateCore) throw new Error("date core not initialized");
 
-const { addUtcDays } = dateCore;
+const { addUtcDays, formatDateUTC, parseUtcDateString } = dateCore;
+
+function accumulateHeatmapDayValue({ valuesByDay, dayKey, billable } = {}) {
+  if (!(valuesByDay instanceof Map)) throw new Error("valuesByDay map is required");
+  if (typeof dayKey !== "string" || !dayKey) throw new Error("valid dayKey is required");
+  if (typeof billable !== "bigint") throw new Error("billable bigint is required");
+  const nextValue = (valuesByDay.get(dayKey) || 0n) + billable;
+  valuesByDay.set(dayKey, nextValue);
+  return nextValue;
+}
+
+function normalizeHeatmapWeeks(raw) {
+  if (raw == null || raw === "") return 52;
+  const value = String(raw).trim();
+  if (!/^[0-9]+$/.test(value)) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  if (parsed < 1 || parsed > 104) return null;
+  return parsed;
+}
+
+function normalizeHeatmapWeekStartsOn(raw) {
+  const value = (raw == null || raw === "" ? "sun" : String(raw)).trim().toLowerCase();
+  if (value === "sun" || value === "mon") return value;
+  return null;
+}
+
+function normalizeHeatmapToDate(raw) {
+  if (raw == null || raw === "") return formatDateUTC(new Date());
+  const value = String(raw).trim();
+  const dt = parseUtcDateString(value);
+  return dt ? formatDateUTC(dt) : null;
+}
 
 function quantileNearestRank(sortedBigints, q) {
   if (!Array.isArray(sortedBigints) || sortedBigints.length === 0) return 0n;
@@ -111,8 +143,12 @@ function buildUsageHeatmapPayload({
 if (!globalThis[CORE_KEY]) {
   Object.defineProperty(globalThis, CORE_KEY, {
     value: {
+      accumulateHeatmapDayValue,
       buildUsageHeatmapPayload,
       computeActiveStreakDays,
+      normalizeHeatmapToDate,
+      normalizeHeatmapWeekStartsOn,
+      normalizeHeatmapWeeks,
       quantileNearestRank,
     },
     configurable: true,

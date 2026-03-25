@@ -1,6 +1,12 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
 import { shouldIncludeUsageRow } from "./shared/core/usage-filter.js";
-import { buildUsageHeatmapPayload } from "./shared/core/usage-heatmap.js";
+import {
+  accumulateHeatmapDayValue,
+  buildUsageHeatmapPayload,
+  normalizeHeatmapToDate,
+  normalizeHeatmapWeekStartsOn,
+  normalizeHeatmapWeeks,
+} from "./shared/core/usage-heatmap.js";
 import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
 import {
   addDatePartsDays,
@@ -15,7 +21,6 @@ import {
   isUtcTimeZone,
   localDatePartsToUtc,
   parseDateParts,
-  parseUtcDateString,
 } from "./shared/date.js";
 import { isDebugEnabled, withSlowQueryDebugPayload } from "./shared/debug.js";
 import { getBaseUrl } from "./shared/env.js";
@@ -54,17 +59,17 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
   const model = modelResult.model;
 
   const weeksRaw = url.searchParams.get("weeks");
-  const weeks = normalizeWeeks(weeksRaw);
+  const weeks = normalizeHeatmapWeeks(weeksRaw);
   if (!weeks) return respond({ error: "Invalid weeks" }, 400, 0);
 
   const weekStartsOnRaw = url.searchParams.get("week_starts_on");
-  const weekStartsOn = normalizeWeekStartsOn(weekStartsOnRaw);
+  const weekStartsOn = normalizeHeatmapWeekStartsOn(weekStartsOnRaw);
   if (!weekStartsOn) return respond({ error: "Invalid week_starts_on" }, 400, 0);
 
   const toRaw = url.searchParams.get("to");
 
   if (isUtcTimeZone(tzContext)) {
-    const to = normalizeToDate(toRaw);
+    const to = normalizeHeatmapToDate(toRaw);
     if (!to) return respond({ error: "Invalid to" }, 400, 0);
 
     const { from, gridStart, end } = computeHeatmapWindowUtc({
@@ -109,9 +114,11 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
           });
           if (!usageRow) continue;
           if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) continue;
-          const day = formatDateUTC(usageRow.date);
-          const prev = valuesByDay.get(day) || 0n;
-          valuesByDay.set(day, prev + usageRow.billable);
+          accumulateHeatmapDayValue({
+            valuesByDay,
+            dayKey: formatDateUTC(usageRow.date),
+            billable: usageRow.billable,
+          });
         }
       },
     });
@@ -208,9 +215,11 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
         });
         if (!usageRow) continue;
         if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) continue;
-        const key = formatLocalDateKey(usageRow.date, tzContext);
-        const prev = valuesByDay.get(key) || 0n;
-        valuesByDay.set(key, prev + usageRow.billable);
+        accumulateHeatmapDayValue({
+          valuesByDay,
+          dayKey: formatLocalDateKey(usageRow.date, tzContext),
+          billable: usageRow.billable,
+        });
       }
     },
   });
@@ -246,26 +255,3 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
     queryDurationMs,
   );
 });
-
-function normalizeWeeks(raw) {
-  if (raw == null || raw === "") return 52;
-  const value = String(raw).trim();
-  if (!/^[0-9]+$/.test(value)) return null;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return null;
-  if (parsed < 1 || parsed > 104) return null;
-  return parsed;
-}
-
-function normalizeWeekStartsOn(raw) {
-  const value = (raw == null || raw === "" ? "sun" : String(raw)).trim().toLowerCase();
-  if (value === "sun" || value === "mon") return value;
-  return null;
-}
-
-function normalizeToDate(raw) {
-  if (raw == null || raw === "") return formatDateUTC(new Date());
-  const value = String(raw).trim();
-  const dt = parseUtcDateString(value);
-  return dt ? formatDateUTC(dt) : null;
-}

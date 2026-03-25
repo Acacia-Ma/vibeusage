@@ -241,6 +241,14 @@ test("backend usage rollup and bucket helpers flow through shared cores", () => 
     /shared\/usage-heatmap-core\.mjs/,
   );
   assert.match(
+    read("insforge-src/functions-esm/shared/core/usage-heatmap.js"),
+    /accumulateHeatmapDayValue = usageHeatmapCore\.accumulateHeatmapDayValue/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/shared/core/usage-heatmap.js"),
+    /normalizeHeatmapWeeks = usageHeatmapCore\.normalizeHeatmapWeeks/,
+  );
+  assert.match(
     read("insforge-src/functions-esm/shared/db/usage-hourly.js"),
     /forEachHourlyUsagePage/,
   );
@@ -280,6 +288,8 @@ test("backend usage rollup and bucket helpers flow through shared cores", () => 
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js"), /forEachHourlyUsagePage/);
   assert.match(read("insforge-src/functions-esm/shared/core/usage-hourly.js"), /shared\/usage-hourly-core\.mjs/);
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-heatmap.js"), /buildUsageHeatmapPayload/);
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-heatmap.js"), /accumulateHeatmapDayValue/);
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-heatmap.js"), /normalizeHeatmapWeeks/);
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /createHourlyBuckets/);
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /addHourlyBucketTotals/);
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /resolveHalfHourSlot/);
@@ -307,6 +317,14 @@ test("backend usage rollup and bucket helpers flow through shared cores", () => 
     read("insforge-src/functions-esm/vibeusage-usage-heatmap.js"),
     /computeActiveStreakDays/,
   );
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-heatmap.js"), /function normalizeWeeks/);
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-usage-heatmap.js"),
+    /function normalizeWeekStartsOn/,
+  );
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-heatmap.js"), /function normalizeToDate/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-heatmap.js"), /valuesByDay\.set\(day,/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-heatmap.js"), /valuesByDay\.set\(key,/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /function initHourlyBuckets/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /function buildHourlyResponse/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /function formatHourKeyFromValue/);
