@@ -1059,174 +1059,8 @@ var usageFilterCore = globalThis.__vibeusageUsageFilterCore;
 if (!usageFilterCore) throw new Error("usage filter core not initialized");
 var shouldIncludeUsageRow2 = usageFilterCore.shouldIncludeUsageRow;
 
-// insforge-src/shared/canary-core.mjs
-var CORE_KEY7 = "__vibeusageCanaryCore";
-function isCanaryTag(value) {
-  if (typeof value !== "string") return false;
-  return value.trim().toLowerCase() === "canary";
-}
-function applyCanaryFilter(query, { source, model } = {}) {
-  if (!query || typeof query.neq !== "function") return query;
-  if (isCanaryTag(source) || isCanaryTag(model)) return query;
-  return query.neq("source", "canary").neq("model", "canary");
-}
-if (!globalThis[CORE_KEY7]) {
-  Object.defineProperty(globalThis, CORE_KEY7, {
-    value: {
-      applyCanaryFilter,
-      isCanaryTag
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
-  });
-}
-
-// insforge-src/functions-esm/shared/canary.js
-var canaryCore = globalThis.__vibeusageCanaryCore;
-if (!canaryCore) throw new Error("canary core not initialized");
-var isCanaryTag2 = canaryCore.isCanaryTag;
-var applyCanaryFilter2 = canaryCore.applyCanaryFilter;
-
-// insforge-src/shared/pagination-core.mjs
-var CORE_KEY8 = "__vibeusagePaginationCore";
-var MAX_PAGE_SIZE = 1e3;
-function normalizePageSize(value) {
-  const size = Number(value);
-  if (!Number.isFinite(size) || size <= 0) return MAX_PAGE_SIZE;
-  return Math.min(MAX_PAGE_SIZE, Math.floor(size));
-}
-async function forEachPage({ createQuery, pageSize, onPage }) {
-  if (typeof createQuery !== "function") {
-    throw new Error("createQuery must be a function");
-  }
-  if (typeof onPage !== "function") {
-    throw new Error("onPage must be a function");
-  }
-  const size = normalizePageSize(pageSize);
-  let offset = 0;
-  while (true) {
-    const query = createQuery();
-    if (!query || typeof query.range !== "function") {
-      const { data: data2, error: error2 } = await query;
-      if (error2) return { error: error2 };
-      const rows2 = Array.isArray(data2) ? data2 : [];
-      if (rows2.length) await onPage(rows2);
-      return { error: null };
-    }
-    const { data, error } = await query.range(offset, offset + size - 1);
-    if (error) return { error };
-    const rows = Array.isArray(data) ? data : [];
-    if (rows.length) await onPage(rows);
-    if (rows.length < size) break;
-    offset += size;
-  }
-  return { error: null };
-}
-if (!globalThis[CORE_KEY8]) {
-  Object.defineProperty(globalThis, CORE_KEY8, {
-    value: {
-      MAX_PAGE_SIZE,
-      normalizePageSize,
-      forEachPage
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
-  });
-}
-
-// insforge-src/shared/usage-hourly-query-core.mjs
-var CORE_KEY9 = "__vibeusageUsageHourlyQueryCore";
-var usageModelCore3 = globalThis.__vibeusageUsageModelCore;
-if (!usageModelCore3) throw new Error("usage-model core not initialized");
-var canaryCore2 = globalThis.__vibeusageCanaryCore;
-if (!canaryCore2) throw new Error("canary core not initialized");
-var paginationCore = globalThis.__vibeusagePaginationCore;
-if (!paginationCore) throw new Error("pagination core not initialized");
-var { applyUsageModelFilter: applyUsageModelFilter2 } = usageModelCore3;
-var { applyCanaryFilter: applyCanaryFilter3 } = canaryCore2;
-var { forEachPage: forEachPage2 } = paginationCore;
-function buildHourlyUsageQuery({
-  edgeClient,
-  userId,
-  source,
-  usageModels,
-  canonicalModel,
-  startIso,
-  endIso,
-  select
-} = {}) {
-  if (!edgeClient?.database?.from) {
-    throw new Error("edgeClient is required");
-  }
-  let query = edgeClient.database.from("vibeusage_tracker_hourly").select(select || "hour_start,source,model,total_tokens");
-  query = query.eq("user_id", userId);
-  if (source) query = query.eq("source", source);
-  if (Array.isArray(usageModels) && usageModels.length > 0) {
-    query = applyUsageModelFilter2(query, usageModels);
-  }
-  query = applyCanaryFilter3(query, { source, model: canonicalModel });
-  if (startIso) query = query.gte("hour_start", startIso);
-  if (endIso) query = query.lt("hour_start", endIso);
-  return query.order("hour_start", { ascending: true }).order("device_id", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
-}
-async function forEachHourlyUsagePage({
-  edgeClient,
-  userId,
-  source,
-  usageModels,
-  canonicalModel,
-  startIso,
-  endIso,
-  select,
-  pageSize,
-  onPage
-} = {}) {
-  if (typeof onPage !== "function") {
-    throw new Error("onPage must be a function");
-  }
-  let rowCount = 0;
-  const { error } = await forEachPage2({
-    pageSize,
-    createQuery: () => buildHourlyUsageQuery({
-      edgeClient,
-      userId,
-      source,
-      usageModels,
-      canonicalModel,
-      startIso,
-      endIso,
-      select
-    }),
-    onPage: async (rows) => {
-      const pageRows = Array.isArray(rows) ? rows : [];
-      rowCount += pageRows.length;
-      await onPage(pageRows);
-    }
-  });
-  return { error, rowCount };
-}
-if (!globalThis[CORE_KEY9]) {
-  Object.defineProperty(globalThis, CORE_KEY9, {
-    value: {
-      buildHourlyUsageQuery,
-      forEachHourlyUsagePage
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
-  });
-}
-
-// insforge-src/functions-esm/shared/db/usage-hourly.js
-var usageHourlyQueryCore = globalThis.__vibeusageUsageHourlyQueryCore;
-if (!usageHourlyQueryCore) throw new Error("usage hourly query core not initialized");
-var buildHourlyUsageQuery2 = usageHourlyQueryCore.buildHourlyUsageQuery;
-var forEachHourlyUsagePage2 = usageHourlyQueryCore.forEachHourlyUsagePage;
-
 // insforge-src/shared/date-core.mjs
-var CORE_KEY10 = "__vibeusageDateCore";
+var CORE_KEY7 = "__vibeusageDateCore";
 var envCore2 = globalThis.__vibeusageEnvCore;
 if (!envCore2) throw new Error("env core not initialized");
 var TIMEZONE_FORMATTERS = /* @__PURE__ */ new Map();
@@ -1471,8 +1305,8 @@ function listDateStrings(from, to) {
 function getUsageMaxDays3() {
   return envCore2.getUsageMaxDays();
 }
-if (!globalThis[CORE_KEY10]) {
-  Object.defineProperty(globalThis, CORE_KEY10, {
+if (!globalThis[CORE_KEY7]) {
+  Object.defineProperty(globalThis, CORE_KEY7, {
     value: {
       isDate,
       toUtcDay,
@@ -1528,8 +1362,289 @@ var normalizeDateRangeLocal2 = dateCore.normalizeDateRangeLocal;
 var listDateStrings2 = dateCore.listDateStrings;
 var getUsageMaxDays4 = dateCore.getUsageMaxDays;
 
+// insforge-src/shared/usage-heatmap-core.mjs
+var CORE_KEY8 = "__vibeusageUsageHeatmapCore";
+var dateCore2 = globalThis.__vibeusageDateCore;
+if (!dateCore2) throw new Error("date core not initialized");
+var { addUtcDays: addUtcDays3 } = dateCore2;
+function quantileNearestRank(sortedBigints, q) {
+  if (!Array.isArray(sortedBigints) || sortedBigints.length === 0) return 0n;
+  const n = sortedBigints.length;
+  const pos = Math.floor((n - 1) * q);
+  const idx = Math.min(n - 1, Math.max(0, pos));
+  return sortedBigints[idx] || 0n;
+}
+function computeActiveStreakDays({ valuesByDay, to, getDayKey } = {}) {
+  if (!(valuesByDay instanceof Map) || !(to instanceof Date) || typeof getDayKey !== "function") {
+    return 0;
+  }
+  let streak = 0;
+  for (let i = 0; i < 370; i += 1) {
+    const key = getDayKey(addUtcDays3(to, -i));
+    const value = valuesByDay.get(key) || 0n;
+    if (value > 0n) streak += 1;
+    else break;
+  }
+  return streak;
+}
+function buildUsageHeatmapPayload({
+  valuesByDay,
+  gridStart,
+  end,
+  weeks,
+  from,
+  to,
+  weekStartsOn,
+  getDayKey,
+  renderDay
+} = {}) {
+  if (!(valuesByDay instanceof Map)) throw new Error("valuesByDay map is required");
+  if (!(gridStart instanceof Date) || !Number.isFinite(gridStart.getTime())) {
+    throw new Error("valid gridStart date is required");
+  }
+  if (!(end instanceof Date) || !Number.isFinite(end.getTime())) {
+    throw new Error("valid end date is required");
+  }
+  if (!Number.isFinite(weeks) || weeks < 1) throw new Error("valid weeks count is required");
+  if (typeof getDayKey !== "function") throw new Error("getDayKey callback is required");
+  const renderDayLabel = typeof renderDay === "function" ? renderDay : getDayKey;
+  const nz = [];
+  let activeDays = 0;
+  for (let i = 0; i < weeks * 7; i += 1) {
+    const dt = addUtcDays3(gridStart, i);
+    if (dt.getTime() > end.getTime()) break;
+    const value = valuesByDay.get(getDayKey(dt)) || 0n;
+    if (value > 0n) {
+      activeDays += 1;
+      nz.push(value);
+    }
+  }
+  nz.sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+  const t1 = quantileNearestRank(nz, 0.5);
+  const t2 = quantileNearestRank(nz, 0.75);
+  const t3 = quantileNearestRank(nz, 0.9);
+  const levelFor = (value) => {
+    if (!value || value <= 0n) return 0;
+    if (value <= t1) return 1;
+    if (value <= t2) return 2;
+    if (value <= t3) return 3;
+    return 4;
+  };
+  const weeksOut = [];
+  for (let w = 0; w < weeks; w += 1) {
+    const week = [];
+    for (let d = 0; d < 7; d += 1) {
+      const dt = addUtcDays3(gridStart, w * 7 + d);
+      if (dt.getTime() > end.getTime()) {
+        week.push(null);
+        continue;
+      }
+      const dayKey = getDayKey(dt);
+      const value = valuesByDay.get(dayKey) || 0n;
+      week.push({
+        day: renderDayLabel(dt),
+        value: value.toString(),
+        level: levelFor(value)
+      });
+    }
+    weeksOut.push(week);
+  }
+  return {
+    from,
+    to,
+    week_starts_on: weekStartsOn,
+    thresholds: { t1: t1.toString(), t2: t2.toString(), t3: t3.toString() },
+    active_days: activeDays,
+    streak_days: computeActiveStreakDays({ valuesByDay, to: end, getDayKey }),
+    weeks: weeksOut
+  };
+}
+if (!globalThis[CORE_KEY8]) {
+  Object.defineProperty(globalThis, CORE_KEY8, {
+    value: {
+      buildUsageHeatmapPayload,
+      computeActiveStreakDays,
+      quantileNearestRank
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/core/usage-heatmap.js
+var usageHeatmapCore = globalThis.__vibeusageUsageHeatmapCore;
+if (!usageHeatmapCore) throw new Error("usage heatmap core not initialized");
+var buildUsageHeatmapPayload2 = usageHeatmapCore.buildUsageHeatmapPayload;
+
+// insforge-src/shared/canary-core.mjs
+var CORE_KEY9 = "__vibeusageCanaryCore";
+function isCanaryTag(value) {
+  if (typeof value !== "string") return false;
+  return value.trim().toLowerCase() === "canary";
+}
+function applyCanaryFilter(query, { source, model } = {}) {
+  if (!query || typeof query.neq !== "function") return query;
+  if (isCanaryTag(source) || isCanaryTag(model)) return query;
+  return query.neq("source", "canary").neq("model", "canary");
+}
+if (!globalThis[CORE_KEY9]) {
+  Object.defineProperty(globalThis, CORE_KEY9, {
+    value: {
+      applyCanaryFilter,
+      isCanaryTag
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/canary.js
+var canaryCore = globalThis.__vibeusageCanaryCore;
+if (!canaryCore) throw new Error("canary core not initialized");
+var isCanaryTag2 = canaryCore.isCanaryTag;
+var applyCanaryFilter2 = canaryCore.applyCanaryFilter;
+
+// insforge-src/shared/pagination-core.mjs
+var CORE_KEY10 = "__vibeusagePaginationCore";
+var MAX_PAGE_SIZE = 1e3;
+function normalizePageSize(value) {
+  const size = Number(value);
+  if (!Number.isFinite(size) || size <= 0) return MAX_PAGE_SIZE;
+  return Math.min(MAX_PAGE_SIZE, Math.floor(size));
+}
+async function forEachPage({ createQuery, pageSize, onPage }) {
+  if (typeof createQuery !== "function") {
+    throw new Error("createQuery must be a function");
+  }
+  if (typeof onPage !== "function") {
+    throw new Error("onPage must be a function");
+  }
+  const size = normalizePageSize(pageSize);
+  let offset = 0;
+  while (true) {
+    const query = createQuery();
+    if (!query || typeof query.range !== "function") {
+      const { data: data2, error: error2 } = await query;
+      if (error2) return { error: error2 };
+      const rows2 = Array.isArray(data2) ? data2 : [];
+      if (rows2.length) await onPage(rows2);
+      return { error: null };
+    }
+    const { data, error } = await query.range(offset, offset + size - 1);
+    if (error) return { error };
+    const rows = Array.isArray(data) ? data : [];
+    if (rows.length) await onPage(rows);
+    if (rows.length < size) break;
+    offset += size;
+  }
+  return { error: null };
+}
+if (!globalThis[CORE_KEY10]) {
+  Object.defineProperty(globalThis, CORE_KEY10, {
+    value: {
+      MAX_PAGE_SIZE,
+      normalizePageSize,
+      forEachPage
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/shared/usage-hourly-query-core.mjs
+var CORE_KEY11 = "__vibeusageUsageHourlyQueryCore";
+var usageModelCore3 = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore3) throw new Error("usage-model core not initialized");
+var canaryCore2 = globalThis.__vibeusageCanaryCore;
+if (!canaryCore2) throw new Error("canary core not initialized");
+var paginationCore = globalThis.__vibeusagePaginationCore;
+if (!paginationCore) throw new Error("pagination core not initialized");
+var { applyUsageModelFilter: applyUsageModelFilter2 } = usageModelCore3;
+var { applyCanaryFilter: applyCanaryFilter3 } = canaryCore2;
+var { forEachPage: forEachPage2 } = paginationCore;
+function buildHourlyUsageQuery({
+  edgeClient,
+  userId,
+  source,
+  usageModels,
+  canonicalModel,
+  startIso,
+  endIso,
+  select
+} = {}) {
+  if (!edgeClient?.database?.from) {
+    throw new Error("edgeClient is required");
+  }
+  let query = edgeClient.database.from("vibeusage_tracker_hourly").select(select || "hour_start,source,model,total_tokens");
+  query = query.eq("user_id", userId);
+  if (source) query = query.eq("source", source);
+  if (Array.isArray(usageModels) && usageModels.length > 0) {
+    query = applyUsageModelFilter2(query, usageModels);
+  }
+  query = applyCanaryFilter3(query, { source, model: canonicalModel });
+  if (startIso) query = query.gte("hour_start", startIso);
+  if (endIso) query = query.lt("hour_start", endIso);
+  return query.order("hour_start", { ascending: true }).order("device_id", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
+}
+async function forEachHourlyUsagePage({
+  edgeClient,
+  userId,
+  source,
+  usageModels,
+  canonicalModel,
+  startIso,
+  endIso,
+  select,
+  pageSize,
+  onPage
+} = {}) {
+  if (typeof onPage !== "function") {
+    throw new Error("onPage must be a function");
+  }
+  let rowCount = 0;
+  const { error } = await forEachPage2({
+    pageSize,
+    createQuery: () => buildHourlyUsageQuery({
+      edgeClient,
+      userId,
+      source,
+      usageModels,
+      canonicalModel,
+      startIso,
+      endIso,
+      select
+    }),
+    onPage: async (rows) => {
+      const pageRows = Array.isArray(rows) ? rows : [];
+      rowCount += pageRows.length;
+      await onPage(pageRows);
+    }
+  });
+  return { error, rowCount };
+}
+if (!globalThis[CORE_KEY11]) {
+  Object.defineProperty(globalThis, CORE_KEY11, {
+    value: {
+      buildHourlyUsageQuery,
+      forEachHourlyUsagePage
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/db/usage-hourly.js
+var usageHourlyQueryCore = globalThis.__vibeusageUsageHourlyQueryCore;
+if (!usageHourlyQueryCore) throw new Error("usage hourly query core not initialized");
+var buildHourlyUsageQuery2 = usageHourlyQueryCore.buildHourlyUsageQuery;
+var forEachHourlyUsagePage2 = usageHourlyQueryCore.forEachHourlyUsagePage;
+
 // insforge-src/shared/debug-core.mjs
-var CORE_KEY11 = "__vibeusageDebugCore";
+var CORE_KEY12 = "__vibeusageDebugCore";
 var envCore3 = globalThis.__vibeusageEnvCore;
 if (!envCore3) throw new Error("env core not initialized");
 function isDebugEnabled(url) {
@@ -1571,8 +1686,8 @@ function withSlowQueryDebugPayload(body, options) {
     debug: buildSlowQueryDebugPayload(options)
   };
 }
-if (!globalThis[CORE_KEY11]) {
-  Object.defineProperty(globalThis, CORE_KEY11, {
+if (!globalThis[CORE_KEY12]) {
+  Object.defineProperty(globalThis, CORE_KEY12, {
     value: {
       isDebugEnabled,
       buildSlowQueryDebugPayload,
@@ -1592,7 +1707,7 @@ var buildSlowQueryDebugPayload2 = debugCore.buildSlowQueryDebugPayload;
 var withSlowQueryDebugPayload2 = debugCore.withSlowQueryDebugPayload;
 
 // insforge-src/shared/http-core.mjs
-var CORE_KEY12 = "__vibeusageHttpCore";
+var CORE_KEY13 = "__vibeusageHttpCore";
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -1629,8 +1744,8 @@ async function readJson(request) {
     return { error: "Invalid JSON", status: 400, data: null };
   }
 }
-if (!globalThis[CORE_KEY12]) {
-  Object.defineProperty(globalThis, CORE_KEY12, {
+if (!globalThis[CORE_KEY13]) {
+  Object.defineProperty(globalThis, CORE_KEY13, {
     value: {
       corsHeaders,
       handleOptions,
@@ -1654,7 +1769,7 @@ var requireMethod2 = httpCore.requireMethod;
 var readJson2 = httpCore.readJson;
 
 // insforge-src/shared/logging-core.mjs
-var CORE_KEY13 = "__vibeusageLoggingCore";
+var CORE_KEY14 = "__vibeusageLoggingCore";
 var envCore4 = globalThis.__vibeusageEnvCore;
 if (!envCore4) throw new Error("env core not initialized");
 function createRequestId() {
@@ -1752,8 +1867,8 @@ function logSlowQuery(logger, fields) {
 function getSlowQueryThresholdMs3() {
   return envCore4.getSlowQueryThresholdMs();
 }
-if (!globalThis[CORE_KEY13]) {
-  Object.defineProperty(globalThis, CORE_KEY13, {
+if (!globalThis[CORE_KEY14]) {
+  Object.defineProperty(globalThis, CORE_KEY14, {
     value: {
       createLogger,
       withRequestLogging,
@@ -1781,7 +1896,7 @@ var normalizeSource2 = runtimePrimitivesCore2.normalizeSource;
 var getSourceParam2 = runtimePrimitivesCore2.getSourceParam;
 
 // insforge-src/shared/usage-metrics-core.mjs
-var CORE_KEY14 = "__vibeusageUsageMetricsCore";
+var CORE_KEY15 = "__vibeusageUsageMetricsCore";
 var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
 var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
 var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
@@ -1877,8 +1992,8 @@ function parsePricingBucketKey(bucketKey, defaultDate) {
   }
   return { usageKey: bucketKey, dateKey: defaultDate };
 }
-if (!globalThis[CORE_KEY14]) {
-  Object.defineProperty(globalThis, CORE_KEY14, {
+if (!globalThis[CORE_KEY15]) {
+  Object.defineProperty(globalThis, CORE_KEY15, {
     value: {
       createTotals,
       addRowTotals,
@@ -1897,7 +2012,7 @@ if (!globalThis[CORE_KEY14]) {
 }
 
 // insforge-src/shared/usage-row-core.mjs
-var CORE_KEY15 = "__vibeusageUsageRowCore";
+var CORE_KEY16 = "__vibeusageUsageRowCore";
 var DEFAULT_SOURCE = "codex";
 var DEFAULT_MODEL2 = "unknown";
 var runtimePrimitivesCore4 = globalThis.__vibeusageRuntimePrimitivesCore;
@@ -1947,8 +2062,8 @@ function resolveHourlyUsageRowState({
     usageKey
   };
 }
-if (!globalThis[CORE_KEY15]) {
-  Object.defineProperty(globalThis, CORE_KEY15, {
+if (!globalThis[CORE_KEY16]) {
+  Object.defineProperty(globalThis, CORE_KEY16, {
     value: {
       resolveHourlyUsageRowState
     },
@@ -2076,57 +2191,18 @@ var vibeusage_usage_heatmap_default = withRequestLogging2("vibeusage-usage-heatm
       tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null
     });
     if (error2) return respond({ error: error2.message }, 500, queryDurationMs2);
-    const nz2 = [];
-    let activeDays2 = 0;
-    for (let i = 0; i < weeks * 7; i++) {
-      const dt = addUtcDays2(gridStart2, i);
-      if (dt.getTime() > end2.getTime()) break;
-      const value = valuesByDay2.get(formatDateUTC2(dt)) || 0n;
-      if (value > 0n) {
-        activeDays2 += 1;
-        nz2.push(value);
-      }
-    }
-    nz2.sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
-    const t12 = quantileNearestRank(nz2, 0.5);
-    const t22 = quantileNearestRank(nz2, 0.75);
-    const t32 = quantileNearestRank(nz2, 0.9);
-    const levelFor2 = (value) => {
-      if (!value || value <= 0n) return 0;
-      if (value <= t12) return 1;
-      if (value <= t22) return 2;
-      if (value <= t32) return 3;
-      return 4;
-    };
-    const weeksOut2 = [];
-    for (let w = 0; w < weeks; w++) {
-      const week = [];
-      for (let d = 0; d < 7; d++) {
-        const dt = addUtcDays2(gridStart2, w * 7 + d);
-        if (dt.getTime() > end2.getTime()) {
-          week.push(null);
-          continue;
-        }
-        const day = formatDateUTC2(dt);
-        const value = valuesByDay2.get(day) || 0n;
-        week.push({ day, value: value.toString(), level: levelFor2(value) });
-      }
-      weeksOut2.push(week);
-    }
-    const streakDays2 = computeActiveStreakDays({
-      valuesByDay: valuesByDay2,
-      to: end2
-    });
     return respond(
-      {
+      buildUsageHeatmapPayload2({
+        valuesByDay: valuesByDay2,
+        gridStart: gridStart2,
+        end: end2,
+        weeks,
         from: from2,
         to: to2,
-        week_starts_on: weekStartsOn,
-        thresholds: { t1: t12.toString(), t2: t22.toString(), t3: t32.toString() },
-        active_days: activeDays2,
-        streak_days: streakDays2,
-        weeks: weeksOut2
-      },
+        weekStartsOn,
+        getDayKey: formatDateUTC2,
+        renderDay: formatDateUTC2
+      }),
       200,
       queryDurationMs2
     );
@@ -2200,57 +2276,18 @@ var vibeusage_usage_heatmap_default = withRequestLogging2("vibeusage-usage-heatm
     tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null
   });
   if (error) return respond({ error: error.message }, 500, queryDurationMs);
-  const nz = [];
-  let activeDays = 0;
-  for (let i = 0; i < weeks * 7; i++) {
-    const dt = addUtcDays2(gridStart, i);
-    if (dt.getTime() > end.getTime()) break;
-    const value = valuesByDay.get(formatDateUTC2(dt)) || 0n;
-    if (value > 0n) {
-      activeDays += 1;
-      nz.push(value);
-    }
-  }
-  nz.sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
-  const t1 = quantileNearestRank(nz, 0.5);
-  const t2 = quantileNearestRank(nz, 0.75);
-  const t3 = quantileNearestRank(nz, 0.9);
-  const levelFor = (value) => {
-    if (!value || value <= 0n) return 0;
-    if (value <= t1) return 1;
-    if (value <= t2) return 2;
-    if (value <= t3) return 3;
-    return 4;
-  };
-  const weeksOut = [];
-  for (let w = 0; w < weeks; w++) {
-    const week = [];
-    for (let d = 0; d < 7; d++) {
-      const dt = addUtcDays2(gridStart, w * 7 + d);
-      if (dt.getTime() > end.getTime()) {
-        week.push(null);
-        continue;
-      }
-      const day = formatDateUTC2(dt);
-      const value = valuesByDay.get(day) || 0n;
-      week.push({ day, value: value.toString(), level: levelFor(value) });
-    }
-    weeksOut.push(week);
-  }
-  const streakDays = computeActiveStreakDays({
-    valuesByDay,
-    to: end
-  });
   return respond(
-    {
+    buildUsageHeatmapPayload2({
+      valuesByDay,
+      gridStart,
+      end,
+      weeks,
       from,
       to,
-      week_starts_on: weekStartsOn,
-      thresholds: { t1: t1.toString(), t2: t2.toString(), t3: t3.toString() },
-      active_days: activeDays,
-      streak_days: streakDays,
-      weeks: weeksOut
-    },
+      weekStartsOn,
+      getDayKey: formatDateUTC2,
+      renderDay: formatDateUTC2
+    }),
     200,
     queryDurationMs
   );
@@ -2274,23 +2311,6 @@ function normalizeToDate(raw) {
   const value = String(raw).trim();
   const dt = parseUtcDateString2(value);
   return dt ? formatDateUTC2(dt) : null;
-}
-function quantileNearestRank(sortedBigints, q) {
-  if (!Array.isArray(sortedBigints) || sortedBigints.length === 0) return 0n;
-  const n = sortedBigints.length;
-  const pos = Math.floor((n - 1) * q);
-  const idx = Math.min(n - 1, Math.max(0, pos));
-  return sortedBigints[idx] || 0n;
-}
-function computeActiveStreakDays({ valuesByDay, to }) {
-  let streak = 0;
-  for (let i = 0; i < 370; i += 1) {
-    const key = formatDateUTC2(addUtcDays2(to, -i));
-    const value = valuesByDay.get(key) || 0n;
-    if (value > 0n) streak += 1;
-    else break;
-  }
-  return streak;
 }
 export {
   vibeusage_usage_heatmap_default as default

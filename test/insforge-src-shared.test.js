@@ -21,6 +21,8 @@ require("../insforge-src/shared/usage-metrics-core");
 const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
 require("../insforge-src/shared/usage-row-core");
 const usageRowCore = globalThis.__vibeusageUsageRowCore;
+require("../insforge-src/shared/usage-heatmap-core");
+const usageHeatmapCore = globalThis.__vibeusageUsageHeatmapCore;
 require("../insforge-src/shared/usage-pricing-core");
 const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 
@@ -659,4 +661,32 @@ test("usage pricing core accumulates rolling usage rows into shared state", () =
     avg_per_active_day: "6",
     avg_per_day: "1",
   });
+});
+
+test("usage heatmap core builds thresholds, streak, and grid from shared values", () => {
+  const valuesByDay = new Map([
+    ["2025-02-09", 5n],
+    ["2025-02-11", 10n],
+    ["2025-02-12", 50n],
+    ["2025-02-15", 100n],
+  ]);
+
+  const payload = usageHeatmapCore.buildUsageHeatmapPayload({
+    valuesByDay,
+    gridStart: new Date("2025-02-09T00:00:00.000Z"),
+    end: new Date("2025-02-15T00:00:00.000Z"),
+    weeks: 1,
+    from: "2025-02-09",
+    to: "2025-02-15",
+    weekStartsOn: "sun",
+    getDayKey: (dt) => dt.toISOString().slice(0, 10),
+    renderDay: (dt) => dt.toISOString().slice(0, 10),
+  });
+
+  assert.deepEqual(payload.thresholds, { t1: "10", t2: "50", t3: "50" });
+  assert.equal(payload.active_days, 4);
+  assert.equal(payload.streak_days, 1);
+  assert.equal(payload.weeks.length, 1);
+  assert.deepEqual(payload.weeks[0][0], { day: "2025-02-09", value: "5", level: 1 });
+  assert.deepEqual(payload.weeks[0][6], { day: "2025-02-15", value: "100", level: 4 });
 });

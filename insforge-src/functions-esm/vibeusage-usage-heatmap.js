@@ -1,5 +1,6 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
 import { shouldIncludeUsageRow } from "./shared/core/usage-filter.js";
+import { buildUsageHeatmapPayload } from "./shared/core/usage-heatmap.js";
 import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
 import {
   addDatePartsDays,
@@ -130,62 +131,18 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
 
     if (error) return respond({ error: error.message }, 500, queryDurationMs);
 
-    const nz = [];
-    let activeDays = 0;
-    for (let i = 0; i < weeks * 7; i++) {
-      const dt = addUtcDays(gridStart, i);
-      if (dt.getTime() > end.getTime()) break;
-      const value = valuesByDay.get(formatDateUTC(dt)) || 0n;
-      if (value > 0n) {
-        activeDays += 1;
-        nz.push(value);
-      }
-    }
-
-    nz.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-    const t1 = quantileNearestRank(nz, 0.5);
-    const t2 = quantileNearestRank(nz, 0.75);
-    const t3 = quantileNearestRank(nz, 0.9);
-
-    const levelFor = (value) => {
-      if (!value || value <= 0n) return 0;
-      if (value <= t1) return 1;
-      if (value <= t2) return 2;
-      if (value <= t3) return 3;
-      return 4;
-    };
-
-    const weeksOut = [];
-    for (let w = 0; w < weeks; w++) {
-      const week = [];
-      for (let d = 0; d < 7; d++) {
-        const dt = addUtcDays(gridStart, w * 7 + d);
-        if (dt.getTime() > end.getTime()) {
-          week.push(null);
-          continue;
-        }
-        const day = formatDateUTC(dt);
-        const value = valuesByDay.get(day) || 0n;
-        week.push({ day, value: value.toString(), level: levelFor(value) });
-      }
-      weeksOut.push(week);
-    }
-
-    const streakDays = computeActiveStreakDays({
-      valuesByDay,
-      to: end,
-    });
-
     return respond(
-      {
+      buildUsageHeatmapPayload({
+        valuesByDay,
+        gridStart,
+        end,
+        weeks,
         from,
         to,
-        week_starts_on: weekStartsOn,
-        thresholds: { t1: t1.toString(), t2: t2.toString(), t3: t3.toString() },
-        active_days: activeDays,
-        streak_days: streakDays,
-        weeks: weeksOut,
-      },
+        weekStartsOn,
+        getDayKey: formatDateUTC,
+        renderDay: formatDateUTC,
+      }),
       200,
       queryDurationMs,
     );
@@ -273,62 +230,18 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
 
   if (error) return respond({ error: error.message }, 500, queryDurationMs);
 
-  const nz = [];
-  let activeDays = 0;
-  for (let i = 0; i < weeks * 7; i++) {
-    const dt = addUtcDays(gridStart, i);
-    if (dt.getTime() > end.getTime()) break;
-    const value = valuesByDay.get(formatDateUTC(dt)) || 0n;
-    if (value > 0n) {
-      activeDays += 1;
-      nz.push(value);
-    }
-  }
-
-  nz.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-  const t1 = quantileNearestRank(nz, 0.5);
-  const t2 = quantileNearestRank(nz, 0.75);
-  const t3 = quantileNearestRank(nz, 0.9);
-
-  const levelFor = (value) => {
-    if (!value || value <= 0n) return 0;
-    if (value <= t1) return 1;
-    if (value <= t2) return 2;
-    if (value <= t3) return 3;
-    return 4;
-  };
-
-  const weeksOut = [];
-  for (let w = 0; w < weeks; w++) {
-    const week = [];
-    for (let d = 0; d < 7; d++) {
-      const dt = addUtcDays(gridStart, w * 7 + d);
-      if (dt.getTime() > end.getTime()) {
-        week.push(null);
-        continue;
-      }
-      const day = formatDateUTC(dt);
-      const value = valuesByDay.get(day) || 0n;
-      week.push({ day, value: value.toString(), level: levelFor(value) });
-    }
-    weeksOut.push(week);
-  }
-
-  const streakDays = computeActiveStreakDays({
-    valuesByDay,
-    to: end,
-  });
-
   return respond(
-    {
+    buildUsageHeatmapPayload({
+      valuesByDay,
+      gridStart,
+      end,
+      weeks,
       from,
       to,
-      week_starts_on: weekStartsOn,
-      thresholds: { t1: t1.toString(), t2: t2.toString(), t3: t3.toString() },
-      active_days: activeDays,
-      streak_days: streakDays,
-      weeks: weeksOut,
-    },
+      weekStartsOn,
+      getDayKey: formatDateUTC,
+      renderDay: formatDateUTC,
+    }),
     200,
     queryDurationMs,
   );
@@ -355,23 +268,4 @@ function normalizeToDate(raw) {
   const value = String(raw).trim();
   const dt = parseUtcDateString(value);
   return dt ? formatDateUTC(dt) : null;
-}
-
-function quantileNearestRank(sortedBigints, q) {
-  if (!Array.isArray(sortedBigints) || sortedBigints.length === 0) return 0n;
-  const n = sortedBigints.length;
-  const pos = Math.floor((n - 1) * q);
-  const idx = Math.min(n - 1, Math.max(0, pos));
-  return sortedBigints[idx] || 0n;
-}
-
-function computeActiveStreakDays({ valuesByDay, to }) {
-  let streak = 0;
-  for (let i = 0; i < 370; i += 1) {
-    const key = formatDateUTC(addUtcDays(to, -i));
-    const value = valuesByDay.get(key) || 0n;
-    if (value > 0n) streak += 1;
-    else break;
-  }
-  return streak;
 }
