@@ -383,14 +383,10 @@ test("backend usage pricing semantics flow through shared cores", () => {
     "runtime-primitives-core",
     "usage-model-core",
     "usage-row-core",
-    "usage-filter-core",
-    "canary-core",
-    "pagination-core",
     "date-core",
     "env-core",
     "pricing-core",
     "usage-metrics-core",
-    "usage-hourly-query-core",
   ]) {
     assert.match(usagePricingCoreJs, new RegExp(`require\\(\\\"\\./${dependency}\\\"\\)`));
     assert.match(
@@ -420,7 +416,6 @@ test("backend usage pricing semantics flow through shared cores", () => {
   );
   assert.match(read("insforge-src/shared/usage-pricing-core.js"), /createAggregateUsageState/);
   assert.match(read("insforge-src/shared/usage-pricing-core.js"), /accumulateAggregateUsageRow/);
-  assert.match(read("insforge-src/shared/usage-pricing-core.js"), /collectAggregateUsageRange/);
   assert.match(read("insforge-src/shared/usage-pricing-core.js"), /createRollingUsageState/);
   assert.match(read("insforge-src/shared/usage-pricing-core.js"), /accumulateRollingUsageRow/);
   assert.match(read("insforge-src/shared/usage-pricing-core.js"), /buildRollingUsagePayload/);
@@ -465,6 +460,7 @@ test("backend usage pricing semantics flow through shared cores", () => {
     read("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js"),
     /buildModelBreakdownSources/,
   );
+  assert.doesNotMatch(read("insforge-src/shared/usage-pricing-core.js"), /collectAggregateUsageRange/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /applyTotalsAndBillable/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /const sumHourlyRange = async/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /accumulateAggregateUsageRow/);
@@ -490,6 +486,45 @@ test("backend usage pricing semantics flow through shared cores", () => {
     read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
     /shared\/source\.js/,
   );
+});
+
+test("backend aggregate usage collection semantics flow through dedicated shared core", () => {
+  const aggregateCollectorCoreJs = read("insforge-src/shared/usage-aggregate-collector-core.js");
+  const aggregateCollectorCoreMjs = read("insforge-src/shared/usage-aggregate-collector-core.mjs");
+  assert.equal(
+    stripModulePrelude(aggregateCollectorCoreJs),
+    stripModulePrelude(aggregateCollectorCoreMjs),
+  );
+  for (const dependency of [
+    "usage-filter-core",
+    "usage-pricing-core",
+    "usage-hourly-query-core",
+  ]) {
+    assert.match(aggregateCollectorCoreJs, new RegExp(`require\\(\\\"\\./${dependency}\\\"\\)`));
+    assert.match(
+      aggregateCollectorCoreMjs,
+      new RegExp(`import \\\"\\./${dependency}\\.mjs\\\"`),
+    );
+  }
+  assert.match(
+    read("insforge-src/shared/core/usage-aggregate-collector.js"),
+    /usage-aggregate-collector-core/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/shared/core/usage-aggregate-collector.js"),
+    /shared\/usage-aggregate-collector-core\.mjs/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
+    /shared\/core\/usage-aggregate-collector\.js/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-daily.js"),
+    /shared\/core\/usage-aggregate-collector\.js/,
+  );
+  assert.match(aggregateCollectorCoreJs, /collectAggregateUsageRange/);
+  assert.match(aggregateCollectorCoreJs, /shouldAccumulateRow/);
+  assert.match(aggregateCollectorCoreJs, /onAccumulatedRow/);
 });
 
 test("backend hourly usage row semantics flow through shared core", () => {

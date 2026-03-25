@@ -34,6 +34,7 @@ require("../insforge-src/shared/project-usage-core");
 const projectUsageCore = globalThis.__vibeusageProjectUsageCore;
 require("../insforge-src/shared/usage-pricing-core");
 const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
+const usageAggregateCollector = require("../insforge-src/shared/core/usage-aggregate-collector");
 
 if (!globalThis.crypto) {
   globalThis.crypto = webcrypto;
@@ -819,14 +820,14 @@ test("usage pricing core accumulates aggregate usage rows into shared state", ()
   assert.equal(state.pricingBuckets.size, 1);
 });
 
-test("usage pricing core collects aggregate usage ranges through shared hourly scan", async () => {
+test("usage aggregate collector core collects aggregate usage ranges through shared hourly scan", async () => {
   const state = usagePricingCore.createAggregateUsageState({
     hasModelParam: true,
     defaultModel: "unknown",
   });
   const accumulated = [];
 
-  const result = await usagePricingCore.collectAggregateUsageRange({
+  const result = await usageAggregateCollector.collectAggregateUsageRange({
     edgeClient: createHourlyUsageEdgeClient([
       {
         user_id: "user-1",

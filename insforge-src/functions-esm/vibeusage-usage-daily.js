@@ -1,4 +1,5 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
+import { collectAggregateUsageRange } from "./shared/core/usage-aggregate-collector.js";
 import { applyDailyBucket, initDailyBuckets } from "./shared/core/usage-daily.js";
 import {
   getUsageTimeZoneContext,
@@ -21,7 +22,6 @@ const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 if (!usagePricingCore) throw new Error("usage pricing core not initialized");
 const {
   createAggregateUsageState,
-  collectAggregateUsageRange,
   buildAggregateUsagePayload,
   resolveAggregateUsagePricing,
 } = usagePricingCore;

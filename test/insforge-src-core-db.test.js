@@ -8,6 +8,9 @@ const usageSummaryCore = require("../insforge-src/shared/core/usage-summary");
 const records = require("../insforge-src/shared/db/records");
 const usageMonthlyCore = require("../insforge-src/shared/core/usage-monthly");
 const usageDailyCore = require("../insforge-src/shared/core/usage-daily");
+const usageAggregateCollector = require("../insforge-src/shared/core/usage-aggregate-collector");
+require("../insforge-src/shared/usage-pricing-core");
+const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 const usageFilter = require("../insforge-src/shared/core/usage-filter");
 const usageHourlyDb = require("../insforge-src/shared/db/usage-hourly");
 const ingestDb = require("../insforge-src/shared/db/ingest");
@@ -348,6 +351,105 @@ test("forEachHourlyUsagePage paginates through hourly query rows", async () => {
       ["range", 2, 3],
     ],
   );
+});
+
+test("collectAggregateUsageRange reuses hourly paging, filtering, and aggregate ingestion", async () => {
+  const pages = [
+    [
+      {
+        hour_start: "2026-01-01T00:00:00.000Z",
+        source: "codex",
+        model: "gpt-4o",
+        total_tokens: 6,
+        billable_total_tokens: 4,
+        input_tokens: 2,
+        cached_input_tokens: 0,
+        output_tokens: 4,
+        reasoning_output_tokens: 0,
+      },
+      {
+        hour_start: "2026-01-01T00:30:00.000Z",
+        source: "codex",
+        model: "other-model",
+        total_tokens: 9,
+        billable_total_tokens: 9,
+        input_tokens: 4,
+        cached_input_tokens: 0,
+        output_tokens: 5,
+        reasoning_output_tokens: 0,
+      },
+    ],
+    [
+      {
+        hour_start: "2026-01-01T01:00:00.000Z",
+        source: "codex",
+        model: "gpt-4o",
+        total_tokens: 5,
+        input_tokens: 3,
+        cached_input_tokens: 0,
+        output_tokens: 2,
+        reasoning_output_tokens: 0,
+      },
+    ],
+  ];
+
+  const edgeClient = {
+    database: {
+      from: () => {
+        const query = {
+          eq: () => query,
+          gte: () => query,
+          lt: () => query,
+          order: () => query,
+          neq: () => query,
+          or: () => query,
+          range: async (from) => {
+            if (from === 0) return { data: pages[0], error: null };
+            if (from === 2) return { data: pages[1], error: null };
+            return { data: [], error: null };
+          },
+        };
+        return {
+          select: () => query,
+        };
+      },
+    },
+  };
+
+  const state = usagePricingCore.createAggregateUsageState({
+    hasModelParam: false,
+    defaultModel: "unknown",
+  });
+  const seen = [];
+
+  const result = await usageAggregateCollector.collectAggregateUsageRange({
+    edgeClient,
+    userId: "u1",
+    canonicalModel: "gpt-4o",
+    hasModelFilter: true,
+    aliasTimeline: null,
+    effectiveDate: "2026-01-01",
+    startIso: "2026-01-01T00:00:00.000Z",
+    endIso: "2026-01-02T00:00:00.000Z",
+    state,
+    pageSize: 2,
+    onAccumulatedRow: ({ row, accumulation }) => {
+      seen.push([row.hour_start, accumulation.billable.toString()]);
+    },
+  });
+
+  assert.equal(result.error, null);
+  assert.equal(result.rowCount, 3);
+  assert.equal(result.state, state);
+  assert.deepEqual(seen, [
+    ["2026-01-01T00:00:00.000Z", "4"],
+    ["2026-01-01T01:00:00.000Z", "5"],
+  ]);
+  assert.equal(state.totals.total_tokens, 11n);
+  assert.equal(state.totals.billable_total_tokens, 9n);
+  assert.equal(state.pricingBuckets.size, 1);
+  assert.deepEqual(Array.from(state.distinctModels), ["gpt-4o"]);
+  assert.deepEqual(Array.from(state.distinctUsageModels), ["gpt-4o"]);
 });
 
 test("fetchDeviceTokenRow uses records API and ignores revoked tokens", async () => {

@@ -81,14 +81,21 @@ test("usage pagination uses deterministic ordering", () => {
     ),
   );
   assert.ok(
-    normalize(readFile("insforge-src/shared/usage-pricing-core.js")).includes(
+    normalize(readFile("insforge-src/shared/usage-aggregate-collector-core.js")).includes(
       "const{forEachHourlyUsagePage}=usageHourlyQueryCore",
     ),
   );
   assert.ok(
-    normalize(readFile("insforge-src/shared/usage-pricing-core.js")).includes(
+    normalize(readFile("insforge-src/shared/usage-aggregate-collector-core.js")).includes(
       "asyncfunctioncollectAggregateUsageRange(",
     ),
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/shared/usage-pricing-core.js")),
+      aggregateCollectorCall,
+    ),
+    0,
   );
   assert.ok(
     countOccurrences(

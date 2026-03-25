@@ -53,7 +53,7 @@
 - [x] 4.2.29 Converge heatmap request normalization and per-day accumulation through `usage-heatmap-core` while keeping time-window/query orchestration in the endpoint.
 - [x] 4.2.30 Converge local usage date-range request resolution through `date-core` for summary/daily/model-breakdown endpoints.
 - [x] 4.2.31 Converge project-usage summary limit normalization, aggregate fallback detection, row normalization, and fallback aggregation through `project-usage-core`.
-- [x] 4.2.32 Converge summary/daily aggregate hourly range collection through `usage-pricing-core` while keeping rolling and bucket-specific sinks in the endpoints.
+- [x] 4.2.32 Converge summary/daily aggregate hourly range collection through `usage-aggregate-collector-core` while keeping pricing state in `usage-pricing-core` and endpoint-specific sinks in the endpoints.
 
 ## 5. Verification
 

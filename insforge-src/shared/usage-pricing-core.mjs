@@ -3,14 +3,10 @@
 import "./runtime-primitives-core.mjs";
 import "./usage-model-core.mjs";
 import "./usage-row-core.mjs";
-import "./usage-filter-core.mjs";
-import "./canary-core.mjs";
-import "./pagination-core.mjs";
 import "./date-core.mjs";
 import "./env-core.mjs";
 import "./pricing-core.mjs";
 import "./usage-metrics-core.mjs";
-import "./usage-hourly-query-core.mjs";
 
 const CORE_KEY = "__vibeusageUsagePricingCore";
 const DEFAULT_MODEL = "unknown";
@@ -21,16 +17,12 @@ const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
 const usageRowCore = globalThis.__vibeusageUsageRowCore;
 if (!usageRowCore) throw new Error("usage row core not initialized");
-const usageFilterCore = globalThis.__vibeusageUsageFilterCore;
-if (!usageFilterCore) throw new Error("usage filter core not initialized");
 const pricingCore = globalThis.__vibeusagePricingCore;
 if (!pricingCore) throw new Error("pricing core not initialized");
 const runtimePrimitivesCore = globalThis.__vibeusageRuntimePrimitivesCore;
 if (!runtimePrimitivesCore) throw new Error("runtime primitives core not initialized");
 const dateCore = globalThis.__vibeusageDateCore;
 if (!dateCore) throw new Error("date core not initialized");
-const usageHourlyQueryCore = globalThis.__vibeusageUsageHourlyQueryCore;
-if (!usageHourlyQueryCore) throw new Error("usage hourly query core not initialized");
 
 const {
   applyModelIdentity,
@@ -38,7 +30,6 @@ const {
   resolveModelIdentity,
   resolveUsageTimelineContext,
 } = usageModelCore;
-const { shouldIncludeUsageRow } = usageFilterCore;
 const {
   addRowTotals,
   applyTotalsAndBillable,
@@ -52,9 +43,6 @@ const {
 const { resolvePricingProfile, computeUsageCost, formatUsdFromMicros } = pricingCore;
 const { formatLocalDateKey, listDateStrings } = dateCore;
 const { resolveHourlyUsageRowState } = usageRowCore;
-const { forEachHourlyUsagePage } = usageHourlyQueryCore;
-const AGGREGATE_USAGE_SELECT =
-  "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens";
 
 function createAggregateUsageState({
   hasModelParam = false,
@@ -128,66 +116,6 @@ function accumulateAggregateUsageRow({
     normalizedModel,
     sourceKey,
   };
-}
-
-async function collectAggregateUsageRange({
-  edgeClient,
-  userId,
-  source,
-  usageModels,
-  canonicalModel,
-  hasModelFilter = false,
-  aliasTimeline,
-  effectiveDate,
-  startIso,
-  endIso,
-  state,
-  pageSize,
-  onAccumulatedRow,
-  shouldAccumulateRow,
-  defaultSource = "codex",
-} = {}) {
-  const aggregateState = state || createAggregateUsageState();
-  const { error, rowCount } = await forEachHourlyUsagePage({
-    edgeClient,
-    userId,
-    source,
-    usageModels,
-    canonicalModel,
-    startIso,
-    endIso,
-    select: AGGREGATE_USAGE_SELECT,
-    pageSize,
-    onPage: async (rows) => {
-      for (const row of rows) {
-        if (
-          !shouldIncludeUsageRow({
-            row,
-            canonicalModel,
-            hasModelFilter,
-            aliasTimeline,
-            to: effectiveDate,
-          })
-        ) {
-          continue;
-        }
-        if (typeof shouldAccumulateRow === "function" && !shouldAccumulateRow(row)) {
-          continue;
-        }
-        const accumulation = accumulateAggregateUsageRow({
-          state: aggregateState,
-          row,
-          effectiveDate,
-          defaultSource,
-        });
-        if (typeof onAccumulatedRow === "function") {
-          await onAccumulatedRow({ row, accumulation, state: aggregateState });
-        }
-      }
-    },
-  });
-
-  return { error, rowCount, state: aggregateState };
 }
 
 function createRollingUsageState() {
@@ -595,7 +523,6 @@ if (!globalThis[CORE_KEY]) {
     value: {
       createAggregateUsageState,
       accumulateAggregateUsageRow,
-      collectAggregateUsageRange,
       createRollingUsageState,
       accumulateRollingUsageRow,
       buildRollingUsagePayload,
