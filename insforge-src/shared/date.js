@@ -30,6 +30,7 @@ module.exports = {
   localDatePartsToUtc: dateCore.localDatePartsToUtc,
   normalizeDateRangeLocal: dateCore.normalizeDateRangeLocal,
   listDateStrings: dateCore.listDateStrings,
+  resolveUsageDateRangeLocal: dateCore.resolveUsageDateRangeLocal,
   getUsageMaxDays: dateCore.getUsageMaxDays,
   isWithinInterval: dateCore.isWithinInterval,
 };

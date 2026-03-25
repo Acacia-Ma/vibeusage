@@ -51,6 +51,7 @@
 - [x] 4.2.27 Converge ISO normalization and sync interval timing through `date-core` across ESM/CJS runtime consumers.
 - [x] 4.2.28 Converge usage token bucket payload formatting through `usage-metrics-core` across hourly/daily/monthly and pricing payload consumers.
 - [x] 4.2.29 Converge heatmap request normalization and per-day accumulation through `usage-heatmap-core` while keeping time-window/query orchestration in the endpoint.
+- [x] 4.2.30 Converge local usage date-range request resolution through `date-core` for summary/daily/model-breakdown endpoints.
 
 ## 5. Verification
 

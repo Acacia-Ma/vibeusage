@@ -1411,6 +1411,46 @@ var require_date_core = __commonJS({
       }
       return days;
     }
+    function resolveUsageDateRangeLocal({ fromRaw, toRaw, tzContext, maxDays } = {}) {
+      const resolvedMaxDays = Number.isFinite(maxDays) ? maxDays : getUsageMaxDays();
+      const { from, to } = normalizeDateRangeLocal(fromRaw, toRaw, tzContext);
+      const dayKeys = listDateStrings(from, to);
+      if (dayKeys.length > resolvedMaxDays) {
+        return {
+          ok: false,
+          error: `Date range too large (max ${resolvedMaxDays} days)`
+        };
+      }
+      const startParts = parseDateParts(from);
+      const endParts = parseDateParts(to);
+      if (!startParts || !endParts) {
+        return {
+          ok: false,
+          error: "Invalid date range"
+        };
+      }
+      const startUtc = localDatePartsToUtc(startParts, tzContext);
+      const endUtc = localDatePartsToUtc(addDatePartsDays(endParts, 1), tzContext);
+      if (!Number.isFinite(startUtc.getTime()) || !Number.isFinite(endUtc.getTime())) {
+        return {
+          ok: false,
+          error: "Invalid date range"
+        };
+      }
+      return {
+        ok: true,
+        from,
+        to,
+        dayKeys,
+        startParts,
+        endParts,
+        startUtc,
+        endUtc,
+        startIso: startUtc.toISOString(),
+        endIso: endUtc.toISOString(),
+        maxDays: resolvedMaxDays
+      };
+    }
     function getUsageMaxDays() {
       return envCore.getUsageMaxDays();
     }
@@ -1451,6 +1491,7 @@ var require_date_core = __commonJS({
           localDatePartsToUtc,
           normalizeDateRangeLocal,
           listDateStrings,
+          resolveUsageDateRangeLocal,
           getUsageMaxDays,
           isWithinInterval
         },
@@ -1494,6 +1535,7 @@ var require_date = __commonJS({
       localDatePartsToUtc: dateCore.localDatePartsToUtc,
       normalizeDateRangeLocal: dateCore.normalizeDateRangeLocal,
       listDateStrings: dateCore.listDateStrings,
+      resolveUsageDateRangeLocal: dateCore.resolveUsageDateRangeLocal,
       getUsageMaxDays: dateCore.getUsageMaxDays,
       isWithinInterval: dateCore.isWithinInterval
     };

@@ -24,5 +24,6 @@ export const formatLocalDateKey = dateCore.formatLocalDateKey;
 export const localDatePartsToUtc = dateCore.localDatePartsToUtc;
 export const normalizeDateRangeLocal = dateCore.normalizeDateRangeLocal;
 export const listDateStrings = dateCore.listDateStrings;
+export const resolveUsageDateRangeLocal = dateCore.resolveUsageDateRangeLocal;
 export const getUsageMaxDays = dateCore.getUsageMaxDays;
 export const isWithinInterval = dateCore.isWithinInterval;

@@ -1445,6 +1445,46 @@ function listDateStrings(from, to) {
   }
   return days;
 }
+function resolveUsageDateRangeLocal({ fromRaw, toRaw, tzContext, maxDays } = {}) {
+  const resolvedMaxDays = Number.isFinite(maxDays) ? maxDays : getUsageMaxDays3();
+  const { from, to } = normalizeDateRangeLocal(fromRaw, toRaw, tzContext);
+  const dayKeys = listDateStrings(from, to);
+  if (dayKeys.length > resolvedMaxDays) {
+    return {
+      ok: false,
+      error: `Date range too large (max ${resolvedMaxDays} days)`
+    };
+  }
+  const startParts = parseDateParts(from);
+  const endParts = parseDateParts(to);
+  if (!startParts || !endParts) {
+    return {
+      ok: false,
+      error: "Invalid date range"
+    };
+  }
+  const startUtc = localDatePartsToUtc(startParts, tzContext);
+  const endUtc = localDatePartsToUtc(addDatePartsDays(endParts, 1), tzContext);
+  if (!Number.isFinite(startUtc.getTime()) || !Number.isFinite(endUtc.getTime())) {
+    return {
+      ok: false,
+      error: "Invalid date range"
+    };
+  }
+  return {
+    ok: true,
+    from,
+    to,
+    dayKeys,
+    startParts,
+    endParts,
+    startUtc,
+    endUtc,
+    startIso: startUtc.toISOString(),
+    endIso: endUtc.toISOString(),
+    maxDays: resolvedMaxDays
+  };
+}
 function getUsageMaxDays3() {
   return envCore2.getUsageMaxDays();
 }
@@ -1485,6 +1525,7 @@ if (!globalThis[CORE_KEY9]) {
       localDatePartsToUtc,
       normalizeDateRangeLocal,
       listDateStrings,
+      resolveUsageDateRangeLocal,
       getUsageMaxDays: getUsageMaxDays3,
       isWithinInterval
     },
@@ -1517,6 +1558,7 @@ var formatLocalDateKey2 = dateCore.formatLocalDateKey;
 var localDatePartsToUtc2 = dateCore.localDatePartsToUtc;
 var normalizeDateRangeLocal2 = dateCore.normalizeDateRangeLocal;
 var listDateStrings2 = dateCore.listDateStrings;
+var resolveUsageDateRangeLocal2 = dateCore.resolveUsageDateRangeLocal;
 var getUsageMaxDays4 = dateCore.getUsageMaxDays;
 var isWithinInterval2 = dateCore.isWithinInterval;
 
@@ -2780,25 +2822,15 @@ var vibeusage_usage_daily_default = withRequestLogging2("vibeusage-usage-daily",
   if (!modelResult.ok) return respond({ error: modelResult.error }, 400, 0);
   const model = modelResult.model;
   const hasModelParam = model != null;
-  const { from, to } = normalizeDateRangeLocal2(
-    url.searchParams.get("from"),
-    url.searchParams.get("to"),
+  const range = resolveUsageDateRangeLocal2({
+    fromRaw: url.searchParams.get("from"),
+    toRaw: url.searchParams.get("to"),
     tzContext
-  );
-  const dayKeys = listDateStrings2(from, to);
-  const maxDays = getUsageMaxDays4();
-  if (dayKeys.length > maxDays) {
-    return respond({ error: `Date range too large (max ${maxDays} days)` }, 400, 0);
-  }
-  const startParts = parseDateParts2(from);
-  const endParts = parseDateParts2(to);
-  if (!startParts || !endParts) return respond({ error: "Invalid date range" }, 400, 0);
+  });
+  if (!range.ok) return respond({ error: range.error }, 400, 0);
+  const { from, to, dayKeys, startIso, endIso } = range;
   const auth = await getAccessContext2({ baseUrl: getBaseUrl2(), bearer, allowPublic: true });
   if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
-  const startUtc = localDatePartsToUtc2(startParts, tzContext);
-  const endUtc = localDatePartsToUtc2(addDatePartsDays2(endParts, 1), tzContext);
-  const startIso = startUtc.toISOString();
-  const endIso = endUtc.toISOString();
   const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } = await resolveUsageFilterContext2({
     edgeClient: auth.edgeClient,
     canonicalModel: model,

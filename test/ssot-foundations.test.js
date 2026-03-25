@@ -184,9 +184,14 @@ test("backend date and logging helpers flow through shared cores", () => {
   assert.match(read("insforge-src/functions-esm/shared/date.js"), /shared\/date-core\.mjs/);
   assert.match(read("insforge-src/shared/date-core.js"), /function normalizeIso/);
   assert.match(read("insforge-src/shared/date-core.js"), /function isWithinInterval/);
+  assert.match(read("insforge-src/shared/date-core.js"), /function resolveUsageDateRangeLocal/);
   assert.match(read("insforge-src/shared/logging.js"), /logging-core/);
   assert.match(read("insforge-src/functions-esm/shared/logging.js"), /shared\/logging-core\.mjs/);
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /normalizeIso/);
+  assert.match(read("insforge-src/functions-esm/shared/date.js"), /resolveUsageDateRangeLocal/);
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /resolveUsageDateRangeLocal/);
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /resolveUsageDateRangeLocal/);
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js"), /resolveUsageDateRangeLocal/);
   assert.match(read("insforge-src/functions\/vibeusage-sync-ping.js"), /require\(\"..\/shared\/date\"\)/);
   assert.match(read("insforge-src/shared\/db\/ingest.js"), /require\(\"..\/date\"\)/);
   assert.match(read("insforge-src/functions-esm\/vibeusage-user-status.js"), /from "\.\/shared\/date\.js"/);
@@ -196,6 +201,24 @@ test("backend date and logging helpers flow through shared cores", () => {
   assert.doesNotMatch(read("insforge-src/functions\/vibeusage-sync-ping.js"), /function isWithinInterval/);
   assert.doesNotMatch(read("insforge-src/shared\/db\/ingest.js"), /function normalizeIso/);
   assert.doesNotMatch(read("insforge-src/shared\/db\/ingest.js"), /function isWithinInterval/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /normalizeDateRangeLocal/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /listDateStrings/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /getUsageMaxDays/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /normalizeDateRangeLocal/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /listDateStrings/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /getUsageMaxDays/);
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js"),
+    /normalizeDateRangeLocal/,
+  );
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js"),
+    /listDateStrings/,
+  );
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js"),
+    /getUsageMaxDays/,
+  );
 });
 
 test("backend usage rollup and bucket helpers flow through shared cores", () => {

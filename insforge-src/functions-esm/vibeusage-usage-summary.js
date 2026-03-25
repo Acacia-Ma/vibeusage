@@ -5,12 +5,10 @@ import {
   addDatePartsDays,
   formatDateParts,
   getLocalParts,
-  getUsageMaxDays,
   getUsageTimeZoneContext,
-  listDateStrings,
   localDatePartsToUtc,
-  normalizeDateRangeLocal,
   parseDateParts,
+  resolveUsageDateRangeLocal,
 } from "./shared/date.js";
 import { isDebugEnabled, withSlowQueryDebugPayload } from "./shared/debug.js";
 import { getBaseUrl } from "./shared/env.js";
@@ -60,21 +58,13 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
   if (!modelResult.ok) return respond({ error: modelResult.error }, 400, 0);
   const model = modelResult.model;
   const hasModelParam = model != null;
-  const { from, to } = normalizeDateRangeLocal(
-    url.searchParams.get("from"),
-    url.searchParams.get("to"),
+  const range = resolveUsageDateRangeLocal({
+    fromRaw: url.searchParams.get("from"),
+    toRaw: url.searchParams.get("to"),
     tzContext,
-  );
-
-  const dayKeys = listDateStrings(from, to);
-  const maxDays = getUsageMaxDays();
-  if (dayKeys.length > maxDays) {
-    return respond({ error: `Date range too large (max ${maxDays} days)` }, 400, 0);
-  }
-
-  const startParts = parseDateParts(from);
-  const endParts = parseDateParts(to);
-  if (!startParts || !endParts) return respond({ error: "Invalid date range" }, 400, 0);
+  });
+  if (!range.ok) return respond({ error: range.error }, 400, 0);
+  const { from, to, dayKeys, startIso, endIso } = range;
 
   const auth = await getAccessContext({
     baseUrl: getBaseUrl(),
@@ -83,10 +73,6 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
   });
   if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
 
-  const startUtc = localDatePartsToUtc(startParts, tzContext);
-  const endUtc = localDatePartsToUtc(addDatePartsDays(endParts, 1), tzContext);
-  const startIso = startUtc.toISOString();
-  const endIso = endUtc.toISOString();
   const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
     await resolveUsageFilterContext({
       edgeClient: auth.edgeClient,

@@ -4,7 +4,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { webcrypto } = require("node:crypto");
 const { logSlowQuery } = require("../insforge-src/shared/logging");
-const { getUsageMaxDays, isWithinInterval, normalizeIso } = require("../insforge-src/shared/date");
+const {
+  getUsageMaxDays,
+  isWithinInterval,
+  normalizeIso,
+  resolveUsageDateRangeLocal,
+} = require("../insforge-src/shared/date");
 const { sha256Hex } = require("../insforge-src/shared/crypto");
 const { normalizeUsageModel, applyUsageModelFilter } = require("../insforge-src/shared/model");
 const { resolveIdentityAtDate } = require("../insforge-src/shared/model-alias-timeline");
@@ -203,6 +208,32 @@ test("date helpers resolve sync intervals through shared core", () => {
     false,
   );
   assert.equal(isWithinInterval("invalid", 30, "2026-03-25T01:20:00Z"), false);
+});
+
+test("date helpers resolve local usage date ranges through shared core", () => {
+  const tzContext = { offsetMinutes: 540 };
+  const okRange = resolveUsageDateRangeLocal({
+    fromRaw: "2026-03-01",
+    toRaw: "2026-03-03",
+    tzContext,
+  });
+  assert.equal(okRange.ok, true);
+  assert.equal(okRange.from, "2026-03-01");
+  assert.equal(okRange.to, "2026-03-03");
+  assert.deepEqual(okRange.dayKeys, ["2026-03-01", "2026-03-02", "2026-03-03"]);
+  assert.equal(okRange.startIso, "2026-02-28T15:00:00.000Z");
+  assert.equal(okRange.endIso, "2026-03-03T15:00:00.000Z");
+
+  const tooLarge = resolveUsageDateRangeLocal({
+    fromRaw: "2026-03-01",
+    toRaw: "2026-03-03",
+    tzContext,
+    maxDays: 2,
+  });
+  assert.deepEqual(tooLarge, {
+    ok: false,
+    error: "Date range too large (max 2 days)",
+  });
 });
 
 test("pricing defaults ignore VIBESCORE env when VIBEUSAGE missing", () => {

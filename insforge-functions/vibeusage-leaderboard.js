@@ -1279,6 +1279,46 @@ function listDateStrings(from, to) {
   }
   return days;
 }
+function resolveUsageDateRangeLocal({ fromRaw, toRaw, tzContext, maxDays } = {}) {
+  const resolvedMaxDays = Number.isFinite(maxDays) ? maxDays : getUsageMaxDays3();
+  const { from, to } = normalizeDateRangeLocal(fromRaw, toRaw, tzContext);
+  const dayKeys = listDateStrings(from, to);
+  if (dayKeys.length > resolvedMaxDays) {
+    return {
+      ok: false,
+      error: `Date range too large (max ${resolvedMaxDays} days)`
+    };
+  }
+  const startParts = parseDateParts(from);
+  const endParts = parseDateParts(to);
+  if (!startParts || !endParts) {
+    return {
+      ok: false,
+      error: "Invalid date range"
+    };
+  }
+  const startUtc = localDatePartsToUtc(startParts, tzContext);
+  const endUtc = localDatePartsToUtc(addDatePartsDays(endParts, 1), tzContext);
+  if (!Number.isFinite(startUtc.getTime()) || !Number.isFinite(endUtc.getTime())) {
+    return {
+      ok: false,
+      error: "Invalid date range"
+    };
+  }
+  return {
+    ok: true,
+    from,
+    to,
+    dayKeys,
+    startParts,
+    endParts,
+    startUtc,
+    endUtc,
+    startIso: startUtc.toISOString(),
+    endIso: endUtc.toISOString(),
+    maxDays: resolvedMaxDays
+  };
+}
 function getUsageMaxDays3() {
   return envCore2.getUsageMaxDays();
 }
@@ -1319,6 +1359,7 @@ if (!globalThis[CORE_KEY6]) {
       localDatePartsToUtc,
       normalizeDateRangeLocal,
       listDateStrings,
+      resolveUsageDateRangeLocal,
       getUsageMaxDays: getUsageMaxDays3,
       isWithinInterval
     },
@@ -1351,6 +1392,7 @@ var formatLocalDateKey2 = dateCore.formatLocalDateKey;
 var localDatePartsToUtc2 = dateCore.localDatePartsToUtc;
 var normalizeDateRangeLocal2 = dateCore.normalizeDateRangeLocal;
 var listDateStrings2 = dateCore.listDateStrings;
+var resolveUsageDateRangeLocal2 = dateCore.resolveUsageDateRangeLocal;
 var getUsageMaxDays4 = dateCore.getUsageMaxDays;
 var isWithinInterval2 = dateCore.isWithinInterval;
 
