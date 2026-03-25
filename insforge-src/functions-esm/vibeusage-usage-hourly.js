@@ -18,6 +18,7 @@ import {
   getUsageTimeZoneContext,
   isUtcTimeZone,
   localDatePartsToUtc,
+  normalizeIso,
   parseDateParts,
   parseUtcDateString,
 } from "./shared/date.js";
@@ -423,13 +424,6 @@ async function getLastSyncAt({ edgeClient, userId }) {
   } catch (_error) {
     return null;
   }
-}
-
-function normalizeIso(value) {
-  if (typeof value !== "string") return null;
-  const dt = new Date(value);
-  if (!Number.isFinite(dt.getTime())) return null;
-  return dt.toISOString();
 }
 
 function buildSyncResponse(syncMeta) {

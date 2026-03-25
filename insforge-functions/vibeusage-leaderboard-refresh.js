@@ -1174,6 +1174,14 @@ var require_date_core = __commonJS({
     function formatDateUTC(date) {
       return toUtcDay(date).toISOString().slice(0, 10);
     }
+    function normalizeIso(value) {
+      if (typeof value !== "string") return null;
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      const dt = new Date(trimmed);
+      if (!Number.isFinite(dt.getTime())) return null;
+      return dt.toISOString();
+    }
     function normalizeDateRange(fromRaw, toRaw) {
       const today = /* @__PURE__ */ new Date();
       const toDefault = formatDateUTC(today);
@@ -1406,12 +1414,24 @@ var require_date_core = __commonJS({
     function getUsageMaxDays() {
       return envCore.getUsageMaxDays();
     }
+    function isWithinInterval(lastSyncAt, minutes, nowIso) {
+      const lastIso = normalizeIso(lastSyncAt);
+      if (!lastIso) return false;
+      const lastMs = Date.parse(lastIso);
+      if (!Number.isFinite(lastMs)) return false;
+      const windowMs = Math.max(0, minutes) * 60 * 1e3;
+      if (windowMs <= 0) return false;
+      const nowValue = nowIso == null ? Date.now() : Date.parse(normalizeIso(nowIso) || "");
+      if (!Number.isFinite(nowValue)) return false;
+      return nowValue - lastMs < windowMs;
+    }
     if (!globalThis[CORE_KEY]) {
       Object.defineProperty(globalThis, CORE_KEY, {
         value: {
           isDate,
           toUtcDay,
           formatDateUTC,
+          normalizeIso,
           normalizeDateRange,
           parseUtcDateString,
           addUtcDays,
@@ -1431,7 +1451,8 @@ var require_date_core = __commonJS({
           localDatePartsToUtc,
           normalizeDateRangeLocal,
           listDateStrings,
-          getUsageMaxDays
+          getUsageMaxDays,
+          isWithinInterval
         },
         configurable: true,
         enumerable: false,
@@ -1453,6 +1474,7 @@ var require_date = __commonJS({
       isDate: dateCore.isDate,
       toUtcDay: dateCore.toUtcDay,
       formatDateUTC: dateCore.formatDateUTC,
+      normalizeIso: dateCore.normalizeIso,
       normalizeDateRange: dateCore.normalizeDateRange,
       parseUtcDateString: dateCore.parseUtcDateString,
       addUtcDays: dateCore.addUtcDays,
@@ -1472,7 +1494,8 @@ var require_date = __commonJS({
       localDatePartsToUtc: dateCore.localDatePartsToUtc,
       normalizeDateRangeLocal: dateCore.normalizeDateRangeLocal,
       listDateStrings: dateCore.listDateStrings,
-      getUsageMaxDays: dateCore.getUsageMaxDays
+      getUsageMaxDays: dateCore.getUsageMaxDays,
+      isWithinInterval: dateCore.isWithinInterval
     };
   }
 });

@@ -1291,6 +1291,349 @@ var require_auth = __commonJS({
   }
 });
 
+// insforge-src/shared/date-core.js
+var require_date_core = __commonJS({
+  "insforge-src/shared/date-core.js"() {
+    "use strict";
+    var CORE_KEY = "__vibeusageDateCore";
+    var envCore = globalThis.__vibeusageEnvCore;
+    if (!envCore) throw new Error("env core not initialized");
+    var TIMEZONE_FORMATTERS = /* @__PURE__ */ new Map();
+    function isDate(value) {
+      return typeof value === "string" && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value);
+    }
+    function toUtcDay(date) {
+      return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+    }
+    function formatDateUTC(date) {
+      return toUtcDay(date).toISOString().slice(0, 10);
+    }
+    function normalizeIso2(value) {
+      if (typeof value !== "string") return null;
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      const dt = new Date(trimmed);
+      if (!Number.isFinite(dt.getTime())) return null;
+      return dt.toISOString();
+    }
+    function normalizeDateRange(fromRaw, toRaw) {
+      const today = /* @__PURE__ */ new Date();
+      const toDefault = formatDateUTC(today);
+      const fromDefault = formatDateUTC(
+        new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 29))
+      );
+      const from = isDate(fromRaw) ? fromRaw : fromDefault;
+      const to = isDate(toRaw) ? toRaw : toDefault;
+      return { from, to };
+    }
+    function parseUtcDateString(value) {
+      if (!isDate(value)) return null;
+      const [year, month, day] = value.split("-").map(Number);
+      const date = new Date(Date.UTC(year, month - 1, day));
+      if (!Number.isFinite(date.getTime())) return null;
+      return formatDateUTC(date) === value ? date : null;
+    }
+    function addUtcDays(date, days) {
+      return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days));
+    }
+    function computeHeatmapWindowUtc({ weeks, weekStartsOn, to }) {
+      const end = parseUtcDateString(to) || /* @__PURE__ */ new Date();
+      const desired = weekStartsOn === "mon" ? 1 : 0;
+      const endDow = end.getUTCDay();
+      const endWeekStart = addUtcDays(end, -((endDow - desired + 7) % 7));
+      const gridStart = addUtcDays(endWeekStart, -7 * (weeks - 1));
+      return { from: formatDateUTC(gridStart), gridStart, end };
+    }
+    function getTimeZoneFormatter(timeZone) {
+      if (TIMEZONE_FORMATTERS.has(timeZone)) return TIMEZONE_FORMATTERS.get(timeZone);
+      const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hour12: false,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+      TIMEZONE_FORMATTERS.set(timeZone, formatter);
+      return formatter;
+    }
+    function parseDateParts(value) {
+      if (!isDate(value)) return null;
+      const [year, month, day] = value.split("-").map(Number);
+      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+      return { year, month, day };
+    }
+    function formatDateParts(parts) {
+      if (!parts) return null;
+      const year = Number(parts.year);
+      const month = Number(parts.month);
+      const day = Number(parts.day);
+      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+      return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+    function dateFromPartsUTC(parts) {
+      if (!parts) return null;
+      const year = Number(parts.year);
+      const month = Number(parts.month) - 1;
+      const day = Number(parts.day);
+      const hour = Number(parts.hour || 0);
+      const minute = Number(parts.minute || 0);
+      const second = Number(parts.second || 0);
+      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+      return new Date(Date.UTC(year, month, day, hour, minute, second));
+    }
+    function datePartsFromDateUTC(date) {
+      return {
+        year: date.getUTCFullYear(),
+        month: date.getUTCMonth() + 1,
+        day: date.getUTCDate(),
+        hour: date.getUTCHours(),
+        minute: date.getUTCMinutes(),
+        second: date.getUTCSeconds()
+      };
+    }
+    function addDatePartsDays(parts, days) {
+      const base = dateFromPartsUTC(parts);
+      if (!base) return null;
+      return datePartsFromDateUTC(addUtcDays(base, days));
+    }
+    function addDatePartsMonths(parts, months) {
+      if (!parts) return null;
+      const year = Number(parts.year);
+      const month = Number(parts.month) - 1 + Number(months || 0);
+      const day = Number(parts.day || 1);
+      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+      const dt = new Date(Date.UTC(year, month, day));
+      return {
+        year: dt.getUTCFullYear(),
+        month: dt.getUTCMonth() + 1,
+        day: dt.getUTCDate()
+      };
+    }
+    function parseOffsetMinutes(raw) {
+      if (raw == null || raw === "") return null;
+      const value = String(raw).trim();
+      if (!/^-?\d+$/.test(value)) return null;
+      const offset = Number(value);
+      if (!Number.isFinite(offset) || offset < -840 || offset > 840) return null;
+      return Math.trunc(offset);
+    }
+    function normalizeTimeZone(tzRaw, offsetRaw) {
+      const timeZoneValue = typeof tzRaw === "string" ? tzRaw.trim() : "";
+      let timeZone = null;
+      if (timeZoneValue) {
+        try {
+          getTimeZoneFormatter(timeZoneValue).format(/* @__PURE__ */ new Date(0));
+          timeZone = timeZoneValue;
+        } catch (_error) {
+          timeZone = null;
+        }
+      }
+      const offsetMinutes = parseOffsetMinutes(offsetRaw);
+      if (timeZone) return { timeZone, offsetMinutes: null, source: "iana" };
+      if (offsetMinutes != null) return { timeZone: null, offsetMinutes, source: "offset" };
+      return { timeZone: null, offsetMinutes: 0, source: "utc" };
+    }
+    function getUsageTimeZoneContext(url) {
+      if (!url?.searchParams) return normalizeTimeZone();
+      return normalizeTimeZone(url.searchParams.get("tz"), url.searchParams.get("tz_offset_minutes"));
+    }
+    function isUtcTimeZone(tzContext) {
+      if (!tzContext) return true;
+      const tz = tzContext.timeZone;
+      if (tz) {
+        const upper = tz.toUpperCase();
+        return upper === "UTC" || upper === "ETC/UTC" || upper === "ETC/GMT";
+      }
+      return Number(tzContext.offsetMinutes || 0) === 0;
+    }
+    function getTimeZoneParts(date, timeZone) {
+      const parts = getTimeZoneFormatter(timeZone).formatToParts(date);
+      let year = 0;
+      let month = 0;
+      let day = 0;
+      let hour = 0;
+      let minute = 0;
+      let second = 0;
+      for (const part of parts) {
+        if (part.type === "year") year = Number(part.value);
+        if (part.type === "month") month = Number(part.value);
+        if (part.type === "day") day = Number(part.value);
+        if (part.type === "hour") hour = Number(part.value);
+        if (part.type === "minute") minute = Number(part.value);
+        if (part.type === "second") second = Number(part.value);
+      }
+      return { year, month, day, hour, minute, second };
+    }
+    function getTimeZoneOffsetMinutes(date, timeZone) {
+      const parts = getTimeZoneParts(date, timeZone);
+      const asUtc = Date.UTC(
+        parts.year,
+        parts.month - 1,
+        parts.day,
+        parts.hour,
+        parts.minute,
+        parts.second
+      );
+      return Math.round((asUtc - date.getTime()) / 6e4);
+    }
+    function getLocalParts(date, tzContext) {
+      if (tzContext?.timeZone) {
+        return getTimeZoneParts(date, tzContext.timeZone);
+      }
+      const offsetMinutes = Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : 0;
+      const shifted = new Date(date.getTime() + offsetMinutes * 6e4);
+      return {
+        year: shifted.getUTCFullYear(),
+        month: shifted.getUTCMonth() + 1,
+        day: shifted.getUTCDate(),
+        hour: shifted.getUTCHours(),
+        minute: shifted.getUTCMinutes(),
+        second: shifted.getUTCSeconds()
+      };
+    }
+    function formatLocalDateKey(date, tzContext) {
+      return formatDateParts(getLocalParts(date, tzContext));
+    }
+    function localDatePartsToUtc(parts, tzContext) {
+      const baseUtc = Date.UTC(
+        Number(parts.year),
+        Number(parts.month) - 1,
+        Number(parts.day),
+        Number(parts.hour || 0),
+        Number(parts.minute || 0),
+        Number(parts.second || 0)
+      );
+      if (tzContext?.timeZone) {
+        let offset = getTimeZoneOffsetMinutes(new Date(baseUtc), tzContext.timeZone);
+        let utc = baseUtc - offset * 6e4;
+        const offset2 = getTimeZoneOffsetMinutes(new Date(utc), tzContext.timeZone);
+        if (offset2 !== offset) {
+          utc = baseUtc - offset2 * 6e4;
+        }
+        return new Date(utc);
+      }
+      const offsetMinutes = Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : 0;
+      return new Date(baseUtc - offsetMinutes * 6e4);
+    }
+    function normalizeDateRangeLocal(fromRaw, toRaw, tzContext) {
+      const todayParts = getLocalParts(/* @__PURE__ */ new Date(), tzContext);
+      const toDefault = formatDateParts(todayParts);
+      const fromDefault = formatDateParts(
+        addDatePartsDays(
+          { year: todayParts.year, month: todayParts.month, day: todayParts.day },
+          -29
+        )
+      );
+      return {
+        from: isDate(fromRaw) ? fromRaw : fromDefault,
+        to: isDate(toRaw) ? toRaw : toDefault
+      };
+    }
+    function listDateStrings(from, to) {
+      const startParts = parseDateParts(from);
+      const endParts = parseDateParts(to);
+      if (!startParts || !endParts) return [];
+      const start = dateFromPartsUTC(startParts);
+      const end = dateFromPartsUTC(endParts);
+      if (!start || !end || end < start) return [];
+      const days = [];
+      for (let cursor = start; cursor <= end; cursor = addUtcDays(cursor, 1)) {
+        days.push(formatDateUTC(cursor));
+      }
+      return days;
+    }
+    function getUsageMaxDays() {
+      return envCore.getUsageMaxDays();
+    }
+    function isWithinInterval2(lastSyncAt, minutes, nowIso) {
+      const lastIso = normalizeIso2(lastSyncAt);
+      if (!lastIso) return false;
+      const lastMs = Date.parse(lastIso);
+      if (!Number.isFinite(lastMs)) return false;
+      const windowMs = Math.max(0, minutes) * 60 * 1e3;
+      if (windowMs <= 0) return false;
+      const nowValue = nowIso == null ? Date.now() : Date.parse(normalizeIso2(nowIso) || "");
+      if (!Number.isFinite(nowValue)) return false;
+      return nowValue - lastMs < windowMs;
+    }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          isDate,
+          toUtcDay,
+          formatDateUTC,
+          normalizeIso: normalizeIso2,
+          normalizeDateRange,
+          parseUtcDateString,
+          addUtcDays,
+          computeHeatmapWindowUtc,
+          parseDateParts,
+          formatDateParts,
+          dateFromPartsUTC,
+          datePartsFromDateUTC,
+          addDatePartsDays,
+          addDatePartsMonths,
+          normalizeTimeZone,
+          getUsageTimeZoneContext,
+          isUtcTimeZone,
+          getTimeZoneOffsetMinutes,
+          getLocalParts,
+          formatLocalDateKey,
+          localDatePartsToUtc,
+          normalizeDateRangeLocal,
+          listDateStrings,
+          getUsageMaxDays,
+          isWithinInterval: isWithinInterval2
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
+// insforge-src/shared/date.js
+var require_date = __commonJS({
+  "insforge-src/shared/date.js"(exports2, module2) {
+    "use strict";
+    require_env();
+    require_date_core();
+    var dateCore = globalThis.__vibeusageDateCore;
+    if (!dateCore) throw new Error("date core not initialized");
+    module2.exports = {
+      isDate: dateCore.isDate,
+      toUtcDay: dateCore.toUtcDay,
+      formatDateUTC: dateCore.formatDateUTC,
+      normalizeIso: dateCore.normalizeIso,
+      normalizeDateRange: dateCore.normalizeDateRange,
+      parseUtcDateString: dateCore.parseUtcDateString,
+      addUtcDays: dateCore.addUtcDays,
+      computeHeatmapWindowUtc: dateCore.computeHeatmapWindowUtc,
+      parseDateParts: dateCore.parseDateParts,
+      formatDateParts: dateCore.formatDateParts,
+      dateFromPartsUTC: dateCore.dateFromPartsUTC,
+      datePartsFromDateUTC: dateCore.datePartsFromDateUTC,
+      addDatePartsDays: dateCore.addDatePartsDays,
+      addDatePartsMonths: dateCore.addDatePartsMonths,
+      normalizeTimeZone: dateCore.normalizeTimeZone,
+      getUsageTimeZoneContext: dateCore.getUsageTimeZoneContext,
+      isUtcTimeZone: dateCore.isUtcTimeZone,
+      getTimeZoneOffsetMinutes: dateCore.getTimeZoneOffsetMinutes,
+      getLocalParts: dateCore.getLocalParts,
+      formatLocalDateKey: dateCore.formatLocalDateKey,
+      localDatePartsToUtc: dateCore.localDatePartsToUtc,
+      normalizeDateRangeLocal: dateCore.normalizeDateRangeLocal,
+      listDateStrings: dateCore.listDateStrings,
+      getUsageMaxDays: dateCore.getUsageMaxDays,
+      isWithinInterval: dateCore.isWithinInterval
+    };
+  }
+});
+
 // insforge-src/shared/crypto-core.js
 var require_crypto_core = __commonJS({
   "insforge-src/shared/crypto-core.js"() {
@@ -1331,6 +1674,7 @@ var require_crypto = __commonJS({
 var { handleOptions, json, requireMethod } = require_http();
 var { withRequestLogging } = require_logging();
 var { getBearerToken } = require_auth();
+var { isWithinInterval, normalizeIso } = require_date();
 var { getAnonKey, getBaseUrl, getServiceRoleKey } = require_env();
 var { sha256Hex } = require_crypto();
 var MIN_INTERVAL_MINUTES = 30;
@@ -1426,16 +1770,4 @@ async function readApiJson(res) {
   } catch (_e) {
     return { data: null, error: text.slice(0, 300) };
   }
-}
-function normalizeIso(value) {
-  if (typeof value !== "string") return null;
-  const dt = new Date(value);
-  if (!Number.isFinite(dt.getTime())) return null;
-  return dt.toISOString();
-}
-function isWithinInterval(lastSyncAt, minutes) {
-  const lastMs = Date.parse(lastSyncAt);
-  if (!Number.isFinite(lastMs)) return false;
-  const windowMs = Math.max(0, minutes) * 60 * 1e3;
-  return windowMs > 0 && Date.now() - lastMs < windowMs;
 }

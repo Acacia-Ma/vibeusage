@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { webcrypto } = require("node:crypto");
 const { logSlowQuery } = require("../insforge-src/shared/logging");
-const { getUsageMaxDays } = require("../insforge-src/shared/date");
+const { getUsageMaxDays, isWithinInterval, normalizeIso } = require("../insforge-src/shared/date");
 const { sha256Hex } = require("../insforge-src/shared/crypto");
 const { normalizeUsageModel, applyUsageModelFilter } = require("../insforge-src/shared/model");
 const { resolveIdentityAtDate } = require("../insforge-src/shared/model-alias-timeline");
@@ -185,6 +185,24 @@ test("getUsageMaxDays ignores VIBESCORE env when VIBEUSAGE missing", () => {
     if (prevLegacyMax === undefined) delete process.env.VIBESCORE_USAGE_MAX_DAYS;
     else process.env.VIBESCORE_USAGE_MAX_DAYS = prevLegacyMax;
   }
+});
+
+test("date helpers normalize ISO strings through shared core", () => {
+  assert.equal(normalizeIso(" 2026-03-25T01:02:03Z "), "2026-03-25T01:02:03.000Z");
+  assert.equal(normalizeIso(""), null);
+  assert.equal(normalizeIso("nope"), null);
+});
+
+test("date helpers resolve sync intervals through shared core", () => {
+  assert.equal(
+    isWithinInterval("2026-03-25T01:00:00Z", 30, "2026-03-25T01:20:00Z"),
+    true,
+  );
+  assert.equal(
+    isWithinInterval("2026-03-25T01:00:00Z", 30, "2026-03-25T01:31:00Z"),
+    false,
+  );
+  assert.equal(isWithinInterval("invalid", 30, "2026-03-25T01:20:00Z"), false);
 });
 
 test("pricing defaults ignore VIBESCORE env when VIBEUSAGE missing", () => {

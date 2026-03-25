@@ -1,4 +1,5 @@
 import { getBearerToken, getEdgeClientAndUserId } from "./shared/auth.js";
+import { normalizeIso } from "./shared/date.js";
 import { getAnonKey, getBaseUrl, getServiceRoleKey } from "./shared/env.js";
 import { json, handleOptions, requireMethod } from "./shared/http.js";
 import { computeProStatus } from "./shared/pro-status.js";
@@ -178,15 +179,6 @@ function normalizeText(value) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
-}
-
-function normalizeIso(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const dt = new Date(trimmed);
-  if (!Number.isFinite(dt.getTime())) return null;
-  return dt.toISOString();
 }
 
 function getLatestIso(rows, key) {

@@ -10,6 +10,7 @@ module.exports = {
   isDate: dateCore.isDate,
   toUtcDay: dateCore.toUtcDay,
   formatDateUTC: dateCore.formatDateUTC,
+  normalizeIso: dateCore.normalizeIso,
   normalizeDateRange: dateCore.normalizeDateRange,
   parseUtcDateString: dateCore.parseUtcDateString,
   addUtcDays: dateCore.addUtcDays,
@@ -30,4 +31,5 @@ module.exports = {
   normalizeDateRangeLocal: dateCore.normalizeDateRangeLocal,
   listDateStrings: dateCore.listDateStrings,
   getUsageMaxDays: dateCore.getUsageMaxDays,
+  isWithinInterval: dateCore.isWithinInterval,
 };

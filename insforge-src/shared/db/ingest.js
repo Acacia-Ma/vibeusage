@@ -1,5 +1,6 @@
 "use strict";
 
+const { isWithinInterval, normalizeIso } = require("../date");
 const {
   buildAuthHeaders,
   isUpsertUnsupported,
@@ -9,23 +10,6 @@ const {
 } = require("./records");
 
 const DEVICE_TOKEN_SELECT = "id,user_id,device_id,revoked_at,last_sync_at";
-
-function normalizeIso(value) {
-  if (typeof value !== "string") return null;
-  const dt = new Date(value);
-  if (!Number.isFinite(dt.getTime())) return null;
-  return dt.toISOString();
-}
-
-function isWithinInterval(lastSyncAt, minutes, nowIso) {
-  const lastMs = Date.parse(lastSyncAt);
-  if (!Number.isFinite(lastMs)) return false;
-  const windowMs = Math.max(0, minutes) * 60 * 1000;
-  if (windowMs <= 0) return false;
-  const nowMs = nowIso ? Date.parse(nowIso) : Date.now();
-  if (!Number.isFinite(nowMs)) return false;
-  return nowMs - lastMs < windowMs;
-}
 
 function toNonNegativeInt(value) {
   if (typeof value !== "number") return 0;

@@ -1371,6 +1371,14 @@ function toUtcDay(date) {
 function formatDateUTC(date) {
   return toUtcDay(date).toISOString().slice(0, 10);
 }
+function normalizeIso(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const dt = new Date(trimmed);
+  if (!Number.isFinite(dt.getTime())) return null;
+  return dt.toISOString();
+}
 function normalizeDateRange(fromRaw, toRaw) {
   const today = /* @__PURE__ */ new Date();
   const toDefault = formatDateUTC(today);
@@ -1603,12 +1611,24 @@ function listDateStrings(from, to) {
 function getUsageMaxDays3() {
   return envCore2.getUsageMaxDays();
 }
+function isWithinInterval(lastSyncAt, minutes, nowIso) {
+  const lastIso = normalizeIso(lastSyncAt);
+  if (!lastIso) return false;
+  const lastMs = Date.parse(lastIso);
+  if (!Number.isFinite(lastMs)) return false;
+  const windowMs = Math.max(0, minutes) * 60 * 1e3;
+  if (windowMs <= 0) return false;
+  const nowValue = nowIso == null ? Date.now() : Date.parse(normalizeIso(nowIso) || "");
+  if (!Number.isFinite(nowValue)) return false;
+  return nowValue - lastMs < windowMs;
+}
 if (!globalThis[CORE_KEY11]) {
   Object.defineProperty(globalThis, CORE_KEY11, {
     value: {
       isDate,
       toUtcDay,
       formatDateUTC,
+      normalizeIso,
       normalizeDateRange,
       parseUtcDateString,
       addUtcDays,
@@ -1628,7 +1648,8 @@ if (!globalThis[CORE_KEY11]) {
       localDatePartsToUtc,
       normalizeDateRangeLocal,
       listDateStrings,
-      getUsageMaxDays: getUsageMaxDays3
+      getUsageMaxDays: getUsageMaxDays3,
+      isWithinInterval
     },
     configurable: true,
     enumerable: false,
@@ -1642,6 +1663,7 @@ if (!dateCore) throw new Error("date core not initialized");
 var isDate2 = dateCore.isDate;
 var toUtcDay2 = dateCore.toUtcDay;
 var formatDateUTC2 = dateCore.formatDateUTC;
+var normalizeIso2 = dateCore.normalizeIso;
 var parseUtcDateString2 = dateCore.parseUtcDateString;
 var addUtcDays2 = dateCore.addUtcDays;
 var computeHeatmapWindowUtc2 = dateCore.computeHeatmapWindowUtc;
@@ -1659,6 +1681,7 @@ var localDatePartsToUtc2 = dateCore.localDatePartsToUtc;
 var normalizeDateRangeLocal2 = dateCore.normalizeDateRangeLocal;
 var listDateStrings2 = dateCore.listDateStrings;
 var getUsageMaxDays4 = dateCore.getUsageMaxDays;
+var isWithinInterval2 = dateCore.isWithinInterval;
 
 // insforge-src/shared/debug-core.mjs
 var CORE_KEY12 = "__vibeusageDebugCore";
@@ -2413,7 +2436,7 @@ async function tryAggregateHourlyTotals({
 }
 async function getSyncMeta({ edgeClient, userId, startUtc, endUtc, tzContext }) {
   const lastSyncAt = await getLastSyncAt({ edgeClient, userId });
-  const lastSyncIso = normalizeIso(lastSyncAt);
+  const lastSyncIso = normalizeIso2(lastSyncAt);
   if (!lastSyncIso || !(startUtc instanceof Date) || !(endUtc instanceof Date) || !Number.isFinite(startUtc.getTime()) || !Number.isFinite(endUtc.getTime())) {
     return { lastSyncAt: lastSyncIso, missingAfterSlot: null };
   }
@@ -2447,12 +2470,6 @@ async function getLastSyncAt({ edgeClient, userId }) {
   } catch (_error) {
     return null;
   }
-}
-function normalizeIso(value) {
-  if (typeof value !== "string") return null;
-  const dt = new Date(value);
-  if (!Number.isFinite(dt.getTime())) return null;
-  return dt.toISOString();
 }
 function buildSyncResponse(syncMeta) {
   return {
