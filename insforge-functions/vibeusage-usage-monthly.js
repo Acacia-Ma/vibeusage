@@ -1624,6 +1624,30 @@ function parsePricingBucketKey(bucketKey, defaultDate) {
   }
   return { usageKey: bucketKey, dateKey: defaultDate };
 }
+function buildUsageTotalsPayload(totals, extra) {
+  const payload = {
+    total_tokens: runtimePrimitivesCore3.toBigInt(totals?.total_tokens).toString(),
+    billable_total_tokens: runtimePrimitivesCore3.toBigInt(totals?.billable_total_tokens).toString(),
+    input_tokens: runtimePrimitivesCore3.toBigInt(totals?.input_tokens).toString(),
+    cached_input_tokens: runtimePrimitivesCore3.toBigInt(totals?.cached_input_tokens).toString(),
+    output_tokens: runtimePrimitivesCore3.toBigInt(totals?.output_tokens).toString(),
+    reasoning_output_tokens: runtimePrimitivesCore3.toBigInt(totals?.reasoning_output_tokens).toString()
+  };
+  return extra && typeof extra === "object" ? { ...payload, ...extra } : payload;
+}
+function buildUsageBucketPayload(bucket, extra) {
+  return buildUsageTotalsPayload(
+    {
+      total_tokens: bucket?.total,
+      billable_total_tokens: bucket?.billable,
+      input_tokens: bucket?.input,
+      cached_input_tokens: bucket?.cached,
+      output_tokens: bucket?.output,
+      reasoning_output_tokens: bucket?.reasoning
+    },
+    extra
+  );
+}
 if (!globalThis[CORE_KEY10]) {
   Object.defineProperty(globalThis, CORE_KEY10, {
     value: {
@@ -1635,7 +1659,9 @@ if (!globalThis[CORE_KEY10]) {
       getSourceEntry,
       resolveDisplayName,
       buildPricingBucketKey,
-      parsePricingBucketKey
+      parsePricingBucketKey,
+      buildUsageTotalsPayload,
+      buildUsageBucketPayload
     },
     configurable: true,
     enumerable: false,
@@ -2101,6 +2127,8 @@ var getSourceParam2 = runtimePrimitivesCore6.getSourceParam;
 
 // insforge-src/functions-esm/vibeusage-usage-monthly.js
 var MAX_MONTHS = 24;
+var usageMetricsCore4 = globalThis.__vibeusageUsageMetricsCore;
+if (!usageMetricsCore4) throw new Error("usage metrics core not initialized");
 var vibeusage_usage_monthly_default = withRequestLogging2("vibeusage-usage-monthly", async function(request, logger) {
   const opt = handleOptions2(request);
   if (opt) return opt;
@@ -2193,12 +2221,7 @@ var vibeusage_usage_monthly_default = withRequestLogging2("vibeusage-usage-month
     const bucket = buckets.get(key);
     return {
       month: key,
-      total_tokens: bucket.total.toString(),
-      billable_total_tokens: bucket.billable.toString(),
-      input_tokens: bucket.input.toString(),
-      cached_input_tokens: bucket.cached.toString(),
-      output_tokens: bucket.output.toString(),
-      reasoning_output_tokens: bucket.reasoning.toString()
+      ...usageMetricsCore4.buildUsageBucketPayload(bucket)
     };
   });
   return respond({ from, to, months, data: monthly }, 200, queryDurationMs);

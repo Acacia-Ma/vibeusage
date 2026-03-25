@@ -1889,6 +1889,30 @@ var require_usage_metrics_core = __commonJS({
       }
       return { usageKey: bucketKey, dateKey: defaultDate };
     }
+    function buildUsageTotalsPayload(totals, extra) {
+      const payload = {
+        total_tokens: runtimePrimitivesCore.toBigInt(totals?.total_tokens).toString(),
+        billable_total_tokens: runtimePrimitivesCore.toBigInt(totals?.billable_total_tokens).toString(),
+        input_tokens: runtimePrimitivesCore.toBigInt(totals?.input_tokens).toString(),
+        cached_input_tokens: runtimePrimitivesCore.toBigInt(totals?.cached_input_tokens).toString(),
+        output_tokens: runtimePrimitivesCore.toBigInt(totals?.output_tokens).toString(),
+        reasoning_output_tokens: runtimePrimitivesCore.toBigInt(totals?.reasoning_output_tokens).toString()
+      };
+      return extra && typeof extra === "object" ? { ...payload, ...extra } : payload;
+    }
+    function buildUsageBucketPayload(bucket, extra) {
+      return buildUsageTotalsPayload(
+        {
+          total_tokens: bucket?.total,
+          billable_total_tokens: bucket?.billable,
+          input_tokens: bucket?.input,
+          cached_input_tokens: bucket?.cached,
+          output_tokens: bucket?.output,
+          reasoning_output_tokens: bucket?.reasoning
+        },
+        extra
+      );
+    }
     if (!globalThis[CORE_KEY]) {
       Object.defineProperty(globalThis, CORE_KEY, {
         value: {
@@ -1900,7 +1924,9 @@ var require_usage_metrics_core = __commonJS({
           getSourceEntry,
           resolveDisplayName,
           buildPricingBucketKey,
-          parsePricingBucketKey
+          parsePricingBucketKey,
+          buildUsageTotalsPayload,
+          buildUsageBucketPayload
         },
         configurable: true,
         enumerable: false,

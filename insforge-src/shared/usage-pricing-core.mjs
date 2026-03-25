@@ -34,6 +34,7 @@ const {
   addRowTotals,
   applyTotalsAndBillable,
   buildPricingBucketKey,
+  buildUsageTotalsPayload,
   createTotals,
   getSourceEntry,
   parsePricingBucketKey,
@@ -216,21 +217,9 @@ function buildAggregateUsagePayload({
           : null,
     },
     summary: {
-      totals: {
-        total_tokens: runtimePrimitivesCore.toBigInt(resolvedTotals?.total_tokens).toString(),
-        billable_total_tokens: runtimePrimitivesCore
-          .toBigInt(resolvedTotals?.billable_total_tokens)
-          .toString(),
-        input_tokens: runtimePrimitivesCore.toBigInt(resolvedTotals?.input_tokens).toString(),
-        cached_input_tokens: runtimePrimitivesCore
-          .toBigInt(resolvedTotals?.cached_input_tokens)
-          .toString(),
-        output_tokens: runtimePrimitivesCore.toBigInt(resolvedTotals?.output_tokens).toString(),
-        reasoning_output_tokens: runtimePrimitivesCore
-          .toBigInt(resolvedTotals?.reasoning_output_tokens)
-          .toString(),
+      totals: buildUsageTotalsPayload(resolvedTotals, {
         total_cost_usd: formatUsdFromMicros(pricingSummary?.totalCostMicros || 0n),
-      },
+      }),
       pricing: pricingCore.buildPricingMetadata({
         profile: pricingSummary?.overallCost?.profile || pricingCore.getDefaultPricingProfile(),
         pricingMode:
@@ -316,15 +305,9 @@ function formatModelBreakdownEntry(entry, pricingProfile) {
   const { cost_micros: _ignored, ...rest } = entry || {};
   return {
     ...rest,
-    totals: {
-      total_tokens: totals.total_tokens.toString(),
-      billable_total_tokens: totals.billable_total_tokens.toString(),
-      input_tokens: totals.input_tokens.toString(),
-      cached_input_tokens: totals.cached_input_tokens.toString(),
-      output_tokens: totals.output_tokens.toString(),
-      reasoning_output_tokens: totals.reasoning_output_tokens.toString(),
+    totals: buildUsageTotalsPayload(totals, {
       total_cost_usd: formatUsdFromMicros(costMicros),
-    },
+    }),
   };
 }
 

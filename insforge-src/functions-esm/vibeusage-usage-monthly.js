@@ -16,12 +16,15 @@ import { handleOptions, json } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
 import { toPositiveIntOrNull } from "./shared/numbers.js";
 import { getSourceParam } from "./shared/source.js";
+import "../shared/usage-metrics-core.mjs";
 import {
   getModelParam,
   resolveUsageFilterContext,
 } from "./shared/usage-summary-support.js";
 
 const MAX_MONTHS = 24;
+const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
+if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
 
 export default withRequestLogging("vibeusage-usage-monthly", async function (request, logger) {
   const opt = handleOptions(request);
@@ -133,12 +136,7 @@ export default withRequestLogging("vibeusage-usage-monthly", async function (req
     const bucket = buckets.get(key);
     return {
       month: key,
-      total_tokens: bucket.total.toString(),
-      billable_total_tokens: bucket.billable.toString(),
-      input_tokens: bucket.input.toString(),
-      cached_input_tokens: bucket.cached.toString(),
-      output_tokens: bucket.output.toString(),
-      reasoning_output_tokens: bucket.reasoning.toString(),
+      ...usageMetricsCore.buildUsageBucketPayload(bucket),
     };
   });
 

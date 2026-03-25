@@ -1,11 +1,14 @@
 "use strict";
 
 import "./runtime-primitives-core.mjs";
+import "./usage-metrics-core.mjs";
 
 const CORE_KEY = "__vibeusageUsageHourlyCore";
 
 const runtimePrimitivesCore = globalThis.__vibeusageRuntimePrimitivesCore;
 if (!runtimePrimitivesCore) throw new Error("runtime primitives core not initialized");
+const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
+if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
 
 function createHourlyBucket() {
   return {
@@ -94,15 +97,7 @@ function parseHalfHourSlotFromKey(key) {
 function buildHourlyResponse(hourKeys, bucketMap, missingAfterSlot) {
   return hourKeys.map((key) => {
     const bucket = bucketMap.get(key) || createHourlyBucket();
-    const row = {
-      hour: key,
-      total_tokens: bucket.total.toString(),
-      billable_total_tokens: bucket.billable.toString(),
-      input_tokens: bucket.input.toString(),
-      cached_input_tokens: bucket.cached.toString(),
-      output_tokens: bucket.output.toString(),
-      reasoning_output_tokens: bucket.reasoning.toString(),
-    };
+    const row = usageMetricsCore.buildUsageBucketPayload(bucket, { hour: key });
     if (typeof missingAfterSlot === "number") {
       const slot = parseHalfHourSlotFromKey(key);
       if (Number.isFinite(slot) && slot > missingAfterSlot) row.missing = true;

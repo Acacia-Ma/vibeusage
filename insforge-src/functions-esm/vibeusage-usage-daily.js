@@ -17,6 +17,7 @@ import { handleOptions, json } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
 import { getSourceParam } from "./shared/source.js";
 import "../shared/usage-pricing-core.mjs";
+import "../shared/usage-metrics-core.mjs";
 import {
   getModelParam,
   resolveUsageFilterContext,
@@ -31,6 +32,8 @@ const {
   buildAggregateUsagePayload,
   resolveAggregateUsagePricing,
 } = usagePricingCore;
+const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
+if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
 
 export default withRequestLogging("vibeusage-usage-daily", async function (request, logger) {
   const opt = handleOptions(request);
@@ -171,12 +174,7 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
     const bucket = buckets.get(day);
     return {
       day,
-      total_tokens: bucket.total.toString(),
-      billable_total_tokens: bucket.billable.toString(),
-      input_tokens: bucket.input.toString(),
-      cached_input_tokens: bucket.cached.toString(),
-      output_tokens: bucket.output.toString(),
-      reasoning_output_tokens: bucket.reasoning.toString(),
+      ...usageMetricsCore.buildUsageBucketPayload(bucket),
     };
   });
 

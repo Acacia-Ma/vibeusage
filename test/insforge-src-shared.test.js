@@ -379,6 +379,49 @@ test("usage pricing core resolves implied models and summary pricing mode", () =
   );
 });
 
+test("usage metrics core formats usage totals and bucket payloads", () => {
+  assert.deepEqual(
+    usageMetricsCore.buildUsageTotalsPayload({
+      total_tokens: 12n,
+      billable_total_tokens: 9n,
+      input_tokens: 5n,
+      cached_input_tokens: 1n,
+      output_tokens: 4n,
+      reasoning_output_tokens: 2n,
+    }),
+    {
+      total_tokens: "12",
+      billable_total_tokens: "9",
+      input_tokens: "5",
+      cached_input_tokens: "1",
+      output_tokens: "4",
+      reasoning_output_tokens: "2",
+    },
+  );
+  assert.deepEqual(
+    usageMetricsCore.buildUsageBucketPayload(
+      {
+        total: 20n,
+        billable: 18n,
+        input: 7n,
+        cached: 2n,
+        output: 9n,
+        reasoning: 3n,
+      },
+      { day: "2026-03-25" },
+    ),
+    {
+      day: "2026-03-25",
+      total_tokens: "20",
+      billable_total_tokens: "18",
+      input_tokens: "7",
+      cached_input_tokens: "2",
+      output_tokens: "9",
+      reasoning_output_tokens: "3",
+    },
+  );
+});
+
 test("usage pricing core prices bucketed usage with callback attribution", async () => {
   const edgeClient = createPricingEdgeClient({
     aliasRows: [

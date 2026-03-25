@@ -1900,6 +1900,30 @@ function parsePricingBucketKey(bucketKey, defaultDate) {
   }
   return { usageKey: bucketKey, dateKey: defaultDate };
 }
+function buildUsageTotalsPayload(totals, extra) {
+  const payload = {
+    total_tokens: runtimePrimitivesCore3.toBigInt(totals?.total_tokens).toString(),
+    billable_total_tokens: runtimePrimitivesCore3.toBigInt(totals?.billable_total_tokens).toString(),
+    input_tokens: runtimePrimitivesCore3.toBigInt(totals?.input_tokens).toString(),
+    cached_input_tokens: runtimePrimitivesCore3.toBigInt(totals?.cached_input_tokens).toString(),
+    output_tokens: runtimePrimitivesCore3.toBigInt(totals?.output_tokens).toString(),
+    reasoning_output_tokens: runtimePrimitivesCore3.toBigInt(totals?.reasoning_output_tokens).toString()
+  };
+  return extra && typeof extra === "object" ? { ...payload, ...extra } : payload;
+}
+function buildUsageBucketPayload(bucket, extra) {
+  return buildUsageTotalsPayload(
+    {
+      total_tokens: bucket?.total,
+      billable_total_tokens: bucket?.billable,
+      input_tokens: bucket?.input,
+      cached_input_tokens: bucket?.cached,
+      output_tokens: bucket?.output,
+      reasoning_output_tokens: bucket?.reasoning
+    },
+    extra
+  );
+}
 if (!globalThis[CORE_KEY14]) {
   Object.defineProperty(globalThis, CORE_KEY14, {
     value: {
@@ -1911,7 +1935,9 @@ if (!globalThis[CORE_KEY14]) {
       getSourceEntry,
       resolveDisplayName,
       buildPricingBucketKey,
-      parsePricingBucketKey
+      parsePricingBucketKey,
+      buildUsageTotalsPayload,
+      buildUsageBucketPayload
     },
     configurable: true,
     enumerable: false,
@@ -2184,6 +2210,7 @@ var {
   addRowTotals: addRowTotals2,
   applyTotalsAndBillable: applyTotalsAndBillable2,
   buildPricingBucketKey: buildPricingBucketKey2,
+  buildUsageTotalsPayload: buildUsageTotalsPayload2,
   createTotals: createTotals2,
   getSourceEntry: getSourceEntry2,
   parsePricingBucketKey: parsePricingBucketKey2,
@@ -2343,15 +2370,9 @@ function buildAggregateUsagePayload({
       model: hasModelParam && impliedModelId ? pricingSummary?.impliedModelDisplay || impliedModelId : null
     },
     summary: {
-      totals: {
-        total_tokens: runtimePrimitivesCore6.toBigInt(resolvedTotals?.total_tokens).toString(),
-        billable_total_tokens: runtimePrimitivesCore6.toBigInt(resolvedTotals?.billable_total_tokens).toString(),
-        input_tokens: runtimePrimitivesCore6.toBigInt(resolvedTotals?.input_tokens).toString(),
-        cached_input_tokens: runtimePrimitivesCore6.toBigInt(resolvedTotals?.cached_input_tokens).toString(),
-        output_tokens: runtimePrimitivesCore6.toBigInt(resolvedTotals?.output_tokens).toString(),
-        reasoning_output_tokens: runtimePrimitivesCore6.toBigInt(resolvedTotals?.reasoning_output_tokens).toString(),
+      totals: buildUsageTotalsPayload2(resolvedTotals, {
         total_cost_usd: formatUsdFromMicros2(pricingSummary?.totalCostMicros || 0n)
-      },
+      }),
       pricing: pricingCore.buildPricingMetadata({
         profile: pricingSummary?.overallCost?.profile || pricingCore.getDefaultPricingProfile(),
         pricingMode: pricingSummary?.summaryPricingMode || pricingSummary?.overallCost?.pricing_mode || "add"
@@ -2428,15 +2449,9 @@ function formatModelBreakdownEntry(entry, pricingProfile) {
   const { cost_micros: _ignored, ...rest } = entry || {};
   return {
     ...rest,
-    totals: {
-      total_tokens: totals.total_tokens.toString(),
-      billable_total_tokens: totals.billable_total_tokens.toString(),
-      input_tokens: totals.input_tokens.toString(),
-      cached_input_tokens: totals.cached_input_tokens.toString(),
-      output_tokens: totals.output_tokens.toString(),
-      reasoning_output_tokens: totals.reasoning_output_tokens.toString(),
+    totals: buildUsageTotalsPayload2(totals, {
       total_cost_usd: formatUsdFromMicros2(costMicros)
-    }
+    })
   };
 }
 function compareModelBreakdownEntries(a, b) {

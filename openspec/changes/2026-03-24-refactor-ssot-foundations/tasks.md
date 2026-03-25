@@ -49,6 +49,7 @@
 - [x] 4.2.25 Converge aggregate summary payload assembly through `usage-pricing-core` for `usage-summary` and `usage-daily`.
 - [x] 4.2.26 Converge hourly bucket assembly through `usage-hourly-core` while keeping query/sync orchestration in the endpoint.
 - [x] 4.2.27 Converge ISO normalization and sync interval timing through `date-core` across ESM/CJS runtime consumers.
+- [x] 4.2.28 Converge usage token bucket payload formatting through `usage-metrics-core` across hourly/daily/monthly and pricing payload consumers.
 
 ## 5. Verification
 

@@ -269,7 +269,9 @@ test("backend usage rollup and bucket helpers flow through shared cores", () => 
     stripModulePrelude(read("insforge-src/shared/usage-hourly-core.mjs")),
   );
   assert.match(read("insforge-src/shared/usage-hourly-core.js"), /require\(\"\.\/runtime-primitives-core\"\)/);
+  assert.match(read("insforge-src/shared/usage-hourly-core.js"), /require\(\"\.\/usage-metrics-core\"\)/);
   assert.match(read("insforge-src/shared/usage-hourly-core.mjs"), /import \"\.\/runtime-primitives-core\.mjs\"/);
+  assert.match(read("insforge-src/shared/usage-hourly-core.mjs"), /import \"\.\/usage-metrics-core\.mjs\"/);
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /forEachHourlyUsagePage/);
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /forEachHourlyUsagePage/);
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-monthly.js"), /forEachHourlyUsagePage/);
@@ -282,6 +284,9 @@ test("backend usage rollup and bucket helpers flow through shared cores", () => 
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /addHourlyBucketTotals/);
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /resolveHalfHourSlot/);
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /buildHourlyResponse/);
+  assert.match(read("insforge-src/shared/usage-pricing-core.js"), /buildUsageTotalsPayload/);
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /buildUsageBucketPayload/);
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-monthly.js"), /buildUsageBucketPayload/);
   assert.doesNotMatch(read("insforge-src/functions-esm/shared/usage-summary-support.js"), /pagination-core/);
   assert.doesNotMatch(read("insforge-src/functions-esm/shared/usage-summary-support.js"), /forEachPage/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /buildHourlyUsageQuery/);
@@ -306,6 +311,9 @@ test("backend usage rollup and bucket helpers flow through shared cores", () => 
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /function buildHourlyResponse/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /function formatHourKeyFromValue/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /function parseHalfHourSlotFromKey/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /bucket\.total\.toString\(\)/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-monthly.js"), /bucket\.total\.toString\(\)/);
+  assert.doesNotMatch(read("insforge-src/shared/usage-hourly-core.js"), /bucket\.total\.toString\(\)/);
 });
 
 test("backend leaderboard and user identity semantics flow through shared cores", () => {
