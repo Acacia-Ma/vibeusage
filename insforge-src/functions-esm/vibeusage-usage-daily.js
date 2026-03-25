@@ -22,8 +22,7 @@ const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 if (!usagePricingCore) throw new Error("usage pricing core not initialized");
 const {
   createAggregateUsageState,
-  buildAggregateUsagePayload,
-  resolveAggregateUsagePricing,
+  resolveAggregateUsagePayload,
 } = usagePricingCore;
 const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
@@ -119,21 +118,13 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
     rollup_hit: rollupHit,
   });
 
-  const pricingSummary = await resolveAggregateUsagePricing({
+  const { aggregatePayload } = await resolveAggregateUsagePayload({
     edgeClient: auth.edgeClient,
     canonicalModel,
-    distinctModels: aggregateState.distinctModels,
-    distinctUsageModels: aggregateState.distinctUsageModels,
-    pricingBuckets: aggregateState.pricingBuckets,
     effectiveDate: to,
-    sourcesMap: aggregateState.sourcesMap,
-    totals: aggregateState.totals,
-    defaultModel: DEFAULT_MODEL,
-  });
-  const aggregatePayload = buildAggregateUsagePayload({
-    totals: aggregateState.totals,
-    pricingSummary,
+    state: aggregateState,
     hasModelParam,
+    defaultModel: DEFAULT_MODEL,
   });
 
   const rows = dayKeys.map((day) => {

@@ -722,6 +722,73 @@ test("usage pricing core builds aggregate payload from shared pricing summary", 
   });
 });
 
+test("usage pricing core resolves aggregate payload from shared state", async () => {
+  const totals = usageMetricsCore.createTotals();
+  usageMetricsCore.addRowTotals(totals, {
+    total_tokens: 2000000,
+    billable_total_tokens: 2000000,
+    input_tokens: 1000000,
+    cached_input_tokens: 0,
+    output_tokens: 1000000,
+    reasoning_output_tokens: 0,
+  });
+  const state = usagePricingCore.createAggregateUsageState({
+    hasModelParam: true,
+    defaultModel: "unknown",
+  });
+  state.totals = totals;
+  state.distinctModels.add("gpt-foo");
+  state.distinctUsageModels.add("gpt-foo");
+  state.sourcesMap.set("codex", { source: "codex", totals });
+  state.pricingBuckets = new Map([
+    [
+      usageMetricsCore.buildPricingBucketKey("codex", "gpt-foo", "2025-02-15"),
+      {
+        source: "codex",
+        totals,
+      },
+    ],
+  ]);
+
+  const edgeClient = createPricingEdgeClient({
+    aliasRows: [
+      {
+        usage_model: "gpt-foo",
+        canonical_model: "alpha",
+        display_name: "Alpha",
+        effective_from: "2025-02-01",
+        active: true,
+      },
+    ],
+    profileRows: [
+      {
+        model: "alpha",
+        source: "openrouter",
+        effective_from: "2025-02-01",
+        active: true,
+        input_rate_micro_per_million: 1000000,
+        cached_input_rate_micro_per_million: 0,
+        output_rate_micro_per_million: 1000000,
+        reasoning_output_rate_micro_per_million: 1000000,
+      },
+    ],
+  });
+
+  const { pricingSummary, aggregatePayload } = await usagePricingCore.resolveAggregateUsagePayload({
+    edgeClient,
+    canonicalModel: null,
+    effectiveDate: "2025-02-15",
+    state,
+    hasModelParam: true,
+    defaultModel: "unknown",
+  });
+
+  assert.equal(pricingSummary.impliedModelId, "alpha");
+  assert.equal(aggregatePayload.selection.model_id, "alpha");
+  assert.equal(aggregatePayload.selection.model, "Alpha");
+  assert.equal(aggregatePayload.summary.totals.total_cost_usd, "2.000000");
+});
+
 test("usage pricing core builds model breakdown sources from shared state", () => {
   const state = usagePricingCore.createModelBreakdownState();
 

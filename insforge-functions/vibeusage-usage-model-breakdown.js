@@ -2399,6 +2399,39 @@ function buildAggregateUsagePayload({
     }
   };
 }
+async function resolveAggregateUsagePayload({
+  edgeClient,
+  canonicalModel,
+  effectiveDate,
+  state,
+  hasModelParam = false,
+  defaultModel = DEFAULT_MODEL3
+} = {}) {
+  const aggregateState = state || createAggregateUsageState({
+    hasModelParam,
+    defaultModel
+  });
+  const pricingSummary = await resolveAggregateUsagePricing({
+    edgeClient,
+    canonicalModel,
+    distinctModels: aggregateState.distinctModels,
+    distinctUsageModels: aggregateState.distinctUsageModels,
+    pricingBuckets: aggregateState.pricingBuckets,
+    effectiveDate,
+    sourcesMap: aggregateState.sourcesMap,
+    totals: aggregateState.totals,
+    defaultModel
+  });
+  const aggregatePayload = buildAggregateUsagePayload({
+    totals: aggregateState.totals,
+    pricingSummary,
+    hasModelParam
+  });
+  return {
+    pricingSummary,
+    aggregatePayload
+  };
+}
 function createModelBreakdownState() {
   return {
     sourcesMap: /* @__PURE__ */ new Map()
@@ -2654,6 +2687,7 @@ if (!globalThis[CORE_KEY16]) {
       accumulateRollingUsageRow,
       buildRollingUsagePayload,
       buildAggregateUsagePayload,
+      resolveAggregateUsagePayload,
       createModelBreakdownState,
       accumulateModelBreakdownRow,
       attributeModelBreakdownBucketCost,

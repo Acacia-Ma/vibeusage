@@ -28,8 +28,7 @@ const {
   createRollingUsageState,
   accumulateRollingUsageRow,
   buildRollingUsagePayload,
-  buildAggregateUsagePayload,
-  resolveAggregateUsagePricing,
+  resolveAggregateUsagePayload,
 } = usagePricingCore;
 
 export default withRequestLogging("vibeusage-usage-summary", async function (request, logger) {
@@ -189,21 +188,13 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
     rollup_hit: false,
   });
 
-  const pricingSummary = await resolveAggregateUsagePricing({
+  const { aggregatePayload } = await resolveAggregateUsagePayload({
     edgeClient: auth.edgeClient,
     canonicalModel,
-    distinctModels: aggregateState.distinctModels,
-    distinctUsageModels: aggregateState.distinctUsageModels,
-    pricingBuckets: aggregateState.pricingBuckets,
     effectiveDate: to,
-    sourcesMap: aggregateState.sourcesMap,
-    totals: aggregateState.totals,
-    defaultModel: DEFAULT_MODEL,
-  });
-  const aggregatePayload = buildAggregateUsagePayload({
-    totals: aggregateState.totals,
-    pricingSummary,
+    state: aggregateState,
     hasModelParam,
+    defaultModel: DEFAULT_MODEL,
   });
 
   const responsePayload = {

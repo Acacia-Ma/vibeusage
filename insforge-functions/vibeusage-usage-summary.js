@@ -2138,6 +2138,39 @@ function buildAggregateUsagePayload({
     }
   };
 }
+async function resolveAggregateUsagePayload({
+  edgeClient,
+  canonicalModel,
+  effectiveDate,
+  state,
+  hasModelParam = false,
+  defaultModel = DEFAULT_MODEL3
+} = {}) {
+  const aggregateState = state || createAggregateUsageState({
+    hasModelParam,
+    defaultModel
+  });
+  const pricingSummary = await resolveAggregateUsagePricing({
+    edgeClient,
+    canonicalModel,
+    distinctModels: aggregateState.distinctModels,
+    distinctUsageModels: aggregateState.distinctUsageModels,
+    pricingBuckets: aggregateState.pricingBuckets,
+    effectiveDate,
+    sourcesMap: aggregateState.sourcesMap,
+    totals: aggregateState.totals,
+    defaultModel
+  });
+  const aggregatePayload = buildAggregateUsagePayload({
+    totals: aggregateState.totals,
+    pricingSummary,
+    hasModelParam
+  });
+  return {
+    pricingSummary,
+    aggregatePayload
+  };
+}
 function createModelBreakdownState() {
   return {
     sourcesMap: /* @__PURE__ */ new Map()
@@ -2393,6 +2426,7 @@ if (!globalThis[CORE_KEY14]) {
       accumulateRollingUsageRow,
       buildRollingUsagePayload,
       buildAggregateUsagePayload,
+      resolveAggregateUsagePayload,
       createModelBreakdownState,
       accumulateModelBreakdownRow,
       attributeModelBreakdownBucketCost,
@@ -2826,8 +2860,7 @@ var {
   createRollingUsageState: createRollingUsageState2,
   accumulateRollingUsageRow: accumulateRollingUsageRow2,
   buildRollingUsagePayload: buildRollingUsagePayload2,
-  buildAggregateUsagePayload: buildAggregateUsagePayload2,
-  resolveAggregateUsagePricing: resolveAggregateUsagePricing2
+  resolveAggregateUsagePayload: resolveAggregateUsagePayload2
 } = usagePricingCore2;
 var vibeusage_usage_summary_default = withRequestLogging2("vibeusage-usage-summary", async function(request, logger) {
   const opt = handleOptions2(request);
@@ -2965,21 +2998,13 @@ var vibeusage_usage_summary_default = withRequestLogging2("vibeusage-usage-summa
     tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null,
     rollup_hit: false
   });
-  const pricingSummary = await resolveAggregateUsagePricing2({
+  const { aggregatePayload } = await resolveAggregateUsagePayload2({
     edgeClient: auth.edgeClient,
     canonicalModel,
-    distinctModels: aggregateState.distinctModels,
-    distinctUsageModels: aggregateState.distinctUsageModels,
-    pricingBuckets: aggregateState.pricingBuckets,
     effectiveDate: to,
-    sourcesMap: aggregateState.sourcesMap,
-    totals: aggregateState.totals,
+    state: aggregateState,
+    hasModelParam,
     defaultModel: DEFAULT_MODEL4
-  });
-  const aggregatePayload = buildAggregateUsagePayload2({
-    totals: aggregateState.totals,
-    pricingSummary,
-    hasModelParam
   });
   const responsePayload = {
     from,

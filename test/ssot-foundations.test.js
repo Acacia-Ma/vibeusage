@@ -400,7 +400,7 @@ test("backend usage pricing semantics flow through shared cores", () => {
   );
   assert.match(
     read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
-    /resolveAggregateUsagePricing/,
+    /resolveAggregateUsagePayload/,
   );
   assert.match(
     read("insforge-src/functions-esm/vibeusage-usage-daily.js"),
@@ -408,7 +408,7 @@ test("backend usage pricing semantics flow through shared cores", () => {
   );
   assert.match(
     read("insforge-src/functions-esm/vibeusage-usage-daily.js"),
-    /resolveAggregateUsagePricing/,
+    /resolveAggregateUsagePayload/,
   );
   assert.match(
     read("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js"),
@@ -420,6 +420,7 @@ test("backend usage pricing semantics flow through shared cores", () => {
   assert.match(read("insforge-src/shared/usage-pricing-core.js"), /accumulateRollingUsageRow/);
   assert.match(read("insforge-src/shared/usage-pricing-core.js"), /buildRollingUsagePayload/);
   assert.match(read("insforge-src/shared/usage-pricing-core.js"), /buildAggregateUsagePayload/);
+  assert.match(read("insforge-src/shared/usage-pricing-core.js"), /resolveAggregateUsagePayload/);
   assert.match(read("insforge-src/shared/usage-pricing-core.js"), /createModelBreakdownState/);
   assert.match(read("insforge-src/shared/usage-pricing-core.js"), /accumulateModelBreakdownRow/);
   assert.match(read("insforge-src/shared/usage-pricing-core.js"), /attributeModelBreakdownBucketCost/);
@@ -442,7 +443,11 @@ test("backend usage pricing semantics flow through shared cores", () => {
   );
   assert.match(
     read("insforge-src/functions-esm/vibeusage-usage-daily.js"),
-    /buildAggregateUsagePayload/,
+    /resolveAggregateUsagePayload/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
+    /resolveAggregateUsagePayload/,
   );
   assert.match(
     read("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js"),
@@ -469,6 +474,8 @@ test("backend usage pricing semantics flow through shared cores", () => {
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /resolveBillableTotals/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /buildPricingMetadata/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /formatUsdFromMicros/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /resolveAggregateUsagePricing/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /buildAggregateUsagePayload/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /applyTotalsAndBillable/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /const sumHourlyRange = async/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /accumulateAggregateUsageRow/);
@@ -476,6 +483,8 @@ test("backend usage pricing semantics flow through shared cores", () => {
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /buildPricingBucketKey/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /buildPricingMetadata/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /formatUsdFromMicros/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /resolveAggregateUsagePricing/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /buildAggregateUsagePayload/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js"), /function getSourceEntry/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js"), /function getCanonicalEntry/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js"), /function formatTotals/);
