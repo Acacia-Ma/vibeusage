@@ -1,21 +1,16 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
 import { collectAggregateUsageRange } from "./shared/core/usage-aggregate-collector.js";
+import { resolveAggregateUsageRequestContext } from "./shared/core/usage-aggregate-request.js";
 import { applyDailyBucket, initDailyBuckets } from "./shared/core/usage-daily.js";
 import { createUsageJsonResponder } from "./shared/core/usage-response.js";
 import {
   getUsageTimeZoneContext,
-  resolveUsageDateRangeLocal,
 } from "./shared/date.js";
 import { getBaseUrl } from "./shared/env.js";
 import { handleOptions } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
-import { getSourceParam } from "./shared/source.js";
 import "../shared/usage-pricing-core.mjs";
 import "../shared/usage-metrics-core.mjs";
-import {
-  getModelParam,
-  resolveUsageFilterContext,
-} from "./shared/usage-summary-support.js";
 
 const DEFAULT_MODEL = "unknown";
 const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
@@ -40,30 +35,32 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
   if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
 
   const tzContext = getUsageTimeZoneContext(url);
-  const sourceResult = getSourceParam(url);
-  if (!sourceResult.ok) return respond({ error: sourceResult.error }, 400, 0);
-  const source = sourceResult.source;
-  const modelResult = getModelParam(url);
-  if (!modelResult.ok) return respond({ error: modelResult.error }, 400, 0);
-  const model = modelResult.model;
-  const hasModelParam = model != null;
-  const range = resolveUsageDateRangeLocal({
-    fromRaw: url.searchParams.get("from"),
-    toRaw: url.searchParams.get("to"),
-    tzContext,
-  });
-  if (!range.ok) return respond({ error: range.error }, 400, 0);
-  const { from, to, dayKeys, startIso, endIso } = range;
 
   const auth = await getAccessContext({ baseUrl: getBaseUrl(), bearer, allowPublic: true });
   if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
 
-  const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
-    await resolveUsageFilterContext({
-      edgeClient: auth.edgeClient,
-      canonicalModel: model,
-      effectiveDate: to,
-    });
+  const requestContext = await resolveAggregateUsageRequestContext({
+    url,
+    tzContext,
+    edgeClient: auth.edgeClient,
+    auth,
+  });
+  if (!requestContext.ok) {
+    return respond({ error: requestContext.error }, requestContext.status || 400, 0);
+  }
+  const {
+    source,
+    hasModelParam,
+    from,
+    to,
+    dayKeys,
+    startIso,
+    endIso,
+    canonicalModel,
+    usageModels,
+    hasModelFilter,
+    aliasTimeline,
+  } = requestContext;
 
   const { buckets } = initDailyBuckets(dayKeys);
   const aggregateState = createAggregateUsageState({

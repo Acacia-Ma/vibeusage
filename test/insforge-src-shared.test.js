@@ -28,6 +28,8 @@ require("../insforge-src/shared/usage-row-core");
 const usageRowCore = globalThis.__vibeusageUsageRowCore;
 require("../insforge-src/shared/usage-row-collector-core");
 const usageRowCollectorCore = globalThis.__vibeusageUsageRowCollectorCore;
+require("../insforge-src/shared/usage-aggregate-request-core");
+const usageAggregateRequestCore = globalThis.__vibeusageUsageAggregateRequestCore;
 require("../insforge-src/shared/usage-hourly-core");
 const usageHourlyCore = globalThis.__vibeusageUsageHourlyCore;
 require("../insforge-src/shared/usage-heatmap-core");
@@ -39,6 +41,7 @@ const projectUsageCore = globalThis.__vibeusageProjectUsageCore;
 require("../insforge-src/shared/usage-pricing-core");
 const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 const usageAggregateCollector = require("../insforge-src/shared/core/usage-aggregate-collector");
+const usageAggregateRequest = require("../insforge-src/shared/core/usage-aggregate-request");
 const usageRowCollector = require("../insforge-src/shared/core/usage-row-collector");
 const usageResponse = require("../insforge-src/shared/core/usage-response");
 
@@ -991,6 +994,50 @@ test("usage aggregate collector core collects aggregate usage ranges through sha
   assert.equal(state.totals.total_tokens, 10n);
   assert.equal(state.totals.billable_total_tokens, 10n);
   assert.deepEqual(accumulated, ["10"]);
+});
+
+test("usage aggregate request core resolves local range and filter context", async () => {
+  const edgeClient = createPricingEdgeClient({
+    aliasRows: [
+      {
+        usage_model: "gpt-foo",
+        canonical_model: "alpha",
+        display_name: "Alpha",
+        effective_from: "2025-02-01T00:00:00Z",
+        active: true,
+      },
+    ],
+  });
+
+  const context = await usageAggregateRequest.resolveAggregateUsageRequestContext({
+    url: new URL(
+      "https://example.com/functions/v1/vibeusage-usage-summary?source=openrouter&model=gpt-foo&from=2025-02-15&to=2025-02-16",
+    ),
+    tzContext: { offsetMinutes: 540 },
+    edgeClient,
+    auth: { userId: "user-1" },
+  });
+
+  assert.equal(context.ok, true);
+  assert.equal(context.source, "openrouter");
+  assert.equal(context.model, "gpt-foo");
+  assert.equal(context.hasModelParam, true);
+  assert.equal(context.from, "2025-02-15");
+  assert.equal(context.to, "2025-02-16");
+  assert.deepEqual(context.dayKeys, ["2025-02-15", "2025-02-16"]);
+  assert.equal(context.startIso, "2025-02-14T15:00:00.000Z");
+  assert.equal(context.endIso, "2025-02-16T15:00:00.000Z");
+  assert.equal(context.canonicalModel, "gpt-foo");
+  assert.deepEqual(context.usageModels, ["gpt-foo"]);
+  assert.equal(context.hasModelFilter, true);
+  assert.equal(context.auth.userId, "user-1");
+  assert.deepEqual(context.aliasTimeline.get("gpt-foo"), [
+    {
+      model_id: "alpha",
+      model: "Alpha",
+      effective_from: "2025-02-01",
+    },
+  ]);
 });
 
 test("usage row collector core scans hourly rows through shared normalization and filtering", async () => {

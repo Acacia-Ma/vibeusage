@@ -57,8 +57,22 @@ test("backend model semantics flow through a single shared core", () => {
   );
   assert.match(read("insforge-src/shared/model-identity.js"), /resolveUsageFilterContext/);
   assert.match(read("insforge-src/shared/model-identity.js"), /resolveUsageTimelineContext/);
-  assert.match(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /resolveUsageFilterContext/);
-  assert.match(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /resolveUsageFilterContext/);
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
+    /shared\/core\/usage-aggregate-request\.js/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-daily.js"),
+    /shared\/core\/usage-aggregate-request\.js/,
+  );
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
+    /resolveUsageFilterContext/,
+  );
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-usage-daily.js"),
+    /resolveUsageFilterContext/,
+  );
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-monthly.js"), /resolveUsageFilterContext/);
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /resolveUsageFilterContext/);
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-heatmap.js"), /resolveUsageFilterContext/);
@@ -249,8 +263,22 @@ test("backend date and logging helpers flow through shared cores", () => {
   assert.match(read("insforge-src/functions-esm/shared/logging.js"), /shared\/logging-core\.mjs/);
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /normalizeIso/);
   assert.match(read("insforge-src/functions-esm/shared/date.js"), /resolveUsageDateRangeLocal/);
-  assert.match(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /resolveUsageDateRangeLocal/);
-  assert.match(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /resolveUsageDateRangeLocal/);
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
+    /shared\/core\/usage-aggregate-request\.js/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-daily.js"),
+    /shared\/core\/usage-aggregate-request\.js/,
+  );
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
+    /resolveUsageDateRangeLocal/,
+  );
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-usage-daily.js"),
+    /resolveUsageDateRangeLocal/,
+  );
   assert.match(read("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js"), /resolveUsageDateRangeLocal/);
   assert.match(read("insforge-src/functions\/vibeusage-sync-ping.js"), /require\(\"..\/shared\/date\"\)/);
   assert.match(read("insforge-src/shared\/db\/ingest.js"), /require\(\"..\/date\"\)/);
@@ -556,7 +584,7 @@ test("backend usage pricing semantics flow through shared cores", () => {
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js"), /function resolveCostMicros/);
   assert.match(
     read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
-    /shared\/source\.js/,
+    /shared\/core\/usage-aggregate-request\.js/,
   );
 });
 
@@ -597,6 +625,67 @@ test("backend aggregate usage collection semantics flow through dedicated shared
   assert.match(aggregateCollectorCoreJs, /collectAggregateUsageRange/);
   assert.match(aggregateCollectorCoreJs, /shouldAccumulateRow/);
   assert.match(aggregateCollectorCoreJs, /onAccumulatedRow/);
+});
+
+test("backend aggregate usage request semantics flow through dedicated shared core", () => {
+  const aggregateRequestCoreJs = read("insforge-src/shared/usage-aggregate-request-core.js");
+  const aggregateRequestCoreMjs = read("insforge-src/shared/usage-aggregate-request-core.mjs");
+  const stripAggregateRequestPrelude = (content) =>
+    stripModulePrelude(content).replace(/^"use strict";\n/, "").replace(/^\s+/, "");
+  assert.equal(
+    stripAggregateRequestPrelude(aggregateRequestCoreJs),
+    stripAggregateRequestPrelude(aggregateRequestCoreMjs),
+  );
+  for (const dependency of ["date-core", "runtime-primitives-core", "usage-model-core"]) {
+    assert.match(aggregateRequestCoreJs, new RegExp(`require\\(\\\"\\./${dependency}\\\"\\)`));
+    assert.match(aggregateRequestCoreMjs, new RegExp(`import \\\"\\./${dependency}\\.mjs\\\"`));
+  }
+  assert.match(
+    read("insforge-src/shared/core/usage-aggregate-request.js"),
+    /usage-aggregate-request-core/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/shared/core/usage-aggregate-request.js"),
+    /shared\/usage-aggregate-request-core\.mjs/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
+    /shared\/core\/usage-aggregate-request\.js/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-daily.js"),
+    /shared\/core\/usage-aggregate-request\.js/,
+  );
+  assert.match(aggregateRequestCoreJs, /resolveAggregateUsageRequestContext/);
+  assert.match(aggregateRequestCoreJs, /resolveUsageDateRangeLocal/);
+  assert.match(aggregateRequestCoreJs, /resolveUsageFilterContext/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /getSourceParam/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /getModelParam/);
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
+    /shared\/source\.js/,
+  );
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
+    /resolveUsageDateRangeLocal/,
+  );
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
+    /resolveUsageFilterContext/,
+  );
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-usage-daily.js"),
+    /getSourceParam/,
+  );
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /getModelParam/);
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-usage-daily.js"),
+    /resolveUsageDateRangeLocal/,
+  );
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-usage-daily.js"),
+    /resolveUsageFilterContext/,
+  );
 });
 
 test("backend hourly usage row semantics flow through shared core", () => {
