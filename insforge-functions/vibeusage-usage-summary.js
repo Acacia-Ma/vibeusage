@@ -1773,13 +1773,6 @@ var createLogger2 = loggingCore.createLogger;
 var withRequestLogging2 = loggingCore.withRequestLogging;
 var logSlowQuery2 = loggingCore.logSlowQuery;
 
-// insforge-src/functions-esm/shared/numbers.js
-var runtimePrimitivesCore2 = globalThis.__vibeusageRuntimePrimitivesCore;
-if (!runtimePrimitivesCore2) throw new Error("runtime primitives core not initialized");
-var toBigInt2 = runtimePrimitivesCore2.toBigInt;
-var toPositiveIntOrNull2 = runtimePrimitivesCore2.toPositiveIntOrNull;
-var toPositiveInt2 = runtimePrimitivesCore2.toPositiveInt;
-
 // insforge-src/shared/pricing-core.mjs
 var CORE_KEY14 = "__vibeusagePricingCore";
 var MICROS_PER_DOLLAR = 1000000n;
@@ -1795,14 +1788,14 @@ var DEFAULT_PROFILE = {
     reasoning_output: 14e6
   }
 };
-var runtimePrimitivesCore3 = globalThis.__vibeusageRuntimePrimitivesCore;
-if (!runtimePrimitivesCore3) throw new Error("runtime primitives core not initialized");
+var runtimePrimitivesCore2 = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore2) throw new Error("runtime primitives core not initialized");
 var usageModelCore4 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore4) throw new Error("usage-model core not initialized");
 var envCore5 = globalThis.__vibeusageEnvCore;
 if (!envCore5) throw new Error("env core not initialized");
 function normalizeSource2(value) {
-  return runtimePrimitivesCore3.normalizeSource(value);
+  return runtimePrimitivesCore2.normalizeSource(value);
 }
 function normalizeModelValue(value) {
   const normalized = usageModelCore4.normalizeModel?.(value) || null;
@@ -1868,11 +1861,11 @@ async function resolvePricingProfile({ edgeClient, effectiveDate, model, source 
 }
 function computeUsageCost(totals, profile) {
   const pricing = normalizeProfile(profile || DEFAULT_PROFILE);
-  const input = runtimePrimitivesCore3.toBigInt(totals?.input_tokens);
-  const cached = runtimePrimitivesCore3.toBigInt(totals?.cached_input_tokens);
-  const output = runtimePrimitivesCore3.toBigInt(totals?.output_tokens);
-  const reasoning = runtimePrimitivesCore3.toBigInt(totals?.reasoning_output_tokens);
-  const total = runtimePrimitivesCore3.toBigInt(totals?.total_tokens);
+  const input = runtimePrimitivesCore2.toBigInt(totals?.input_tokens);
+  const cached = runtimePrimitivesCore2.toBigInt(totals?.cached_input_tokens);
+  const output = runtimePrimitivesCore2.toBigInt(totals?.output_tokens);
+  const reasoning = runtimePrimitivesCore2.toBigInt(totals?.reasoning_output_tokens);
+  const total = runtimePrimitivesCore2.toBigInt(totals?.total_tokens);
   const sumAdd = input + cached + output + reasoning;
   const sumOverlap = input + output;
   const canOverlap = cached <= input && reasoning <= output;
@@ -1911,7 +1904,7 @@ function buildPricingMetadata({ profile, pricingMode }) {
   };
 }
 function formatUsdFromMicros(micros) {
-  const value = runtimePrimitivesCore3.toBigInt(micros);
+  const value = runtimePrimitivesCore2.toBigInt(micros);
   const dollars = value / MICROS_PER_DOLLAR;
   const remainder = value % MICROS_PER_DOLLAR;
   return `${dollars.toString()}.${remainder.toString().padStart(6, "0")}`;
@@ -1931,12 +1924,12 @@ function normalizeProfile(profile) {
     source: typeof profile.source === "string" ? profile.source : DEFAULT_PROFILE.source,
     effective_from: typeof profile.effective_from === "string" ? profile.effective_from : DEFAULT_PROFILE.effective_from,
     rates_micro_per_million: {
-      input: runtimePrimitivesCore3.toPositiveInt(profile?.rates_micro_per_million?.input),
-      cached_input: runtimePrimitivesCore3.toPositiveInt(
+      input: runtimePrimitivesCore2.toPositiveInt(profile?.rates_micro_per_million?.input),
+      cached_input: runtimePrimitivesCore2.toPositiveInt(
         profile?.rates_micro_per_million?.cached_input
       ),
-      output: runtimePrimitivesCore3.toPositiveInt(profile?.rates_micro_per_million?.output),
-      reasoning_output: runtimePrimitivesCore3.toPositiveInt(
+      output: runtimePrimitivesCore2.toPositiveInt(profile?.rates_micro_per_million?.output),
+      reasoning_output: runtimePrimitivesCore2.toPositiveInt(
         profile?.rates_micro_per_million?.reasoning_output
       )
     }
@@ -1967,19 +1960,19 @@ var buildPricingMetadata2 = pricingCore.buildPricingMetadata;
 var formatUsdFromMicros2 = pricingCore.formatUsdFromMicros;
 
 // insforge-src/functions-esm/shared/source.js
-var runtimePrimitivesCore4 = globalThis.__vibeusageRuntimePrimitivesCore;
-if (!runtimePrimitivesCore4) throw new Error("runtime primitives core not initialized");
-var MAX_SOURCE_LENGTH2 = runtimePrimitivesCore4.MAX_SOURCE_LENGTH;
-var normalizeSource3 = runtimePrimitivesCore4.normalizeSource;
-var getSourceParam2 = runtimePrimitivesCore4.getSourceParam;
+var runtimePrimitivesCore3 = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore3) throw new Error("runtime primitives core not initialized");
+var MAX_SOURCE_LENGTH2 = runtimePrimitivesCore3.MAX_SOURCE_LENGTH;
+var normalizeSource3 = runtimePrimitivesCore3.normalizeSource;
+var getSourceParam2 = runtimePrimitivesCore3.getSourceParam;
 
 // insforge-src/shared/usage-metrics-core.mjs
 var CORE_KEY15 = "__vibeusageUsageMetricsCore";
 var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
 var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
 var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
-var runtimePrimitivesCore5 = globalThis.__vibeusageRuntimePrimitivesCore;
-if (!runtimePrimitivesCore5) throw new Error("runtime primitives core not initialized");
+var runtimePrimitivesCore4 = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore4) throw new Error("runtime primitives core not initialized");
 function createTotals() {
   return {
     total_tokens: 0n,
@@ -1992,20 +1985,20 @@ function createTotals() {
 }
 function addRowTotals(target, row) {
   if (!target || !row) return;
-  target.total_tokens += runtimePrimitivesCore5.toBigInt(row?.total_tokens);
-  target.billable_total_tokens += runtimePrimitivesCore5.toBigInt(row?.billable_total_tokens);
-  target.input_tokens += runtimePrimitivesCore5.toBigInt(row?.input_tokens);
-  target.cached_input_tokens += runtimePrimitivesCore5.toBigInt(row?.cached_input_tokens);
-  target.output_tokens += runtimePrimitivesCore5.toBigInt(row?.output_tokens);
-  target.reasoning_output_tokens += runtimePrimitivesCore5.toBigInt(row?.reasoning_output_tokens);
+  target.total_tokens += runtimePrimitivesCore4.toBigInt(row?.total_tokens);
+  target.billable_total_tokens += runtimePrimitivesCore4.toBigInt(row?.billable_total_tokens);
+  target.input_tokens += runtimePrimitivesCore4.toBigInt(row?.input_tokens);
+  target.cached_input_tokens += runtimePrimitivesCore4.toBigInt(row?.cached_input_tokens);
+  target.output_tokens += runtimePrimitivesCore4.toBigInt(row?.output_tokens);
+  target.reasoning_output_tokens += runtimePrimitivesCore4.toBigInt(row?.reasoning_output_tokens);
 }
 function computeBillableTotalTokens({ source, totals } = {}) {
-  const normalizedSource = runtimePrimitivesCore5.normalizeSource(source) || "unknown";
-  const input = runtimePrimitivesCore5.toBigInt(totals?.input_tokens);
-  const cached = runtimePrimitivesCore5.toBigInt(totals?.cached_input_tokens);
-  const output = runtimePrimitivesCore5.toBigInt(totals?.output_tokens);
-  const reasoning = runtimePrimitivesCore5.toBigInt(totals?.reasoning_output_tokens);
-  const total = runtimePrimitivesCore5.toBigInt(totals?.total_tokens);
+  const normalizedSource = runtimePrimitivesCore4.normalizeSource(source) || "unknown";
+  const input = runtimePrimitivesCore4.toBigInt(totals?.input_tokens);
+  const cached = runtimePrimitivesCore4.toBigInt(totals?.cached_input_tokens);
+  const output = runtimePrimitivesCore4.toBigInt(totals?.output_tokens);
+  const reasoning = runtimePrimitivesCore4.toBigInt(totals?.reasoning_output_tokens);
+  const total = runtimePrimitivesCore4.toBigInt(totals?.total_tokens);
   const hasTotal = Boolean(totals && Object.prototype.hasOwnProperty.call(totals, "total_tokens"));
   if (BILLABLE_TOTAL.has(normalizedSource)) return total;
   if (BILLABLE_ADD_ALL.has(normalizedSource)) return input + cached + output + reasoning;
@@ -2024,14 +2017,14 @@ function resolveBillableTotals({
     row && Object.prototype.hasOwnProperty.call(row, billableField) && row[billableField] != null
   );
   const resolvedTotals = totals || row;
-  const billable = stored ? runtimePrimitivesCore5.toBigInt(row?.[billableField]) : computeBillableTotalTokens({ source, totals: resolvedTotals });
+  const billable = stored ? runtimePrimitivesCore4.toBigInt(row?.[billableField]) : computeBillableTotalTokens({ source, totals: resolvedTotals });
   return { billable, hasStoredBillable: stored };
 }
 function applyTotalsAndBillable({ totals, row, billable, hasStoredBillable } = {}) {
   if (!totals || !row) return;
   addRowTotals(totals, row);
   if (!hasStoredBillable) {
-    totals.billable_total_tokens += runtimePrimitivesCore5.toBigInt(billable);
+    totals.billable_total_tokens += runtimePrimitivesCore4.toBigInt(billable);
   }
 }
 function getSourceEntry(map, source) {
@@ -2098,8 +2091,10 @@ var usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
 var pricingCore2 = globalThis.__vibeusagePricingCore;
 if (!pricingCore2) throw new Error("pricing core not initialized");
-var runtimePrimitivesCore6 = globalThis.__vibeusageRuntimePrimitivesCore;
-if (!runtimePrimitivesCore6) throw new Error("runtime primitives core not initialized");
+var runtimePrimitivesCore5 = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore5) throw new Error("runtime primitives core not initialized");
+var dateCore2 = globalThis.__vibeusageDateCore;
+if (!dateCore2) throw new Error("date core not initialized");
 var {
   applyModelIdentity: applyModelIdentity2,
   extractDateKey: extractDateKey3,
@@ -2120,6 +2115,7 @@ var {
   resolveDisplayName: resolveDisplayName2
 } = usageMetricsCore;
 var { resolvePricingProfile: resolvePricingProfile3, computeUsageCost: computeUsageCost3 } = pricingCore2;
+var { formatLocalDateKey: formatLocalDateKey3, listDateStrings: listDateStrings3 } = dateCore2;
 function createAggregateUsageState({
   hasModelParam = false,
   defaultModel = DEFAULT_MODEL2
@@ -2148,7 +2144,7 @@ function accumulateAggregateUsageRow({
       sourceKey: defaultSource
     };
   }
-  const sourceKey = runtimePrimitivesCore6.normalizeSource(row?.source) || defaultSource;
+  const sourceKey = runtimePrimitivesCore5.normalizeSource(row?.source) || defaultSource;
   const { billable, hasStoredBillable } = resolveBillableTotals2({ row, source: sourceKey });
   applyTotalsAndBillable2({ totals: state.totals, row, billable, hasStoredBillable });
   const sourceEntry = getSourceEntry2(state.sourcesMap, sourceKey);
@@ -2174,6 +2170,70 @@ function accumulateAggregateUsageRow({
     hasStoredBillable,
     normalizedModel,
     sourceKey
+  };
+}
+function createRollingUsageState() {
+  return {
+    totals: createTotals2(),
+    activeByDay: /* @__PURE__ */ new Map()
+  };
+}
+function accumulateRollingUsageRow({
+  state,
+  row,
+  tzContext,
+  defaultSource = "codex"
+} = {}) {
+  if (!state || !row) {
+    return {
+      billable: 0n,
+      dayKey: null,
+      hasStoredBillable: false,
+      sourceKey: defaultSource
+    };
+  }
+  const sourceKey = runtimePrimitivesCore5.normalizeSource(row?.source) || defaultSource;
+  const { billable, hasStoredBillable } = resolveBillableTotals2({ row, source: sourceKey });
+  applyTotalsAndBillable2({ totals: state.totals, row, billable, hasStoredBillable });
+  let dayKey = null;
+  if (row?.hour_start) {
+    const date = new Date(row.hour_start);
+    if (Number.isFinite(date.getTime())) {
+      dayKey = formatLocalDateKey3(date, tzContext);
+    }
+  }
+  if (dayKey) {
+    const billableTokens = hasStoredBillable ? runtimePrimitivesCore5.toBigInt(row?.billable_total_tokens) : billable;
+    if (billableTokens > 0n) {
+      const prev = state.activeByDay.get(dayKey) || 0n;
+      state.activeByDay.set(dayKey, prev + billableTokens);
+    }
+  }
+  return {
+    billable,
+    dayKey,
+    hasStoredBillable,
+    sourceKey
+  };
+}
+function buildRollingUsagePayload({
+  state,
+  fromDay,
+  toDay
+} = {}) {
+  const windowDays = listDateStrings3(fromDay, toDay).length;
+  const activeDays = state?.activeByDay instanceof Map ? Array.from(state.activeByDay.values()).filter((value) => value > 0n).length : 0;
+  const billableTotalTokens = runtimePrimitivesCore5.toBigInt(state?.totals?.billable_total_tokens);
+  const avgPerActiveDay = activeDays > 0 ? billableTotalTokens / BigInt(activeDays) : 0n;
+  const avgPerDay = windowDays > 0 ? billableTotalTokens / BigInt(windowDays) : 0n;
+  return {
+    from: fromDay,
+    to: toDay,
+    window_days: windowDays,
+    totals: { billable_total_tokens: billableTotalTokens.toString() },
+    active_days: activeDays,
+    avg_per_active_day: avgPerActiveDay.toString(),
+    avg_per_day: avgPerDay.toString()
   };
 }
 async function resolveBucketedUsagePricing({
@@ -2335,6 +2395,9 @@ if (!globalThis[CORE_KEY16]) {
     value: {
       createAggregateUsageState,
       accumulateAggregateUsageRow,
+      createRollingUsageState,
+      accumulateRollingUsageRow,
+      buildRollingUsagePayload,
       resolveBucketedUsagePricing,
       accumulateSourceCostMicros,
       resolveImpliedModelId,
@@ -2384,6 +2447,9 @@ if (!usagePricingCore) throw new Error("usage pricing core not initialized");
 var {
   createAggregateUsageState: createAggregateUsageState2,
   accumulateAggregateUsageRow: accumulateAggregateUsageRow2,
+  createRollingUsageState: createRollingUsageState2,
+  accumulateRollingUsageRow: accumulateRollingUsageRow2,
+  buildRollingUsagePayload: buildRollingUsagePayload2,
   resolveAggregateUsagePricing: resolveAggregateUsagePricing2
 } = usagePricingCore;
 var vibeusage_usage_summary_default = withRequestLogging2("vibeusage-usage-summary", async function(request, logger) {
@@ -2496,43 +2562,21 @@ var vibeusage_usage_summary_default = withRequestLogging2("vibeusage-usage-summa
     }
     const rangeStartIso = rangeStartUtc.toISOString();
     const rangeEndIso = rangeEndUtc.toISOString();
-    const rollingTotals = createTotals3();
-    const activeByDay = /* @__PURE__ */ new Map();
-    const updateActiveByDay = ({ row, billable, hasStoredBillable }) => {
-      let dayKey = null;
-      if (row?.hour_start) {
-        dayKey = formatLocalDateKey2(new Date(row.hour_start), tzContext);
-      }
-      if (!dayKey) return;
-      const billableTokens = hasStoredBillable ? toBigInt2(row?.billable_total_tokens) : billable;
-      if (billableTokens <= 0n) return;
-      const prev = activeByDay.get(dayKey) || 0n;
-      activeByDay.set(dayKey, prev + billableTokens);
-    };
+    const rollingState = createRollingUsageState2();
     const ingestRollingRow = (row) => {
       if (!shouldIncludeUsageRow2({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) return;
-      const sourceKey = normalizeSource3(row?.source) || DEFAULT_SOURCE;
-      const { billable, hasStoredBillable } = resolveBillableTotals3({ row, source: sourceKey });
-      applyTotalsAndBillable3({ totals: rollingTotals, row, billable, hasStoredBillable });
-      updateActiveByDay({ row, billable, hasStoredBillable });
+      accumulateRollingUsageRow2({
+        state: rollingState,
+        row,
+        tzContext,
+        defaultSource: DEFAULT_SOURCE
+      });
     };
     const sumRes = await sumHourlyRangeInto(rangeStartIso, rangeEndIso, ingestRollingRow);
     if (!sumRes.ok) return sumRes;
-    const windowDays = listDateStrings2(fromDay, toDay).length;
-    const activeDays = Array.from(activeByDay.values()).filter((value) => value > 0n).length;
-    const avg = activeDays > 0 ? rollingTotals.billable_total_tokens / BigInt(activeDays) : 0n;
-    const avgPerDay = windowDays > 0 ? rollingTotals.billable_total_tokens / BigInt(windowDays) : 0n;
     return {
       ok: true,
-      payload: {
-        from: fromDay,
-        to: toDay,
-        window_days: windowDays,
-        totals: { billable_total_tokens: rollingTotals.billable_total_tokens.toString() },
-        active_days: activeDays,
-        avg_per_active_day: avg.toString(),
-        avg_per_day: avgPerDay.toString()
-      }
+      payload: buildRollingUsagePayload2({ state: rollingState, fromDay, toDay })
     };
   };
   const hourlyRes = await sumHourlyRange(startIso, endIso);

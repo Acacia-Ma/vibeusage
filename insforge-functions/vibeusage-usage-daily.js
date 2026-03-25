@@ -2158,6 +2158,8 @@ var pricingCore2 = globalThis.__vibeusagePricingCore;
 if (!pricingCore2) throw new Error("pricing core not initialized");
 var runtimePrimitivesCore7 = globalThis.__vibeusageRuntimePrimitivesCore;
 if (!runtimePrimitivesCore7) throw new Error("runtime primitives core not initialized");
+var dateCore3 = globalThis.__vibeusageDateCore;
+if (!dateCore3) throw new Error("date core not initialized");
 var {
   applyModelIdentity: applyModelIdentity2,
   extractDateKey: extractDateKey3,
@@ -2178,6 +2180,7 @@ var {
   resolveDisplayName: resolveDisplayName2
 } = usageMetricsCore;
 var { resolvePricingProfile: resolvePricingProfile3, computeUsageCost: computeUsageCost3 } = pricingCore2;
+var { formatLocalDateKey: formatLocalDateKey4, listDateStrings: listDateStrings3 } = dateCore3;
 function createAggregateUsageState({
   hasModelParam = false,
   defaultModel = DEFAULT_MODEL2
@@ -2232,6 +2235,70 @@ function accumulateAggregateUsageRow({
     hasStoredBillable,
     normalizedModel,
     sourceKey
+  };
+}
+function createRollingUsageState() {
+  return {
+    totals: createTotals2(),
+    activeByDay: /* @__PURE__ */ new Map()
+  };
+}
+function accumulateRollingUsageRow({
+  state,
+  row,
+  tzContext,
+  defaultSource = "codex"
+} = {}) {
+  if (!state || !row) {
+    return {
+      billable: 0n,
+      dayKey: null,
+      hasStoredBillable: false,
+      sourceKey: defaultSource
+    };
+  }
+  const sourceKey = runtimePrimitivesCore7.normalizeSource(row?.source) || defaultSource;
+  const { billable, hasStoredBillable } = resolveBillableTotals2({ row, source: sourceKey });
+  applyTotalsAndBillable2({ totals: state.totals, row, billable, hasStoredBillable });
+  let dayKey = null;
+  if (row?.hour_start) {
+    const date = new Date(row.hour_start);
+    if (Number.isFinite(date.getTime())) {
+      dayKey = formatLocalDateKey4(date, tzContext);
+    }
+  }
+  if (dayKey) {
+    const billableTokens = hasStoredBillable ? runtimePrimitivesCore7.toBigInt(row?.billable_total_tokens) : billable;
+    if (billableTokens > 0n) {
+      const prev = state.activeByDay.get(dayKey) || 0n;
+      state.activeByDay.set(dayKey, prev + billableTokens);
+    }
+  }
+  return {
+    billable,
+    dayKey,
+    hasStoredBillable,
+    sourceKey
+  };
+}
+function buildRollingUsagePayload({
+  state,
+  fromDay,
+  toDay
+} = {}) {
+  const windowDays = listDateStrings3(fromDay, toDay).length;
+  const activeDays = state?.activeByDay instanceof Map ? Array.from(state.activeByDay.values()).filter((value) => value > 0n).length : 0;
+  const billableTotalTokens = runtimePrimitivesCore7.toBigInt(state?.totals?.billable_total_tokens);
+  const avgPerActiveDay = activeDays > 0 ? billableTotalTokens / BigInt(activeDays) : 0n;
+  const avgPerDay = windowDays > 0 ? billableTotalTokens / BigInt(windowDays) : 0n;
+  return {
+    from: fromDay,
+    to: toDay,
+    window_days: windowDays,
+    totals: { billable_total_tokens: billableTotalTokens.toString() },
+    active_days: activeDays,
+    avg_per_active_day: avgPerActiveDay.toString(),
+    avg_per_day: avgPerDay.toString()
   };
 }
 async function resolveBucketedUsagePricing({
@@ -2393,6 +2460,9 @@ if (!globalThis[CORE_KEY17]) {
     value: {
       createAggregateUsageState,
       accumulateAggregateUsageRow,
+      createRollingUsageState,
+      accumulateRollingUsageRow,
+      buildRollingUsagePayload,
       resolveBucketedUsagePricing,
       accumulateSourceCostMicros,
       resolveImpliedModelId,

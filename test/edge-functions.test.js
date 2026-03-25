@@ -4193,6 +4193,103 @@ test("vibeusage-usage-summary returns rolling metrics when requested", () =>
     assert.equal(body.rolling.last_30d.window_days, 30);
   }));
 
+test("vibeusage-usage-summary rolling window stays correct across paginated hourly pages", () =>
+  withRollupDisabled(async () => {
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
+
+    const userId = "55555555-5555-5555-5555-555555555555";
+    const userJwt = createUserJwt(userId);
+    const rangeCalls = [];
+
+    const firstPageRows = Array.from({ length: 1000 }, () => ({
+      hour_start: "2025-12-19T12:00:00.000Z",
+      source: "codex",
+      model: "gpt-4o",
+      billable_total_tokens: "1",
+      total_tokens: "1",
+      input_tokens: "1",
+      cached_input_tokens: "0",
+      output_tokens: "0",
+      reasoning_output_tokens: "0",
+    }));
+    const secondPageRows = [
+      {
+        hour_start: "2025-12-21T00:00:00.000Z",
+        source: "codex",
+        model: "gpt-4o",
+        billable_total_tokens: "500",
+        total_tokens: "500",
+        input_tokens: "500",
+        cached_input_tokens: "0",
+        output_tokens: "0",
+        reasoning_output_tokens: "0",
+      },
+    ];
+
+    globalThis.createClient = (args) => {
+      if (args && args.edgeFunctionToken === userJwt) {
+        return {
+          auth: {
+            getCurrentUser: async () => ({ data: { user: { id: userId } }, error: null }),
+          },
+          database: {
+            from: (table) => {
+              if (table === "vibeusage_tracker_hourly") {
+                const query = {
+                  select: () => query,
+                  eq: () => query,
+                  neq: () => query,
+                  gte: () => query,
+                  lt: () => query,
+                  lte: () => query,
+                  in: () => query,
+                  or: () => query,
+                  order: () => query,
+                  range: async (from, to) => {
+                    rangeCalls.push([from, to]);
+                    if (from === 0) return { data: firstPageRows, error: null };
+                    if (from === 1000) return { data: secondPageRows, error: null };
+                    return { data: [], error: null };
+                  },
+                };
+                return query;
+              }
+              if (table === "vibeusage_model_aliases") {
+                return createQueryMock({ rows: [] });
+              }
+              if (table === "vibeusage_pricing_profiles") {
+                return createQueryMock({ rows: [] });
+              }
+              if (table === "vibeusage_pricing_model_aliases") {
+                return createQueryMock({ rows: [] });
+              }
+              throw new Error(`Unexpected table ${table}`);
+            },
+          },
+        };
+      }
+      throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
+    };
+
+    const req = new Request(
+      "http://localhost/functions/vibeusage-usage-summary?from=2025-12-21&to=2025-12-21&rolling=1",
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${userJwt}` },
+      },
+    );
+
+    const res = await fn(req);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.rolling.last_7d.totals.billable_total_tokens, "1500");
+    assert.equal(body.rolling.last_7d.active_days, 2);
+    assert.equal(body.rolling.last_7d.avg_per_active_day, "750");
+    assert.equal(body.rolling.last_7d.avg_per_day, "214");
+    assert.ok(rangeCalls.some(([from, to]) => from === 0 && to === 999));
+    assert.ok(rangeCalls.some(([from, to]) => from === 1000 && to === 1999));
+  }));
+
 test("vibeusage-usage-summary counts rolling active days in local timezone", () =>
   withRollupDisabled(async () => {
     const fn = await loadEdgeFunction("vibeusage-usage-summary");

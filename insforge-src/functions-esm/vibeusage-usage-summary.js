@@ -4,7 +4,6 @@ import { shouldIncludeUsageRow } from "./shared/core/usage-filter.js";
 import {
   addDatePartsDays,
   formatDateParts,
-  formatLocalDateKey,
   getLocalParts,
   getUsageMaxDays,
   getUsageTimeZoneContext,
@@ -17,17 +16,10 @@ import { isDebugEnabled, withSlowQueryDebugPayload } from "./shared/debug.js";
 import { getBaseUrl } from "./shared/env.js";
 import { handleOptions, json } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
-import { toBigInt } from "./shared/numbers.js";
 import { buildPricingMetadata, formatUsdFromMicros } from "./shared/pricing.js";
-import { getSourceParam, normalizeSource } from "./shared/source.js";
+import { getSourceParam } from "./shared/source.js";
 import "../shared/usage-pricing-core.mjs";
-import {
-  applyTotalsAndBillable,
-  createTotals,
-  getModelParam,
-  resolveBillableTotals,
-  resolveUsageFilterContext,
-} from "./shared/usage-summary-support.js";
+import { getModelParam, resolveUsageFilterContext } from "./shared/usage-summary-support.js";
 
 const DEFAULT_SOURCE = "codex";
 const DEFAULT_MODEL = "unknown";
@@ -36,6 +28,9 @@ if (!usagePricingCore) throw new Error("usage pricing core not initialized");
 const {
   createAggregateUsageState,
   accumulateAggregateUsageRow,
+  createRollingUsageState,
+  accumulateRollingUsageRow,
+  buildRollingUsagePayload,
   resolveAggregateUsagePricing,
 } = usagePricingCore;
 
@@ -169,45 +164,22 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
 
     const rangeStartIso = rangeStartUtc.toISOString();
     const rangeEndIso = rangeEndUtc.toISOString();
-    const rollingTotals = createTotals();
-    const activeByDay = new Map();
-    const updateActiveByDay = ({ row, billable, hasStoredBillable }) => {
-      let dayKey = null;
-      if (row?.hour_start) {
-        dayKey = formatLocalDateKey(new Date(row.hour_start), tzContext);
-      }
-      if (!dayKey) return;
-      const billableTokens = hasStoredBillable ? toBigInt(row?.billable_total_tokens) : billable;
-      if (billableTokens <= 0n) return;
-      const prev = activeByDay.get(dayKey) || 0n;
-      activeByDay.set(dayKey, prev + billableTokens);
-    };
+    const rollingState = createRollingUsageState();
     const ingestRollingRow = (row) => {
       if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) return;
-      const sourceKey = normalizeSource(row?.source) || DEFAULT_SOURCE;
-      const { billable, hasStoredBillable } = resolveBillableTotals({ row, source: sourceKey });
-      applyTotalsAndBillable({ totals: rollingTotals, row, billable, hasStoredBillable });
-      updateActiveByDay({ row, billable, hasStoredBillable });
+      accumulateRollingUsageRow({
+        state: rollingState,
+        row,
+        tzContext,
+        defaultSource: DEFAULT_SOURCE,
+      });
     };
 
     const sumRes = await sumHourlyRangeInto(rangeStartIso, rangeEndIso, ingestRollingRow);
     if (!sumRes.ok) return sumRes;
-
-    const windowDays = listDateStrings(fromDay, toDay).length;
-    const activeDays = Array.from(activeByDay.values()).filter((value) => value > 0n).length;
-    const avg = activeDays > 0 ? rollingTotals.billable_total_tokens / BigInt(activeDays) : 0n;
-    const avgPerDay = windowDays > 0 ? rollingTotals.billable_total_tokens / BigInt(windowDays) : 0n;
     return {
       ok: true,
-      payload: {
-        from: fromDay,
-        to: toDay,
-        window_days: windowDays,
-        totals: { billable_total_tokens: rollingTotals.billable_total_tokens.toString() },
-        active_days: activeDays,
-        avg_per_active_day: avg.toString(),
-        avg_per_day: avgPerDay.toString(),
-      },
+      payload: buildRollingUsagePayload({ state: rollingState, fromDay, toDay }),
     };
   };
 

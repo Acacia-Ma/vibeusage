@@ -42,6 +42,7 @@
 - [x] 4.2.18 Converge usage-model alias timeline resolution through `usage-model-core` for pricing and model-breakdown consumers.
 - [x] 4.2.19 Converge hourly usage row pagination/orchestration through `usage-hourly-query-core` and shared db wrappers.
 - [x] 4.2.20 Converge summary/daily aggregate usage ingest state through `usage-pricing-core` and shared ESM consumers.
+- [x] 4.2.21 Converge summary rolling-window usage aggregation through `usage-pricing-core` while keeping time-range orchestration in the endpoint.
 
 ## 5. Verification
 

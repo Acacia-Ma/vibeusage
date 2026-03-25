@@ -526,3 +526,58 @@ test("usage pricing core accumulates aggregate usage rows into shared state", ()
   assert.deepEqual(Array.from(state.distinctUsageModels.values()), ["gpt-foo"]);
   assert.equal(state.pricingBuckets.size, 1);
 });
+
+test("usage pricing core accumulates rolling usage rows into shared state", () => {
+  const state = usagePricingCore.createRollingUsageState();
+
+  const stored = usagePricingCore.accumulateRollingUsageRow({
+    state,
+    row: {
+      hour_start: "2025-02-15T00:00:00.000Z",
+      source: "codex",
+      model: "gpt-foo",
+      billable_total_tokens: 7,
+      total_tokens: 9,
+      input_tokens: 4,
+      cached_input_tokens: 0,
+      output_tokens: 3,
+      reasoning_output_tokens: 0,
+    },
+    tzContext: { offsetMinutes: 0 },
+  });
+  const computed = usagePricingCore.accumulateRollingUsageRow({
+    state,
+    row: {
+      hour_start: "2025-02-16T00:00:00.000Z",
+      source: "codex",
+      model: "gpt-foo",
+      total_tokens: 5,
+      input_tokens: 3,
+      cached_input_tokens: 0,
+      output_tokens: 2,
+      reasoning_output_tokens: 0,
+    },
+    tzContext: { offsetMinutes: 0 },
+  });
+
+  assert.equal(stored.billable, 7n);
+  assert.equal(stored.dayKey, "2025-02-15");
+  assert.equal(computed.billable, 5n);
+  assert.equal(computed.dayKey, "2025-02-16");
+  assert.equal(state.totals.billable_total_tokens, 12n);
+
+  const payload = usagePricingCore.buildRollingUsagePayload({
+    state,
+    fromDay: "2025-02-10",
+    toDay: "2025-02-16",
+  });
+  assert.deepEqual(payload, {
+    from: "2025-02-10",
+    to: "2025-02-16",
+    window_days: 7,
+    totals: { billable_total_tokens: "12" },
+    active_days: 2,
+    avg_per_active_day: "6",
+    avg_per_day: "1",
+  });
+});

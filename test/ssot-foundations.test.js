@@ -288,6 +288,7 @@ test("backend usage pricing semantics flow through shared cores", () => {
   for (const dependency of [
     "runtime-primitives-core",
     "usage-model-core",
+    "date-core",
     "env-core",
     "pricing-core",
     "usage-metrics-core",
@@ -320,16 +321,29 @@ test("backend usage pricing semantics flow through shared cores", () => {
   );
   assert.match(read("insforge-src/shared/usage-pricing-core.js"), /createAggregateUsageState/);
   assert.match(read("insforge-src/shared/usage-pricing-core.js"), /accumulateAggregateUsageRow/);
+  assert.match(read("insforge-src/shared/usage-pricing-core.js"), /createRollingUsageState/);
+  assert.match(read("insforge-src/shared/usage-pricing-core.js"), /accumulateRollingUsageRow/);
+  assert.match(read("insforge-src/shared/usage-pricing-core.js"), /buildRollingUsagePayload/);
   assert.match(
     read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
     /accumulateAggregateUsageRow/,
   );
   assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
+    /accumulateRollingUsageRow/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-summary.js"),
+    /buildRollingUsagePayload/,
+  );
+  assert.match(
     read("insforge-src/functions-esm/vibeusage-usage-daily.js"),
     /accumulateAggregateUsageRow/,
   );
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /applyTotalsAndBillable/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /getSourceEntry/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /buildPricingBucketKey/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /resolveBillableTotals/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /applyTotalsAndBillable/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /getSourceEntry/);
   assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /buildPricingBucketKey/);
