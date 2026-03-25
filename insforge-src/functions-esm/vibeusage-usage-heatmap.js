@@ -1,5 +1,4 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
-import { shouldIncludeUsageRow } from "./shared/core/usage-filter.js";
 import {
   accumulateHeatmapDayValue,
   buildUsageHeatmapPayload,
@@ -7,8 +6,8 @@ import {
   normalizeHeatmapWeekStartsOn,
   normalizeHeatmapWeeks,
 } from "./shared/core/usage-heatmap.js";
+import { collectHourlyUsageRows } from "./shared/core/usage-row-collector.js";
 import { createUsageJsonResponder } from "./shared/core/usage-response.js";
-import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
 import {
   addDatePartsDays,
   addUtcDays,
@@ -29,7 +28,6 @@ import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
 import { getSourceParam } from "./shared/source.js";
 import {
   getModelParam,
-  resolveHourlyUsageRowState,
   resolveUsageFilterContext,
 } from "./shared/usage-summary-support.js";
 
@@ -90,31 +88,25 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
     const valuesByDay = new Map();
     const queryStartMs = Date.now();
     let rowCount = 0;
-    const { error, rowCount: scannedRows } = await forEachHourlyUsagePage({
+    const { error, rowCount: scannedRows } = await collectHourlyUsageRows({
       edgeClient: auth.edgeClient,
       userId: auth.userId,
       source,
       usageModels,
       canonicalModel,
+      hasModelFilter,
+      aliasTimeline,
+      effectiveDate: to,
       startIso,
       endIso,
       select:
         "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-      onPage: (rows) => {
-        for (const row of rows) {
-          const usageRow = resolveHourlyUsageRowState({
-            row,
-            source,
-            effectiveDate: to,
-          });
-          if (!usageRow) continue;
-          if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) continue;
-          accumulateHeatmapDayValue({
-            valuesByDay,
-            dayKey: formatDateUTC(usageRow.date),
-            billable: usageRow.billable,
-          });
-        }
+      onUsageRow: ({ usageRow }) => {
+        accumulateHeatmapDayValue({
+          valuesByDay,
+          dayKey: formatDateUTC(usageRow.date),
+          billable: usageRow.billable,
+        });
       },
     });
     rowCount += scannedRows;
@@ -191,31 +183,25 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
   const valuesByDay = new Map();
   const queryStartMs = Date.now();
   let rowCount = 0;
-  const { error, rowCount: scannedRows } = await forEachHourlyUsagePage({
+  const { error, rowCount: scannedRows } = await collectHourlyUsageRows({
     edgeClient: auth.edgeClient,
     userId: auth.userId,
     source,
     usageModels,
     canonicalModel,
+    hasModelFilter,
+    aliasTimeline,
+    effectiveDate: to,
     startIso,
     endIso,
     select:
       "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-    onPage: (rows) => {
-      for (const row of rows) {
-        const usageRow = resolveHourlyUsageRowState({
-          row,
-          source,
-          effectiveDate: to,
-        });
-        if (!usageRow) continue;
-        if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) continue;
-        accumulateHeatmapDayValue({
-          valuesByDay,
-          dayKey: formatLocalDateKey(usageRow.date, tzContext),
-          billable: usageRow.billable,
-        });
-      }
+    onUsageRow: ({ usageRow }) => {
+      accumulateHeatmapDayValue({
+        valuesByDay,
+        dayKey: formatLocalDateKey(usageRow.date, tzContext),
+        billable: usageRow.billable,
+      });
     },
   });
   rowCount += scannedRows;

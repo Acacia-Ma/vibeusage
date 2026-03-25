@@ -26,6 +26,8 @@ require("../insforge-src/shared/usage-metrics-core");
 const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
 require("../insforge-src/shared/usage-row-core");
 const usageRowCore = globalThis.__vibeusageUsageRowCore;
+require("../insforge-src/shared/usage-row-collector-core");
+const usageRowCollectorCore = globalThis.__vibeusageUsageRowCollectorCore;
 require("../insforge-src/shared/usage-hourly-core");
 const usageHourlyCore = globalThis.__vibeusageUsageHourlyCore;
 require("../insforge-src/shared/usage-heatmap-core");
@@ -37,6 +39,7 @@ const projectUsageCore = globalThis.__vibeusageProjectUsageCore;
 require("../insforge-src/shared/usage-pricing-core");
 const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 const usageAggregateCollector = require("../insforge-src/shared/core/usage-aggregate-collector");
+const usageRowCollector = require("../insforge-src/shared/core/usage-row-collector");
 const usageResponse = require("../insforge-src/shared/core/usage-response");
 
 if (!globalThis.crypto) {
@@ -988,6 +991,88 @@ test("usage aggregate collector core collects aggregate usage ranges through sha
   assert.equal(state.totals.total_tokens, 10n);
   assert.equal(state.totals.billable_total_tokens, 10n);
   assert.deepEqual(accumulated, ["10"]);
+});
+
+test("usage row collector core scans hourly rows through shared normalization and filtering", async () => {
+  const collected = [];
+  const result = await usageRowCollector.collectHourlyUsageRows({
+    edgeClient: createHourlyUsageEdgeClient([
+      {
+        user_id: "user-1",
+        hour_start: "2025-02-15T00:00:00.000Z",
+        source: "codex",
+        model: "gpt-foo",
+        total_tokens: 10,
+      },
+      {
+        user_id: "user-1",
+        hour_start: "2025-02-15T01:00:00.000Z",
+        source: "codex",
+        model: "gpt-bar",
+        total_tokens: 12,
+      },
+    ]),
+    userId: "user-1",
+    canonicalModel: "gpt-foo",
+    hasModelFilter: true,
+    aliasTimeline: new Map(),
+    effectiveDate: "2025-02-15",
+    startIso: "2025-02-15T00:00:00.000Z",
+    endIso: "2025-02-16T00:00:00.000Z",
+    select: "hour_start,source,model,total_tokens",
+    onUsageRow: ({ usageRow }) => {
+      collected.push({
+        usageKey: usageRow.usageKey,
+        dateKey: usageRow.dateKey,
+      });
+    },
+  });
+
+  assert.equal(result.error, null);
+  assert.equal(result.rowCount, 2);
+  assert.deepEqual(collected, [{ usageKey: "gpt-foo", dateKey: "2025-02-15" }]);
+});
+
+test("usage row collector core supports missing timestamps through rowStateOptions", async () => {
+  const collected = [];
+  const result = await usageRowCollectorCore.collectHourlyUsageRows({
+    edgeClient: createHourlyUsageEdgeClient([
+      {
+        user_id: "user-1",
+        hour_start: null,
+        source: null,
+        model: null,
+        total_tokens: 9,
+      },
+    ]),
+    userId: "user-1",
+    effectiveDate: "2025-02-15",
+    select: "hour_start,source,model,total_tokens",
+    rowStateOptions: {
+      allowMissingTimestamp: true,
+      defaultSource: "codex",
+      defaultModel: "unknown",
+    },
+    onUsageRow: ({ usageRow }) => {
+      collected.push({
+        sourceKey: usageRow.sourceKey,
+        usageKey: usageRow.usageKey,
+        dateKey: usageRow.dateKey,
+        timestamp: usageRow.timestamp,
+      });
+    },
+  });
+
+  assert.equal(result.error, null);
+  assert.equal(result.rowCount, 1);
+  assert.deepEqual(collected, [
+    {
+      sourceKey: "codex",
+      usageKey: "unknown",
+      dateKey: "2025-02-15",
+      timestamp: null,
+    },
+  ]);
 });
 
 test("usage row core resolves hourly usage row state", () => {

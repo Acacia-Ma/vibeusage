@@ -1,5 +1,5 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
-import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
+import { collectHourlyUsageRows } from "./shared/core/usage-row-collector.js";
 import { createUsageJsonResponder } from "./shared/core/usage-response.js";
 import {
   getUsageTimeZoneContext,
@@ -15,8 +15,6 @@ import {
   addRowTotals,
   buildPricingBucketKey,
   createTotals,
-  getModelParam,
-  resolveHourlyUsageRowState,
   resolveIdentityAtDate,
   resolveUsageTimelineContext,
 } from "./shared/usage-summary-support.js";
@@ -70,43 +68,38 @@ export default withRequestLogging(
 
     const queryStartMs = Date.now();
     let rowCount = 0;
-    const { error, rowCount: scannedRows } = await forEachHourlyUsagePage({
+    const { error, rowCount: scannedRows } = await collectHourlyUsageRows({
       edgeClient: auth.edgeClient,
       userId: auth.userId,
       source: sourceFilter,
+      effectiveDate: to,
       startIso,
       endIso,
       select:
         "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-      onPage: (rows) => {
-        for (const row of rows) {
-          const usageRow = resolveHourlyUsageRowState({
-            row,
-            source: sourceFilter,
-            effectiveDate: to,
-            defaultSource: DEFAULT_SOURCE,
-            defaultModel: DEFAULT_MODEL,
-            allowMissingTimestamp: true,
-          });
-          if (!usageRow) continue;
-          rowsBuffer.push({
-            source: usageRow.sourceKey,
-            model: usageRow.normalizedModel,
-            usageKey: usageRow.usageKey,
-            dateKey: usageRow.dateKey,
-            hour_start: usageRow.timestamp,
-            total_tokens: row?.total_tokens,
-            billable_total_tokens: usageRow.hasStoredBillable
-              ? row.billable_total_tokens
-              : usageRow.billable.toString(),
-            input_tokens: row?.input_tokens,
-            cached_input_tokens: row?.cached_input_tokens,
-            output_tokens: row?.output_tokens,
-            reasoning_output_tokens: row?.reasoning_output_tokens,
-          });
-          if (usageRow.usageKey && usageRow.usageKey !== DEFAULT_MODEL) {
-            distinctModels.add(usageRow.usageKey);
-          }
+      rowStateOptions: {
+        defaultSource: DEFAULT_SOURCE,
+        defaultModel: DEFAULT_MODEL,
+        allowMissingTimestamp: true,
+      },
+      onUsageRow: ({ row, usageRow }) => {
+        rowsBuffer.push({
+          source: usageRow.sourceKey,
+          model: usageRow.normalizedModel,
+          usageKey: usageRow.usageKey,
+          dateKey: usageRow.dateKey,
+          hour_start: usageRow.timestamp,
+          total_tokens: row?.total_tokens,
+          billable_total_tokens: usageRow.hasStoredBillable
+            ? row.billable_total_tokens
+            : usageRow.billable.toString(),
+          input_tokens: row?.input_tokens,
+          cached_input_tokens: row?.cached_input_tokens,
+          output_tokens: row?.output_tokens,
+          reasoning_output_tokens: row?.reasoning_output_tokens,
+        });
+        if (usageRow.usageKey && usageRow.usageKey !== DEFAULT_MODEL) {
+          distinctModels.add(usageRow.usageKey);
         }
       },
     });

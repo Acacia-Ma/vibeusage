@@ -7,9 +7,8 @@ import {
   formatHourKeyFromValue,
   resolveHalfHourSlot,
 } from "./shared/core/usage-hourly.js";
+import { collectHourlyUsageRows } from "./shared/core/usage-row-collector.js";
 import { createUsageJsonResponder } from "./shared/core/usage-response.js";
-import { shouldIncludeUsageRow } from "./shared/core/usage-filter.js";
-import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
 import {
   addDatePartsDays,
   addUtcDays,
@@ -30,7 +29,6 @@ import { getSourceParam } from "./shared/source.js";
 import {
   applyUsageModelFilter,
   getModelParam,
-  resolveHourlyUsageRowState,
   resolveBillableTotals,
   resolveUsageFilterContext,
 } from "./shared/usage-summary-support.js";
@@ -174,42 +172,36 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
 
     const queryStartMs = Date.now();
     let rowCount = 0;
-    const { error, rowCount: scannedRows } = await forEachHourlyUsagePage({
+    const { error, rowCount: scannedRows } = await collectHourlyUsageRows({
       edgeClient: auth.edgeClient,
       userId: auth.userId,
       source,
       usageModels,
       canonicalModel,
+      hasModelFilter,
+      aliasTimeline,
+      effectiveDate: dayLabel,
       startIso,
       endIso,
       select:
         "hour_start,model,source,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-      onPage: (rows) => {
-        for (const row of rows) {
-          const usageRow = resolveHourlyUsageRowState({
-            row,
-            source,
-            effectiveDate: dayLabel,
-          });
-          if (!usageRow) continue;
-          if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to: dayLabel })) continue;
-          const slot = resolveHalfHourSlot({
-            hour: usageRow.date.getUTCHours(),
-            minute: usageRow.date.getUTCMinutes(),
-          });
-          if (!Number.isFinite(slot)) continue;
+      onUsageRow: ({ row, usageRow }) => {
+        const slot = resolveHalfHourSlot({
+          hour: usageRow.date.getUTCHours(),
+          minute: usageRow.date.getUTCMinutes(),
+        });
+        if (!Number.isFinite(slot)) return;
 
-          const bucket = buckets[slot];
-          addHourlyBucketTotals({
-            bucket,
-            totalTokens: row?.total_tokens,
-            billableTokens: usageRow.billable,
-            inputTokens: row?.input_tokens,
-            cachedInputTokens: row?.cached_input_tokens,
-            outputTokens: row?.output_tokens,
-            reasoningOutputTokens: row?.reasoning_output_tokens,
-          });
-        }
+        const bucket = buckets[slot];
+        addHourlyBucketTotals({
+          bucket,
+          totalTokens: row?.total_tokens,
+          billableTokens: usageRow.billable,
+          inputTokens: row?.input_tokens,
+          cachedInputTokens: row?.cached_input_tokens,
+          outputTokens: row?.output_tokens,
+          reasoningOutputTokens: row?.reasoning_output_tokens,
+        });
       },
     });
     rowCount += scannedRows;
@@ -268,46 +260,39 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
 
   const queryStartMs = Date.now();
   let rowCount = 0;
-  const { error, rowCount: scannedRows } = await forEachHourlyUsagePage({
+  const { error, rowCount: scannedRows } = await collectHourlyUsageRows({
     edgeClient: auth.edgeClient,
     userId: auth.userId,
     source,
     usageModels,
     canonicalModel,
+    hasModelFilter,
+    aliasTimeline,
+    effectiveDate: dayKey,
     startIso,
     endIso,
     select:
       "hour_start,model,source,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-    onPage: (rows) => {
-      for (const row of rows) {
-        const usageRow = resolveHourlyUsageRowState({
-          row,
-          source,
-          effectiveDate: dayKey,
-        });
-        if (!usageRow) continue;
-        if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to: dayKey })) continue;
+    onUsageRow: ({ row, usageRow }) => {
+      const localParts = getLocalParts(usageRow.date, tzContext);
+      const localDay = formatDateParts(localParts);
+      if (localDay !== dayKey) return;
+      const hour = Number(localParts.hour);
+      const minute = Number(localParts.minute);
+      if (!Number.isFinite(hour) || !Number.isFinite(minute)) return;
+      const slot = resolveHalfHourSlot({ hour, minute });
+      if (!Number.isFinite(slot)) return;
 
-        const localParts = getLocalParts(usageRow.date, tzContext);
-        const localDay = formatDateParts(localParts);
-        if (localDay !== dayKey) continue;
-        const hour = Number(localParts.hour);
-        const minute = Number(localParts.minute);
-        if (!Number.isFinite(hour) || !Number.isFinite(minute)) continue;
-        const slot = resolveHalfHourSlot({ hour, minute });
-        if (!Number.isFinite(slot)) continue;
-
-        const bucket = buckets[slot];
-        addHourlyBucketTotals({
-          bucket,
-          totalTokens: row?.total_tokens,
-          billableTokens: usageRow.billable,
-          inputTokens: row?.input_tokens,
-          cachedInputTokens: row?.cached_input_tokens,
-          outputTokens: row?.output_tokens,
-          reasoningOutputTokens: row?.reasoning_output_tokens,
-        });
-      }
+      const bucket = buckets[slot];
+      addHourlyBucketTotals({
+        bucket,
+        totalTokens: row?.total_tokens,
+        billableTokens: usageRow.billable,
+        inputTokens: row?.input_tokens,
+        cachedInputTokens: row?.cached_input_tokens,
+        outputTokens: row?.output_tokens,
+        reasoningOutputTokens: row?.reasoning_output_tokens,
+      });
     },
   });
   rowCount += scannedRows;

@@ -56,6 +56,7 @@
 - [x] 4.2.32 Converge summary/daily aggregate hourly range collection through `usage-aggregate-collector-core` while keeping pricing state in `usage-pricing-core` and endpoint-specific sinks in the endpoints.
 - [x] 4.2.33 Converge summary/daily aggregate pricing payload resolution through `usage-pricing-core` while keeping endpoint envelope shapes explicit.
 - [x] 4.2.34 Converge usage/project summary debug-aware JSON response assembly through `usage-response-core` while keeping endpoint payload envelopes explicit.
+- [x] 4.2.35 Converge hourly/heatmap/model-breakdown normalized hourly row collection through `usage-row-collector-core` while keeping endpoint accumulators explicit.
 
 ## 5. Verification
 
