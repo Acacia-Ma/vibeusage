@@ -15,17 +15,14 @@ import { handleOptions, json } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
 import { toBigInt } from "./shared/numbers.js";
 import { buildPricingMetadata, computeUsageCost, formatUsdFromMicros, resolvePricingProfile } from "./shared/pricing.js";
-import { normalizeSource, getSourceParam } from "./shared/source.js";
+import { getSourceParam } from "./shared/source.js";
 import "../shared/usage-pricing-core.mjs";
 import {
   addRowTotals,
   buildPricingBucketKey,
   createTotals,
-  extractDateKey,
   getModelParam,
-  normalizeUsageModel,
-  normalizeUsageModelKey,
-  resolveBillableTotals,
+  resolveHourlyUsageRowState,
   resolveIdentityAtDate,
   resolveUsageTimelineContext,
 } from "./shared/usage-summary-support.js";
@@ -100,24 +97,32 @@ export default withRequestLogging(
         "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
       onPage: (rows) => {
         for (const row of rows) {
-          const source = normalizeSource(row?.source) || DEFAULT_SOURCE;
-          const model = normalizeUsageModel(row?.model) || DEFAULT_MODEL;
-          const usageKey = normalizeUsageModelKey(model);
-          const { billable, hasStoredBillable } = resolveBillableTotals({ row, source });
+          const usageRow = resolveHourlyUsageRowState({
+            row,
+            source: sourceFilter,
+            effectiveDate: to,
+            defaultSource: DEFAULT_SOURCE,
+            defaultModel: DEFAULT_MODEL,
+            allowMissingTimestamp: true,
+          });
+          if (!usageRow) continue;
           rowsBuffer.push({
-            source,
-            model,
-            usageKey,
-            hour_start: row?.hour_start,
+            source: usageRow.sourceKey,
+            model: usageRow.normalizedModel,
+            usageKey: usageRow.usageKey,
+            dateKey: usageRow.dateKey,
+            hour_start: usageRow.timestamp,
             total_tokens: row?.total_tokens,
-            billable_total_tokens: hasStoredBillable ? row.billable_total_tokens : billable.toString(),
+            billable_total_tokens: usageRow.hasStoredBillable
+              ? row.billable_total_tokens
+              : usageRow.billable.toString(),
             input_tokens: row?.input_tokens,
             cached_input_tokens: row?.cached_input_tokens,
             output_tokens: row?.output_tokens,
             reasoning_output_tokens: row?.reasoning_output_tokens,
           });
-          if (usageKey && usageKey !== DEFAULT_MODEL) {
-            distinctModels.add(usageKey);
+          if (usageRow.usageKey && usageRow.usageKey !== DEFAULT_MODEL) {
+            distinctModels.add(usageRow.usageKey);
           }
         }
       },
@@ -152,7 +157,7 @@ export default withRequestLogging(
       const sourceEntry = getSourceEntry(sourcesMap, row.source);
       addRowTotals(sourceEntry.totals, row);
       addRowTotals(grandTotals, row);
-      const dateKey = extractDateKey(row.hour_start) || to;
+      const dateKey = row.dateKey || to;
       const identity = resolveIdentityAtDate({
         rawModel: row.model,
         usageKey: row.usageKey,

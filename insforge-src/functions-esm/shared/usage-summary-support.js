@@ -1,5 +1,6 @@
 import { applyCanaryFilter } from "./canary.js";
 import "../../shared/usage-model-core.mjs";
+import "../../shared/usage-row-core.mjs";
 import "../../shared/runtime-primitives-core.mjs";
 import "../../shared/usage-metrics-core.mjs";
 
@@ -7,6 +8,8 @@ void applyCanaryFilter;
 
 const usageModelCore = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore) throw new Error("usage-model core not initialized");
+const usageRowCore = globalThis.__vibeusageUsageRowCore;
+if (!usageRowCore) throw new Error("usage row core not initialized");
 const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
 
@@ -20,6 +23,7 @@ export const resolveModelIdentity = usageModelCore.resolveModelIdentity;
 export const resolveUsageModelsForCanonical = usageModelCore.resolveUsageModelsForCanonical;
 export const resolveUsageFilterContext = usageModelCore.resolveUsageFilterContext;
 export const resolveUsageTimelineContext = usageModelCore.resolveUsageTimelineContext;
+export const resolveHourlyUsageRowState = usageRowCore.resolveHourlyUsageRowState;
 export const extractDateKey = usageModelCore.extractDateKey;
 export const resolveIdentityAtDate = usageModelCore.resolveIdentityAtDate;
 export const matchesCanonicalModelAtDate = usageModelCore.matchesCanonicalModelAtDate;

@@ -19,6 +19,8 @@ require("../insforge-src/shared/usage-model-core");
 require("../insforge-src/shared/pricing-core");
 require("../insforge-src/shared/usage-metrics-core");
 const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
+require("../insforge-src/shared/usage-row-core");
+const usageRowCore = globalThis.__vibeusageUsageRowCore;
 require("../insforge-src/shared/usage-pricing-core");
 const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 
@@ -525,6 +527,83 @@ test("usage pricing core accumulates aggregate usage rows into shared state", ()
   assert.deepEqual(Array.from(state.distinctModels.values()), ["gpt-foo"]);
   assert.deepEqual(Array.from(state.distinctUsageModels.values()), ["gpt-foo"]);
   assert.equal(state.pricingBuckets.size, 1);
+});
+
+test("usage row core resolves hourly usage row state", () => {
+  const resolved = usageRowCore.resolveHourlyUsageRowState({
+    row: {
+      hour_start: "2025-02-15T00:00:00.000Z",
+      source: " Codex ",
+      model: " GPT-Foo ",
+      total_tokens: 10,
+      input_tokens: 6,
+      cached_input_tokens: 0,
+      output_tokens: 4,
+      reasoning_output_tokens: 0,
+    },
+    effectiveDate: "2025-02-15",
+  });
+
+  assert.ok(resolved);
+  assert.equal(resolved.sourceKey, "codex");
+  assert.equal(resolved.normalizedModel, "gpt-foo");
+  assert.equal(resolved.usageKey, "gpt-foo");
+  assert.equal(resolved.dateKey, "2025-02-15");
+  assert.equal(resolved.billable, 10n);
+  assert.equal(resolved.hasStoredBillable, false);
+  assert.equal(resolved.timestamp, "2025-02-15T00:00:00.000Z");
+  assert.ok(resolved.date instanceof Date);
+});
+
+test("usage row core falls back to effectiveDate for rows without timestamps when allowed", () => {
+  const resolved = usageRowCore.resolveHourlyUsageRowState({
+    row: {
+      source: "codex",
+      model: "gpt-foo",
+      total_tokens: 10,
+      billable_total_tokens: 7,
+    },
+    effectiveDate: "2025-02-15",
+    allowMissingTimestamp: true,
+  });
+
+  assert.ok(resolved);
+  assert.equal(resolved.date, null);
+  assert.equal(resolved.dateKey, "2025-02-15");
+  assert.equal(resolved.timestamp, null);
+  assert.equal(resolved.billable, 7n);
+});
+
+test("usage row core preserves total-based billable fallback when source is missing", () => {
+  const resolved = usageRowCore.resolveHourlyUsageRowState({
+    row: {
+      hour_start: "2025-02-15T00:00:00.000Z",
+      total_tokens: 10,
+    },
+    effectiveDate: "2025-02-15",
+  });
+
+  assert.ok(resolved);
+  assert.equal(resolved.sourceKey, "codex");
+  assert.equal(resolved.billable, 10n);
+});
+
+test("usage row core can opt into default-source billing rules", () => {
+  const resolved = usageRowCore.resolveHourlyUsageRowState({
+    row: {
+      hour_start: "2025-02-15T00:00:00.000Z",
+      total_tokens: 15,
+      input_tokens: 10,
+      cached_input_tokens: 2,
+      output_tokens: 5,
+      reasoning_output_tokens: 1,
+    },
+    effectiveDate: "2025-02-15",
+    useDefaultSourceForBilling: true,
+  });
+
+  assert.ok(resolved);
+  assert.equal(resolved.billable, 16n);
 });
 
 test("usage pricing core accumulates rolling usage rows into shared state", () => {

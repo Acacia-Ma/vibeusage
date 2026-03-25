@@ -2,6 +2,7 @@
 
 require("./runtime-primitives-core");
 require("./usage-model-core");
+require("./usage-row-core");
 require("./date-core");
 require("./env-core");
 require("./pricing-core");
@@ -14,6 +15,8 @@ const usageModelCore = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore) throw new Error("usage-model core not initialized");
 const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
+const usageRowCore = globalThis.__vibeusageUsageRowCore;
+if (!usageRowCore) throw new Error("usage row core not initialized");
 const pricingCore = globalThis.__vibeusagePricingCore;
 if (!pricingCore) throw new Error("pricing core not initialized");
 const runtimePrimitivesCore = globalThis.__vibeusageRuntimePrimitivesCore;
@@ -23,9 +26,6 @@ if (!dateCore) throw new Error("date core not initialized");
 
 const {
   applyModelIdentity,
-  extractDateKey,
-  normalizeUsageModel,
-  normalizeUsageModelKey,
   resolveIdentityAtDate,
   resolveModelIdentity,
   resolveUsageTimelineContext,
@@ -37,11 +37,11 @@ const {
   createTotals,
   getSourceEntry,
   parsePricingBucketKey,
-  resolveBillableTotals,
   resolveDisplayName,
 } = usageMetricsCore;
 const { resolvePricingProfile, computeUsageCost } = pricingCore;
 const { formatLocalDateKey, listDateStrings } = dateCore;
+const { resolveHourlyUsageRowState } = usageRowCore;
 
 function createAggregateUsageState({
   hasModelParam = false,
@@ -73,21 +73,33 @@ function accumulateAggregateUsageRow({
     };
   }
 
-  const sourceKey = runtimePrimitivesCore.normalizeSource(row?.source) || defaultSource;
-  const { billable, hasStoredBillable } = resolveBillableTotals({ row, source: sourceKey });
+  const resolvedRow = resolveHourlyUsageRowState({
+    row,
+    effectiveDate,
+    defaultSource,
+    defaultModel: state.defaultModel || DEFAULT_MODEL,
+    useDefaultSourceForBilling: true,
+  });
+  if (!resolvedRow) {
+    return {
+      billable: 0n,
+      hasStoredBillable: false,
+      normalizedModel: null,
+      sourceKey: defaultSource,
+    };
+  }
+
+  const { billable, dateKey, hasStoredBillable, normalizedModel, sourceKey, usageKey } = resolvedRow;
   applyTotalsAndBillable({ totals: state.totals, row, billable, hasStoredBillable });
   const sourceEntry = getSourceEntry(state.sourcesMap, sourceKey);
   applyTotalsAndBillable({ totals: sourceEntry.totals, row, billable, hasStoredBillable });
 
-  const normalizedModel = normalizeUsageModel(row?.model);
   if (normalizedModel && normalizedModel !== DEFAULT_MODEL) {
     state.distinctModels.add(normalizedModel);
   }
 
   let bucketKey = null;
-  let dateKey = extractDateKey(row?.hour_start || row?.day) || effectiveDate || null;
   if (!state.hasModelParam && state.pricingBuckets instanceof Map) {
-    const usageKey = normalizeUsageModelKey(normalizedModel) || state.defaultModel || DEFAULT_MODEL;
     bucketKey = buildPricingBucketKey(sourceKey, usageKey, dateKey);
     const bucket = state.pricingBuckets.get(bucketKey) || createTotals();
     addRowTotals(bucket, row);
@@ -127,17 +139,25 @@ function accumulateRollingUsageRow({
     };
   }
 
-  const sourceKey = runtimePrimitivesCore.normalizeSource(row?.source) || defaultSource;
-  const { billable, hasStoredBillable } = resolveBillableTotals({ row, source: sourceKey });
+  const resolvedRow = resolveHourlyUsageRowState({
+    row,
+    defaultSource,
+    useDefaultSourceForBilling: true,
+  });
+  if (!resolvedRow) {
+    return {
+      billable: 0n,
+      dayKey: null,
+      hasStoredBillable: false,
+      sourceKey: defaultSource,
+    };
+  }
+
+  const { billable, date, hasStoredBillable, sourceKey } = resolvedRow;
   applyTotalsAndBillable({ totals: state.totals, row, billable, hasStoredBillable });
 
   let dayKey = null;
-  if (row?.hour_start) {
-    const date = new Date(row.hour_start);
-    if (Number.isFinite(date.getTime())) {
-      dayKey = formatLocalDateKey(date, tzContext);
-    }
-  }
+  dayKey = formatLocalDateKey(date, tzContext);
 
   if (dayKey) {
     const billableTokens = hasStoredBillable ? runtimePrimitivesCore.toBigInt(row?.billable_total_tokens) : billable;

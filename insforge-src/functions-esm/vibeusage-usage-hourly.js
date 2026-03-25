@@ -1,5 +1,6 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
 import { applyCanaryFilter } from "./shared/canary.js";
+import { shouldIncludeUsageRow } from "./shared/core/usage-filter.js";
 import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
 import {
   addDatePartsDays,
@@ -21,10 +22,8 @@ import { toBigInt } from "./shared/numbers.js";
 import { getSourceParam } from "./shared/source.js";
 import {
   applyUsageModelFilter,
-  extractDateKey,
   getModelParam,
-  matchesCanonicalModelAtDate,
-  normalizeUsageModel,
+  resolveHourlyUsageRowState,
   resolveBillableTotals,
   resolveUsageFilterContext,
 } from "./shared/usage-summary-support.js";
@@ -182,33 +181,21 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
         "hour_start,model,source,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
       onPage: (rows) => {
         for (const row of rows) {
-          const ts = row?.hour_start;
-          if (!ts) continue;
-          const dt = new Date(ts);
-          if (!Number.isFinite(dt.getTime())) continue;
-          if (
-            hasModelFilter &&
-            !matchesCanonicalModelAtDate({
-              rawModel: normalizeUsageModel(row?.model),
-              canonicalModel,
-              dateKey: extractDateKey(ts) || dayLabel,
-              timeline: aliasTimeline,
-            })
-          ) {
-            continue;
-          }
-          const hour = dt.getUTCHours();
-          const minute = dt.getUTCMinutes();
+          const usageRow = resolveHourlyUsageRowState({
+            row,
+            source,
+            effectiveDate: dayLabel,
+          });
+          if (!usageRow) continue;
+          if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to: dayLabel })) continue;
+          const hour = usageRow.date.getUTCHours();
+          const minute = usageRow.date.getUTCMinutes();
           const slot = hour * 2 + (minute >= 30 ? 1 : 0);
           if (slot < 0 || slot > 47) continue;
 
           const bucket = buckets[slot];
           bucket.total += toBigInt(row?.total_tokens);
-          const { billable } = resolveBillableTotals({
-            row,
-            source: row?.source || source,
-          });
-          bucket.billable += billable;
+          bucket.billable += usageRow.billable;
           bucket.input += toBigInt(row?.input_tokens);
           bucket.cached += toBigInt(row?.cached_input_tokens);
           bucket.output += toBigInt(row?.output_tokens);
@@ -284,23 +271,15 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
       "hour_start,model,source,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
     onPage: (rows) => {
       for (const row of rows) {
-        const ts = row?.hour_start;
-        if (!ts) continue;
-        const dt = new Date(ts);
-        if (!Number.isFinite(dt.getTime())) continue;
-        if (
-          hasModelFilter &&
-          !matchesCanonicalModelAtDate({
-            rawModel: normalizeUsageModel(row?.model),
-            canonicalModel,
-            dateKey: extractDateKey(ts) || dayKey,
-            timeline: aliasTimeline,
-          })
-        ) {
-          continue;
-        }
+        const usageRow = resolveHourlyUsageRowState({
+          row,
+          source,
+          effectiveDate: dayKey,
+        });
+        if (!usageRow) continue;
+        if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to: dayKey })) continue;
 
-        const localParts = getLocalParts(dt, tzContext);
+        const localParts = getLocalParts(usageRow.date, tzContext);
         const localDay = formatDateParts(localParts);
         if (localDay !== dayKey) continue;
         const hour = Number(localParts.hour);
@@ -311,11 +290,7 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
 
         const bucket = buckets[slot];
         bucket.total += toBigInt(row?.total_tokens);
-        const { billable } = resolveBillableTotals({
-          row,
-          source: row?.source || source,
-        });
-        bucket.billable += billable;
+        bucket.billable += usageRow.billable;
         bucket.input += toBigInt(row?.input_tokens);
         bucket.cached += toBigInt(row?.cached_input_tokens);
         bucket.output += toBigInt(row?.output_tokens);

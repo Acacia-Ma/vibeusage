@@ -1,4 +1,5 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
+import { shouldIncludeUsageRow } from "./shared/core/usage-filter.js";
 import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
 import {
   addDatePartsDays,
@@ -21,11 +22,8 @@ import { handleOptions, json } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
 import { getSourceParam } from "./shared/source.js";
 import {
-  extractDateKey,
   getModelParam,
-  matchesCanonicalModelAtDate,
-  normalizeUsageModel,
-  resolveBillableTotals,
+  resolveHourlyUsageRowState,
   resolveUsageFilterContext,
 } from "./shared/usage-summary-support.js";
 
@@ -103,28 +101,16 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
         "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
       onPage: (rows) => {
         for (const row of rows) {
-          const ts = row?.hour_start;
-          if (!ts) continue;
-          const dt = new Date(ts);
-          if (!Number.isFinite(dt.getTime())) continue;
-          if (
-            hasModelFilter &&
-            !matchesCanonicalModelAtDate({
-              rawModel: normalizeUsageModel(row?.model),
-              canonicalModel,
-              dateKey: extractDateKey(ts) || to,
-              timeline: aliasTimeline,
-            })
-          ) {
-            continue;
-          }
-          const day = formatDateUTC(dt);
-          const prev = valuesByDay.get(day) || 0n;
-          const { billable } = resolveBillableTotals({
+          const usageRow = resolveHourlyUsageRowState({
             row,
-            source: row?.source || source,
+            source,
+            effectiveDate: to,
           });
-          valuesByDay.set(day, prev + billable);
+          if (!usageRow) continue;
+          if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) continue;
+          const day = formatDateUTC(usageRow.date);
+          const prev = valuesByDay.get(day) || 0n;
+          valuesByDay.set(day, prev + usageRow.billable);
         }
       },
     });
@@ -258,28 +244,16 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
       "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
     onPage: (rows) => {
       for (const row of rows) {
-        const ts = row?.hour_start;
-        if (!ts) continue;
-        const dt = new Date(ts);
-        if (!Number.isFinite(dt.getTime())) continue;
-        if (
-          hasModelFilter &&
-          !matchesCanonicalModelAtDate({
-            rawModel: normalizeUsageModel(row?.model),
-            canonicalModel,
-            dateKey: extractDateKey(ts) || to,
-            timeline: aliasTimeline,
-          })
-        ) {
-          continue;
-        }
-        const key = formatLocalDateKey(dt, tzContext);
-        const prev = valuesByDay.get(key) || 0n;
-        const { billable } = resolveBillableTotals({
+        const usageRow = resolveHourlyUsageRowState({
           row,
-          source: row?.source || source,
+          source,
+          effectiveDate: to,
         });
-        valuesByDay.set(key, prev + billable);
+        if (!usageRow) continue;
+        if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) continue;
+        const key = formatLocalDateKey(usageRow.date, tzContext);
+        const prev = valuesByDay.get(key) || 0n;
+        valuesByDay.set(key, prev + usageRow.billable);
       }
     },
   });
