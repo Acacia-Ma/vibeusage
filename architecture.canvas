@@ -1189,7 +1189,7 @@
     {
       "id": "test_insforge-src-core-db_test_1578f54c",
       "type": "text",
-      "text": "**insforge-src-core-db.test**\n`test/insforge-src-core-db.test.js`\n\nTest module.\n\n包含：\n- insforge-src-core-db.test (573 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**insforge-src-core-db.test**\n`test/insforge-src-core-db.test.js`\n\nTest module.\n\n包含：\n- insforge-src-core-db.test (675 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 2260,
       "y": 19116,
       "width": 280,
@@ -1206,7 +1206,7 @@
     {
       "id": "test_insforge-src-shared_test_110fa035",
       "type": "text",
-      "text": "**insforge-src-shared.test**\n`test/insforge-src-shared.test.js`\n\nTest module.\n\n包含：\n- insforge-src-shared.test (1196 行)\n- createPricingEdgeClient (2 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**insforge-src-shared.test**\n`test/insforge-src-shared.test.js`\n\nTest module.\n\n包含：\n- insforge-src-shared.test (1197 行)\n- createPricingEdgeClient (2 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 2620,
       "y": 19116,
       "width": 280,
@@ -1886,7 +1886,7 @@
     {
       "id": "test_ssot-foundations_test_90aa72dd",
       "type": "text",
-      "text": "**ssot-foundations.test**\n`test/ssot-foundations.test.js`\n\nTest module.\n\n包含：\n- ssot-foundations.test (583 行)\n- read (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**ssot-foundations.test**\n`test/ssot-foundations.test.js`\n\nTest module.\n\n包含：\n- ssot-foundations.test (618 行)\n- read (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 4060,
       "y": 20196,
       "width": 280,
@@ -2107,7 +2107,7 @@
     {
       "id": "test_usage-pagination-order_test_e45c4df4",
       "type": "text",
-      "text": "**usage-pagination-order.test**\n`test/usage-pagination-order.test.js`\n\nTest module.\n\n包含：\n- usage-pagination-order.test (159 行)\n- readFile (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**usage-pagination-order.test**\n`test/usage-pagination-order.test.js`\n\nTest module.\n\n包含：\n- usage-pagination-order.test (166 行)\n- readFile (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 100,
       "y": 20916,
       "width": 280,
@@ -4934,7 +4934,7 @@
     {
       "id": "utils_usage-aggregate-collector-core_dc98f528",
       "type": "text",
-      "text": "**usage-aggregate-collector-core**\n`insforge-src/shared/usage-aggregate-collector-core.js`\n\nShared utilities.\n\n包含：\n- usage-aggregate-collector-core (98 行)\n- collectAggregateUsageRange (16 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**usage-aggregate-collector-core**\n`insforge-src/shared/usage-aggregate-collector-core.js`\n\nShared utilities.\n\n包含：\n- usage-aggregate-collector-core (100 行)\n- collectAggregateUsageRange (17 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 2980,
       "y": 8896,
       "width": 280,
@@ -5121,7 +5121,7 @@
     {
       "id": "utils_usage-pricing-core_ba15ba4f",
       "type": "text",
-      "text": "**usage-pricing-core**\n`insforge-src/shared/usage-pricing-core.js`\n\nShared utilities.\n\n包含：\n- usage-pricing-core (618 行)\n- createAggregateUsageState (3 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**usage-pricing-core**\n`insforge-src/shared/usage-pricing-core.js`\n\nShared utilities.\n\n包含：\n- usage-pricing-core (545 行)\n- createAggregateUsageState (3 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 2980,
       "y": 9256,
       "width": 280,
