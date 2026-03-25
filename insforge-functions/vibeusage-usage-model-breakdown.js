@@ -521,8 +521,13 @@ async function resolveUsageFilterContext({ edgeClient, canonicalModel, effective
     effectiveDate
   });
   const resolvedCanonicalModel = modelFilter.canonical;
-  const usageModels = modelFilter.usageModels;
-  const hasModelFilter = Array.isArray(usageModels) && usageModels.length > 0;
+  const timelineContext = await resolveUsageTimelineContext({
+    edgeClient,
+    usageModels: modelFilter.usageModels,
+    effectiveDate
+  });
+  const usageModels = timelineContext.usageModels;
+  const hasModelFilter = usageModels.length > 0;
   if (!hasModelFilter) {
     return {
       canonicalModel: resolvedCanonicalModel,
@@ -531,16 +536,32 @@ async function resolveUsageFilterContext({ edgeClient, canonicalModel, effective
       aliasTimeline: null
     };
   }
-  const aliasRows = await fetchAliasRows({
-    edgeClient,
-    usageModels,
-    effectiveDate
-  });
   return {
     canonicalModel: resolvedCanonicalModel,
     usageModels,
     hasModelFilter,
-    aliasTimeline: buildAliasTimeline({ usageModels, aliasRows })
+    aliasTimeline: timelineContext.aliasTimeline
+  };
+}
+async function resolveUsageTimelineContext({ edgeClient, usageModels, effectiveDate } = {}) {
+  const normalizedUsageModels = Array.isArray(usageModels) ? usageModels.map((model) => normalizeUsageModelKey(model)).filter(Boolean) : [];
+  if (!normalizedUsageModels.length) {
+    return {
+      usageModels: [],
+      aliasTimeline: null
+    };
+  }
+  const aliasRows = await fetchAliasRows({
+    edgeClient,
+    usageModels: normalizedUsageModels,
+    effectiveDate
+  });
+  return {
+    usageModels: normalizedUsageModels,
+    aliasTimeline: buildAliasTimeline({
+      usageModels: normalizedUsageModels,
+      aliasRows
+    })
   };
 }
 function resolveIdentityAtDate({ rawModel, usageKey, dateKey, timeline } = {}) {
@@ -628,6 +649,7 @@ if (!globalThis[CORE_KEY3]) {
       resolveModelIdentity,
       resolveUsageModelsForCanonical,
       resolveUsageFilterContext,
+      resolveUsageTimelineContext,
       resolveIdentityAtDate,
       matchesCanonicalModelAtDate,
       buildAliasTimeline,
@@ -1958,10 +1980,9 @@ var pricingCore2 = globalThis.__vibeusagePricingCore;
 if (!pricingCore2) throw new Error("pricing core not initialized");
 var {
   applyModelIdentity: applyModelIdentity2,
-  fetchAliasRows: fetchAliasRows2,
-  buildAliasTimeline: buildAliasTimeline2,
   resolveIdentityAtDate: resolveIdentityAtDate2,
-  resolveModelIdentity: resolveModelIdentity2
+  resolveModelIdentity: resolveModelIdentity2,
+  resolveUsageTimelineContext: resolveUsageTimelineContext2
 } = usageModelCore4;
 var { buildPricingBucketKey: buildPricingBucketKey2, parsePricingBucketKey: parsePricingBucketKey2, resolveDisplayName: resolveDisplayName2 } = usageMetricsCore;
 var { resolvePricingProfile: resolvePricingProfile3, computeUsageCost: computeUsageCost3 } = pricingCore2;
@@ -1980,8 +2001,12 @@ async function resolveBucketedUsagePricing({
   if (!(pricingBuckets instanceof Map) || pricingBuckets.size === 0) {
     return { totalCostMicros, pricingModes, canonicalModels };
   }
-  const aliasRows = usageModelList.length > 0 ? await fetchAliasRows2({ edgeClient, usageModels: usageModelList, effectiveDate }) : [];
-  const timeline = buildAliasTimeline2({ usageModels: usageModelList, aliasRows });
+  const timelineContext = await resolveUsageTimelineContext2({
+    edgeClient,
+    usageModels: usageModelList,
+    effectiveDate
+  });
+  const timeline = timelineContext.aliasTimeline;
   const profileCache = /* @__PURE__ */ new Map();
   let aggregatedCostMicros = 0n;
   const getProfile = async (modelId, dateKey) => {
@@ -2194,11 +2219,12 @@ var applyModelIdentity3 = usageModelCore5.applyModelIdentity;
 var resolveModelIdentity3 = usageModelCore5.resolveModelIdentity;
 var resolveUsageModelsForCanonical2 = usageModelCore5.resolveUsageModelsForCanonical;
 var resolveUsageFilterContext2 = usageModelCore5.resolveUsageFilterContext;
+var resolveUsageTimelineContext3 = usageModelCore5.resolveUsageTimelineContext;
 var extractDateKey2 = usageModelCore5.extractDateKey;
 var resolveIdentityAtDate3 = usageModelCore5.resolveIdentityAtDate;
 var matchesCanonicalModelAtDate2 = usageModelCore5.matchesCanonicalModelAtDate;
-var buildAliasTimeline3 = usageModelCore5.buildAliasTimeline;
-var fetchAliasRows3 = usageModelCore5.fetchAliasRows;
+var buildAliasTimeline2 = usageModelCore5.buildAliasTimeline;
+var fetchAliasRows2 = usageModelCore5.fetchAliasRows;
 var createTotals2 = usageMetricsCore2.createTotals;
 var addRowTotals2 = usageMetricsCore2.addRowTotals;
 var resolveBillableTotals2 = usageMetricsCore2.resolveBillableTotals;
@@ -2302,13 +2328,13 @@ var vibeusage_usage_model_breakdown_default = withRequestLogging2(
       tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null
     });
     if (error) return respond({ error: error.message }, 500, queryDurationMs);
-    const usageModels = Array.from(distinctModels.values());
-    const aliasRows = await fetchAliasRows3({
+    const timelineContext = await resolveUsageTimelineContext3({
       edgeClient: auth.edgeClient,
-      usageModels,
+      usageModels: Array.from(distinctModels.values()),
       effectiveDate: to
     });
-    const aliasTimeline = buildAliasTimeline3({ usageModels, aliasRows });
+    const usageModels = timelineContext.usageModels;
+    const aliasTimeline = timelineContext.aliasTimeline;
     const sourcesMap = /* @__PURE__ */ new Map();
     const costBuckets = /* @__PURE__ */ new Map();
     const grandTotals = createTotals2();

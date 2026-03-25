@@ -6,6 +6,7 @@ const {
   applyModelIdentity,
   resolveModelIdentity,
   resolveUsageFilterContext,
+  resolveUsageTimelineContext,
   resolveUsageModelsForCanonical,
   matchesCanonicalModelAtDate,
 } = require("../insforge-src/shared/model-identity");
@@ -142,6 +143,34 @@ test("resolveUsageFilterContext builds alias timeline once model filter is activ
   assert.equal(context.canonicalModel, "alpha");
   assert.equal(context.hasModelFilter, true);
   assert.deepEqual(context.usageModels, ["alpha", "gpt-foo"]);
+  assert.ok(context.aliasTimeline instanceof Map);
+  assert.deepEqual(context.aliasTimeline.get("gpt-foo"), [
+    {
+      effective_from: "2025-01-01",
+      model: "Alpha",
+      model_id: "alpha",
+    },
+  ]);
+});
+
+test("resolveUsageTimelineContext normalizes usage models and builds alias timeline", async () => {
+  const edgeClient = createEdgeClient([
+    {
+      usage_model: "gpt-foo",
+      canonical_model: "alpha",
+      display_name: "Alpha",
+      effective_from: "2025-01-01T12:00:00Z",
+      active: true,
+    },
+  ]);
+
+  const context = await resolveUsageTimelineContext({
+    edgeClient,
+    usageModels: [" GPT-FOO "],
+    effectiveDate: "2025-01-01",
+  });
+
+  assert.deepEqual(context.usageModels, ["gpt-foo"]);
   assert.ok(context.aliasTimeline instanceof Map);
   assert.deepEqual(context.aliasTimeline.get("gpt-foo"), [
     {

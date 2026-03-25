@@ -612,8 +612,13 @@ var require_usage_model_core = __commonJS({
         effectiveDate
       });
       const resolvedCanonicalModel = modelFilter.canonical;
-      const usageModels = modelFilter.usageModels;
-      const hasModelFilter = Array.isArray(usageModels) && usageModels.length > 0;
+      const timelineContext = await resolveUsageTimelineContext({
+        edgeClient,
+        usageModels: modelFilter.usageModels,
+        effectiveDate
+      });
+      const usageModels = timelineContext.usageModels;
+      const hasModelFilter = usageModels.length > 0;
       if (!hasModelFilter) {
         return {
           canonicalModel: resolvedCanonicalModel,
@@ -622,16 +627,32 @@ var require_usage_model_core = __commonJS({
           aliasTimeline: null
         };
       }
-      const aliasRows = await fetchAliasRows({
-        edgeClient,
-        usageModels,
-        effectiveDate
-      });
       return {
         canonicalModel: resolvedCanonicalModel,
         usageModels,
         hasModelFilter,
-        aliasTimeline: buildAliasTimeline({ usageModels, aliasRows })
+        aliasTimeline: timelineContext.aliasTimeline
+      };
+    }
+    async function resolveUsageTimelineContext({ edgeClient, usageModels, effectiveDate } = {}) {
+      const normalizedUsageModels = Array.isArray(usageModels) ? usageModels.map((model) => normalizeUsageModelKey(model)).filter(Boolean) : [];
+      if (!normalizedUsageModels.length) {
+        return {
+          usageModels: [],
+          aliasTimeline: null
+        };
+      }
+      const aliasRows = await fetchAliasRows({
+        edgeClient,
+        usageModels: normalizedUsageModels,
+        effectiveDate
+      });
+      return {
+        usageModels: normalizedUsageModels,
+        aliasTimeline: buildAliasTimeline({
+          usageModels: normalizedUsageModels,
+          aliasRows
+        })
       };
     }
     function resolveIdentityAtDate({ rawModel, usageKey, dateKey, timeline } = {}) {
@@ -719,6 +740,7 @@ var require_usage_model_core = __commonJS({
           resolveModelIdentity,
           resolveUsageModelsForCanonical,
           resolveUsageFilterContext,
+          resolveUsageTimelineContext,
           resolveIdentityAtDate,
           matchesCanonicalModelAtDate,
           buildAliasTimeline,

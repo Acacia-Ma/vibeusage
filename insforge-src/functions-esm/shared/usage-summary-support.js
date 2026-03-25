@@ -22,6 +22,7 @@ export const applyModelIdentity = usageModelCore.applyModelIdentity;
 export const resolveModelIdentity = usageModelCore.resolveModelIdentity;
 export const resolveUsageModelsForCanonical = usageModelCore.resolveUsageModelsForCanonical;
 export const resolveUsageFilterContext = usageModelCore.resolveUsageFilterContext;
+export const resolveUsageTimelineContext = usageModelCore.resolveUsageTimelineContext;
 export const extractDateKey = usageModelCore.extractDateKey;
 export const resolveIdentityAtDate = usageModelCore.resolveIdentityAtDate;
 export const matchesCanonicalModelAtDate = usageModelCore.matchesCanonicalModelAtDate;

@@ -18,10 +18,9 @@ if (!pricingCore) throw new Error("pricing core not initialized");
 
 const {
   applyModelIdentity,
-  fetchAliasRows,
-  buildAliasTimeline,
   resolveIdentityAtDate,
   resolveModelIdentity,
+  resolveUsageTimelineContext,
 } = usageModelCore;
 const { buildPricingBucketKey, parsePricingBucketKey, resolveDisplayName } = usageMetricsCore;
 const { resolvePricingProfile, computeUsageCost } = pricingCore;
@@ -43,11 +42,12 @@ async function resolveBucketedUsagePricing({
     return { totalCostMicros, pricingModes, canonicalModels };
   }
 
-  const aliasRows =
-    usageModelList.length > 0
-      ? await fetchAliasRows({ edgeClient, usageModels: usageModelList, effectiveDate })
-      : [];
-  const timeline = buildAliasTimeline({ usageModels: usageModelList, aliasRows });
+  const timelineContext = await resolveUsageTimelineContext({
+    edgeClient,
+    usageModels: usageModelList,
+    effectiveDate,
+  });
+  const timeline = timelineContext.aliasTimeline;
   const profileCache = new Map();
   let aggregatedCostMicros = 0n;
 

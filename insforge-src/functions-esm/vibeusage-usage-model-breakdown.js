@@ -19,17 +19,16 @@ import { normalizeSource, getSourceParam } from "./shared/source.js";
 import "../shared/usage-pricing-core.mjs";
 import {
   addRowTotals,
-  buildAliasTimeline,
   buildPricingBucketKey,
   createTotals,
   extractDateKey,
-  fetchAliasRows,
   forEachPage,
   getModelParam,
   normalizeUsageModel,
   normalizeUsageModelKey,
   resolveBillableTotals,
   resolveIdentityAtDate,
+  resolveUsageTimelineContext,
 } from "./shared/usage-summary-support.js";
 
 const DEFAULT_SOURCE = "codex";
@@ -142,13 +141,13 @@ export default withRequestLogging(
 
     if (error) return respond({ error: error.message }, 500, queryDurationMs);
 
-    const usageModels = Array.from(distinctModels.values());
-    const aliasRows = await fetchAliasRows({
+    const timelineContext = await resolveUsageTimelineContext({
       edgeClient: auth.edgeClient,
-      usageModels,
+      usageModels: Array.from(distinctModels.values()),
       effectiveDate: to,
     });
-    const aliasTimeline = buildAliasTimeline({ usageModels, aliasRows });
+    const usageModels = timelineContext.usageModels;
+    const aliasTimeline = timelineContext.aliasTimeline;
 
     const sourcesMap = new Map();
     const costBuckets = new Map();
