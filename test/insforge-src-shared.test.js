@@ -117,6 +117,67 @@ function createPricingEdgeClient({ aliasRows = [], profileRows = [] } = {}) {
   };
 }
 
+function createHourlyUsageEdgeClient(rows = []) {
+  return {
+    database: {
+      from: (table) => {
+        assert.equal(table, "vibeusage_tracker_hourly");
+        const state = {
+          filters: {},
+          select() {
+            return this;
+          },
+          eq(field, value) {
+            this.filters.eq = this.filters.eq || {};
+            this.filters.eq[field] = value;
+            return this;
+          },
+          neq(field, value) {
+            this.filters.neq = this.filters.neq || {};
+            this.filters.neq[field] = value;
+            return this;
+          },
+          gte(field, value) {
+            this.filters.gte = { field, value };
+            return this;
+          },
+          lt(field, value) {
+            this.filters.lt = { field, value };
+            return this;
+          },
+          order() {
+            return this;
+          },
+          async range(start, end) {
+            let data = rows.slice();
+            if (this.filters.eq) {
+              for (const [field, value] of Object.entries(this.filters.eq)) {
+                data = data.filter((row) => row[field] === value);
+              }
+            }
+            if (this.filters.neq) {
+              for (const [field, value] of Object.entries(this.filters.neq)) {
+                data = data.filter((row) => row[field] !== value);
+              }
+            }
+            if (this.filters.gte) {
+              const { field, value } = this.filters.gte;
+              data = data.filter((row) => String(row[field] || "") >= String(value));
+            }
+            if (this.filters.lt) {
+              const { field, value } = this.filters.lt;
+              data = data.filter((row) => String(row[field] || "") < String(value));
+            }
+            data.sort((a, b) => String(a.hour_start || "").localeCompare(String(b.hour_start || "")));
+            return { data: data.slice(start, end + 1), error: null };
+          },
+        };
+        return state;
+      },
+    },
+  };
+}
+
 test("insforge shared logging module exists", () => {
   const loggingPath = path.join(__dirname, "..", "insforge-src", "shared", "logging.js");
   assert.ok(fs.existsSync(loggingPath), "expected insforge-src/shared/logging.js");
@@ -756,6 +817,71 @@ test("usage pricing core accumulates aggregate usage rows into shared state", ()
   assert.deepEqual(Array.from(state.distinctModels.values()), ["gpt-foo"]);
   assert.deepEqual(Array.from(state.distinctUsageModels.values()), ["gpt-foo"]);
   assert.equal(state.pricingBuckets.size, 1);
+});
+
+test("usage pricing core collects aggregate usage ranges through shared hourly scan", async () => {
+  const state = usagePricingCore.createAggregateUsageState({
+    hasModelParam: true,
+    defaultModel: "unknown",
+  });
+  const accumulated = [];
+
+  const result = await usagePricingCore.collectAggregateUsageRange({
+    edgeClient: createHourlyUsageEdgeClient([
+      {
+        user_id: "user-1",
+        hour_start: "2025-02-15T00:00:00.000Z",
+        source: "codex",
+        model: "gpt-foo",
+        total_tokens: 10,
+        input_tokens: 6,
+        cached_input_tokens: 0,
+        output_tokens: 4,
+        reasoning_output_tokens: 0,
+      },
+      {
+        user_id: "user-1",
+        hour_start: "invalid",
+        source: "codex",
+        model: "gpt-foo",
+        total_tokens: 5,
+        input_tokens: 2,
+        cached_input_tokens: 0,
+        output_tokens: 3,
+        reasoning_output_tokens: 0,
+      },
+      {
+        user_id: "user-1",
+        hour_start: "2025-02-15T01:00:00.000Z",
+        source: "codex",
+        model: "gpt-bar",
+        total_tokens: 7,
+        input_tokens: 3,
+        cached_input_tokens: 0,
+        output_tokens: 4,
+        reasoning_output_tokens: 0,
+      },
+    ]),
+    userId: "user-1",
+    canonicalModel: "gpt-foo",
+    hasModelFilter: true,
+    aliasTimeline: new Map(),
+    effectiveDate: "2025-02-15",
+    startIso: "2025-02-15T00:00:00.000Z",
+    endIso: "2025-02-16T00:00:00.000Z",
+    state,
+    shouldAccumulateRow: (row) => Number.isFinite(new Date(row.hour_start).getTime()),
+    onAccumulatedRow: ({ accumulation }) => {
+      accumulated.push(accumulation.billable.toString());
+    },
+  });
+
+  assert.equal(result.error, null);
+  assert.equal(result.rowCount, 2);
+  assert.equal(result.state, state);
+  assert.equal(state.totals.total_tokens, 10n);
+  assert.equal(state.totals.billable_total_tokens, 10n);
+  assert.deepEqual(accumulated, ["10"]);
 });
 
 test("usage row core resolves hourly usage row state", () => {

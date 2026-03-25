@@ -1,5 +1,6 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
 import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
+import { collectAggregateUsageRange } from "./shared/core/usage-aggregate-collector.js";
 import { shouldIncludeUsageRow } from "./shared/core/usage-filter.js";
 import {
   addDatePartsDays,
@@ -24,7 +25,6 @@ const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 if (!usagePricingCore) throw new Error("usage pricing core not initialized");
 const {
   createAggregateUsageState,
-  accumulateAggregateUsageRow,
   createRollingUsageState,
   accumulateRollingUsageRow,
   buildRollingUsagePayload,
@@ -88,36 +88,6 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
   const queryStartMs = Date.now();
   let rowCount = 0;
 
-  const ingestRow = (row) => {
-    if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) return;
-    accumulateAggregateUsageRow({
-      state: aggregateState,
-      row,
-      effectiveDate: to,
-      defaultSource: DEFAULT_SOURCE,
-    });
-  };
-
-  const sumHourlyRange = async (rangeStartIso, rangeEndIso) => {
-    const { error, rowCount: scannedRows } = await forEachHourlyUsagePage({
-      edgeClient: auth.edgeClient,
-      userId: auth.userId,
-      source,
-      usageModels,
-      canonicalModel,
-      startIso: rangeStartIso,
-      endIso: rangeEndIso,
-      select:
-        "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-      onPage: (rows) => {
-        for (const row of rows) ingestRow(row);
-      },
-    });
-    rowCount += scannedRows;
-    if (error) return { ok: false, error };
-    return { ok: true };
-  };
-
   const sumHourlyRangeInto = async (rangeStartIso, rangeEndIso, onRow) => {
     const { error } = await forEachHourlyUsagePage({
       edgeClient: auth.edgeClient,
@@ -169,8 +139,24 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
     };
   };
 
-  const hourlyRes = await sumHourlyRange(startIso, endIso);
-  if (!hourlyRes.ok) return respond({ error: hourlyRes.error.message }, 500, Date.now() - queryStartMs);
+  const aggregateRes = await collectAggregateUsageRange({
+    edgeClient: auth.edgeClient,
+    userId: auth.userId,
+    source,
+    usageModels,
+    canonicalModel,
+    hasModelFilter,
+    aliasTimeline,
+    effectiveDate: to,
+    startIso,
+    endIso,
+    state: aggregateState,
+    defaultSource: DEFAULT_SOURCE,
+  });
+  rowCount += aggregateRes.rowCount;
+  if (aggregateRes.error) {
+    return respond({ error: aggregateRes.error.message }, 500, Date.now() - queryStartMs);
+  }
 
   let rollingPayload = null;
   if (rollingEnabled) {

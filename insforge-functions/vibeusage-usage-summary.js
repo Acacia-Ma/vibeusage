@@ -2236,18 +2236,23 @@ var usageMetricsCore2 = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore2) throw new Error("usage metrics core not initialized");
 var usageRowCore = globalThis.__vibeusageUsageRowCore;
 if (!usageRowCore) throw new Error("usage row core not initialized");
+var usageFilterCore2 = globalThis.__vibeusageUsageFilterCore;
+if (!usageFilterCore2) throw new Error("usage filter core not initialized");
 var pricingCore = globalThis.__vibeusagePricingCore;
 if (!pricingCore) throw new Error("pricing core not initialized");
 var runtimePrimitivesCore6 = globalThis.__vibeusageRuntimePrimitivesCore;
 if (!runtimePrimitivesCore6) throw new Error("runtime primitives core not initialized");
 var dateCore2 = globalThis.__vibeusageDateCore;
 if (!dateCore2) throw new Error("date core not initialized");
+var usageHourlyQueryCore2 = globalThis.__vibeusageUsageHourlyQueryCore;
+if (!usageHourlyQueryCore2) throw new Error("usage hourly query core not initialized");
 var {
   applyModelIdentity: applyModelIdentity2,
   resolveIdentityAtDate: resolveIdentityAtDate2,
   resolveModelIdentity: resolveModelIdentity2,
   resolveUsageTimelineContext: resolveUsageTimelineContext2
 } = usageModelCore6;
+var { shouldIncludeUsageRow: shouldIncludeUsageRow3 } = usageFilterCore2;
 var {
   addRowTotals: addRowTotals2,
   applyTotalsAndBillable: applyTotalsAndBillable2,
@@ -2261,6 +2266,8 @@ var {
 var { resolvePricingProfile: resolvePricingProfile2, computeUsageCost: computeUsageCost2, formatUsdFromMicros: formatUsdFromMicros2 } = pricingCore;
 var { formatLocalDateKey: formatLocalDateKey3, listDateStrings: listDateStrings3 } = dateCore2;
 var { resolveHourlyUsageRowState: resolveHourlyUsageRowState2 } = usageRowCore;
+var { forEachHourlyUsagePage: forEachHourlyUsagePage3 } = usageHourlyQueryCore2;
+var AGGREGATE_USAGE_SELECT = "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens";
 function createAggregateUsageState({
   hasModelParam = false,
   defaultModel = DEFAULT_MODEL3
@@ -2327,6 +2334,62 @@ function accumulateAggregateUsageRow({
     normalizedModel,
     sourceKey
   };
+}
+async function collectAggregateUsageRange({
+  edgeClient,
+  userId,
+  source,
+  usageModels,
+  canonicalModel,
+  hasModelFilter = false,
+  aliasTimeline,
+  effectiveDate,
+  startIso,
+  endIso,
+  state,
+  pageSize,
+  onAccumulatedRow,
+  shouldAccumulateRow,
+  defaultSource = "codex"
+} = {}) {
+  const aggregateState = state || createAggregateUsageState();
+  const { error, rowCount } = await forEachHourlyUsagePage3({
+    edgeClient,
+    userId,
+    source,
+    usageModels,
+    canonicalModel,
+    startIso,
+    endIso,
+    select: AGGREGATE_USAGE_SELECT,
+    pageSize,
+    onPage: async (rows) => {
+      for (const row of rows) {
+        if (!shouldIncludeUsageRow3({
+          row,
+          canonicalModel,
+          hasModelFilter,
+          aliasTimeline,
+          to: effectiveDate
+        })) {
+          continue;
+        }
+        if (typeof shouldAccumulateRow === "function" && !shouldAccumulateRow(row)) {
+          continue;
+        }
+        const accumulation = accumulateAggregateUsageRow({
+          state: aggregateState,
+          row,
+          effectiveDate,
+          defaultSource
+        });
+        if (typeof onAccumulatedRow === "function") {
+          await onAccumulatedRow({ row, accumulation, state: aggregateState });
+        }
+      }
+    }
+  });
+  return { error, rowCount, state: aggregateState };
 }
 function createRollingUsageState() {
   return {
@@ -2673,6 +2736,7 @@ if (!globalThis[CORE_KEY17]) {
     value: {
       createAggregateUsageState,
       accumulateAggregateUsageRow,
+      collectAggregateUsageRange,
       createRollingUsageState,
       accumulateRollingUsageRow,
       buildRollingUsagePayload,
@@ -2732,7 +2796,7 @@ var usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 if (!usagePricingCore) throw new Error("usage pricing core not initialized");
 var {
   createAggregateUsageState: createAggregateUsageState2,
-  accumulateAggregateUsageRow: accumulateAggregateUsageRow2,
+  collectAggregateUsageRange: collectAggregateUsageRange2,
   createRollingUsageState: createRollingUsageState2,
   accumulateRollingUsageRow: accumulateRollingUsageRow2,
   buildRollingUsagePayload: buildRollingUsagePayload2,
@@ -2784,33 +2848,6 @@ var vibeusage_usage_summary_default = withRequestLogging2("vibeusage-usage-summa
   });
   const queryStartMs = Date.now();
   let rowCount = 0;
-  const ingestRow = (row) => {
-    if (!shouldIncludeUsageRow2({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) return;
-    accumulateAggregateUsageRow2({
-      state: aggregateState,
-      row,
-      effectiveDate: to,
-      defaultSource: DEFAULT_SOURCE2
-    });
-  };
-  const sumHourlyRange = async (rangeStartIso, rangeEndIso) => {
-    const { error, rowCount: scannedRows } = await forEachHourlyUsagePage2({
-      edgeClient: auth.edgeClient,
-      userId: auth.userId,
-      source,
-      usageModels,
-      canonicalModel,
-      startIso: rangeStartIso,
-      endIso: rangeEndIso,
-      select: "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-      onPage: (rows) => {
-        for (const row of rows) ingestRow(row);
-      }
-    });
-    rowCount += scannedRows;
-    if (error) return { ok: false, error };
-    return { ok: true };
-  };
   const sumHourlyRangeInto = async (rangeStartIso, rangeEndIso, onRow) => {
     const { error } = await forEachHourlyUsagePage2({
       edgeClient: auth.edgeClient,
@@ -2856,8 +2893,24 @@ var vibeusage_usage_summary_default = withRequestLogging2("vibeusage-usage-summa
       payload: buildRollingUsagePayload2({ state: rollingState, fromDay, toDay })
     };
   };
-  const hourlyRes = await sumHourlyRange(startIso, endIso);
-  if (!hourlyRes.ok) return respond({ error: hourlyRes.error.message }, 500, Date.now() - queryStartMs);
+  const aggregateRes = await collectAggregateUsageRange2({
+    edgeClient: auth.edgeClient,
+    userId: auth.userId,
+    source,
+    usageModels,
+    canonicalModel,
+    hasModelFilter,
+    aliasTimeline,
+    effectiveDate: to,
+    startIso,
+    endIso,
+    state: aggregateState,
+    defaultSource: DEFAULT_SOURCE2
+  });
+  rowCount += aggregateRes.rowCount;
+  if (aggregateRes.error) {
+    return respond({ error: aggregateRes.error.message }, 500, Date.now() - queryStartMs);
+  }
   let rollingPayload = null;
   if (rollingEnabled) {
     const localTodayParts = getLocalParts2(/* @__PURE__ */ new Date(), tzContext);

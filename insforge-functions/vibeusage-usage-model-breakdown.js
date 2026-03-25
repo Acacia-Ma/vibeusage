@@ -2204,27 +2204,58 @@ if (!globalThis[CORE_KEY15]) {
   });
 }
 
-// insforge-src/shared/usage-pricing-core.mjs
-var CORE_KEY16 = "__vibeusageUsagePricingCore";
-var DEFAULT_MODEL3 = "unknown";
+// insforge-src/shared/usage-filter-core.mjs
+var CORE_KEY16 = "__vibeusageUsageFilterCore";
 var usageModelCore5 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore5) throw new Error("usage-model core not initialized");
+var { extractDateKey: extractDateKey3, matchesCanonicalModelAtDate: matchesCanonicalModelAtDate2 } = usageModelCore5;
+function shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to }) {
+  if (!hasModelFilter) return true;
+  const dateKey = extractDateKey3(row?.hour_start || row?.day) || to;
+  return matchesCanonicalModelAtDate2({
+    rawModel: row?.model,
+    canonicalModel,
+    dateKey,
+    timeline: aliasTimeline
+  });
+}
+if (!globalThis[CORE_KEY16]) {
+  Object.defineProperty(globalThis, CORE_KEY16, {
+    value: {
+      shouldIncludeUsageRow
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/shared/usage-pricing-core.mjs
+var CORE_KEY17 = "__vibeusageUsagePricingCore";
+var DEFAULT_MODEL3 = "unknown";
+var usageModelCore6 = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore6) throw new Error("usage-model core not initialized");
 var usageMetricsCore2 = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore2) throw new Error("usage metrics core not initialized");
 var usageRowCore = globalThis.__vibeusageUsageRowCore;
 if (!usageRowCore) throw new Error("usage row core not initialized");
+var usageFilterCore = globalThis.__vibeusageUsageFilterCore;
+if (!usageFilterCore) throw new Error("usage filter core not initialized");
 var pricingCore2 = globalThis.__vibeusagePricingCore;
 if (!pricingCore2) throw new Error("pricing core not initialized");
 var runtimePrimitivesCore6 = globalThis.__vibeusageRuntimePrimitivesCore;
 if (!runtimePrimitivesCore6) throw new Error("runtime primitives core not initialized");
 var dateCore2 = globalThis.__vibeusageDateCore;
 if (!dateCore2) throw new Error("date core not initialized");
+var usageHourlyQueryCore2 = globalThis.__vibeusageUsageHourlyQueryCore;
+if (!usageHourlyQueryCore2) throw new Error("usage hourly query core not initialized");
 var {
   applyModelIdentity: applyModelIdentity2,
   resolveIdentityAtDate: resolveIdentityAtDate2,
   resolveModelIdentity: resolveModelIdentity2,
   resolveUsageTimelineContext: resolveUsageTimelineContext2
-} = usageModelCore5;
+} = usageModelCore6;
+var { shouldIncludeUsageRow: shouldIncludeUsageRow2 } = usageFilterCore;
 var {
   addRowTotals: addRowTotals2,
   applyTotalsAndBillable: applyTotalsAndBillable2,
@@ -2238,6 +2269,8 @@ var {
 var { resolvePricingProfile: resolvePricingProfile3, computeUsageCost: computeUsageCost3, formatUsdFromMicros: formatUsdFromMicros3 } = pricingCore2;
 var { formatLocalDateKey: formatLocalDateKey3, listDateStrings: listDateStrings3 } = dateCore2;
 var { resolveHourlyUsageRowState: resolveHourlyUsageRowState2 } = usageRowCore;
+var { forEachHourlyUsagePage: forEachHourlyUsagePage3 } = usageHourlyQueryCore2;
+var AGGREGATE_USAGE_SELECT = "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens";
 function createAggregateUsageState({
   hasModelParam = false,
   defaultModel = DEFAULT_MODEL3
@@ -2304,6 +2337,62 @@ function accumulateAggregateUsageRow({
     normalizedModel,
     sourceKey
   };
+}
+async function collectAggregateUsageRange({
+  edgeClient,
+  userId,
+  source,
+  usageModels,
+  canonicalModel,
+  hasModelFilter = false,
+  aliasTimeline,
+  effectiveDate,
+  startIso,
+  endIso,
+  state,
+  pageSize,
+  onAccumulatedRow,
+  shouldAccumulateRow,
+  defaultSource = "codex"
+} = {}) {
+  const aggregateState = state || createAggregateUsageState();
+  const { error, rowCount } = await forEachHourlyUsagePage3({
+    edgeClient,
+    userId,
+    source,
+    usageModels,
+    canonicalModel,
+    startIso,
+    endIso,
+    select: AGGREGATE_USAGE_SELECT,
+    pageSize,
+    onPage: async (rows) => {
+      for (const row of rows) {
+        if (!shouldIncludeUsageRow2({
+          row,
+          canonicalModel,
+          hasModelFilter,
+          aliasTimeline,
+          to: effectiveDate
+        })) {
+          continue;
+        }
+        if (typeof shouldAccumulateRow === "function" && !shouldAccumulateRow(row)) {
+          continue;
+        }
+        const accumulation = accumulateAggregateUsageRow({
+          state: aggregateState,
+          row,
+          effectiveDate,
+          defaultSource
+        });
+        if (typeof onAccumulatedRow === "function") {
+          await onAccumulatedRow({ row, accumulation, state: aggregateState });
+        }
+      }
+    }
+  });
+  return { error, rowCount, state: aggregateState };
 }
 function createRollingUsageState() {
   return {
@@ -2645,11 +2734,12 @@ async function resolveAggregateUsagePricing({
     totalCostMicros
   };
 }
-if (!globalThis[CORE_KEY16]) {
-  Object.defineProperty(globalThis, CORE_KEY16, {
+if (!globalThis[CORE_KEY17]) {
+  Object.defineProperty(globalThis, CORE_KEY17, {
     value: {
       createAggregateUsageState,
       accumulateAggregateUsageRow,
+      collectAggregateUsageRange,
       createRollingUsageState,
       accumulateRollingUsageRow,
       buildRollingUsagePayload,
@@ -2671,28 +2761,28 @@ if (!globalThis[CORE_KEY16]) {
 }
 
 // insforge-src/functions-esm/shared/usage-summary-support.js
-var usageModelCore6 = globalThis.__vibeusageUsageModelCore;
-if (!usageModelCore6) throw new Error("usage-model core not initialized");
+var usageModelCore7 = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore7) throw new Error("usage-model core not initialized");
 var usageRowCore2 = globalThis.__vibeusageUsageRowCore;
 if (!usageRowCore2) throw new Error("usage row core not initialized");
 var usageMetricsCore3 = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore3) throw new Error("usage metrics core not initialized");
-var normalizeModel2 = usageModelCore6.normalizeModel;
-var normalizeUsageModel3 = usageModelCore6.normalizeUsageModel;
-var applyUsageModelFilter3 = usageModelCore6.applyUsageModelFilter;
-var getModelParam2 = usageModelCore6.getModelParam;
-var normalizeUsageModelKey3 = usageModelCore6.normalizeUsageModelKey;
-var applyModelIdentity3 = usageModelCore6.applyModelIdentity;
-var resolveModelIdentity3 = usageModelCore6.resolveModelIdentity;
-var resolveUsageModelsForCanonical2 = usageModelCore6.resolveUsageModelsForCanonical;
-var resolveUsageFilterContext2 = usageModelCore6.resolveUsageFilterContext;
-var resolveUsageTimelineContext3 = usageModelCore6.resolveUsageTimelineContext;
+var normalizeModel2 = usageModelCore7.normalizeModel;
+var normalizeUsageModel3 = usageModelCore7.normalizeUsageModel;
+var applyUsageModelFilter3 = usageModelCore7.applyUsageModelFilter;
+var getModelParam2 = usageModelCore7.getModelParam;
+var normalizeUsageModelKey3 = usageModelCore7.normalizeUsageModelKey;
+var applyModelIdentity3 = usageModelCore7.applyModelIdentity;
+var resolveModelIdentity3 = usageModelCore7.resolveModelIdentity;
+var resolveUsageModelsForCanonical2 = usageModelCore7.resolveUsageModelsForCanonical;
+var resolveUsageFilterContext2 = usageModelCore7.resolveUsageFilterContext;
+var resolveUsageTimelineContext3 = usageModelCore7.resolveUsageTimelineContext;
 var resolveHourlyUsageRowState3 = usageRowCore2.resolveHourlyUsageRowState;
-var extractDateKey3 = usageModelCore6.extractDateKey;
-var resolveIdentityAtDate3 = usageModelCore6.resolveIdentityAtDate;
-var matchesCanonicalModelAtDate2 = usageModelCore6.matchesCanonicalModelAtDate;
-var buildAliasTimeline2 = usageModelCore6.buildAliasTimeline;
-var fetchAliasRows2 = usageModelCore6.fetchAliasRows;
+var extractDateKey4 = usageModelCore7.extractDateKey;
+var resolveIdentityAtDate3 = usageModelCore7.resolveIdentityAtDate;
+var matchesCanonicalModelAtDate3 = usageModelCore7.matchesCanonicalModelAtDate;
+var buildAliasTimeline2 = usageModelCore7.buildAliasTimeline;
+var fetchAliasRows2 = usageModelCore7.fetchAliasRows;
 var createTotals3 = usageMetricsCore3.createTotals;
 var addRowTotals3 = usageMetricsCore3.addRowTotals;
 var resolveBillableTotals3 = usageMetricsCore3.resolveBillableTotals;

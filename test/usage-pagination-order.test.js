@@ -24,6 +24,7 @@ test("usage pagination uses deterministic ordering", () => {
   const adminOrder =
     "order('hour_start',{ascending:true}).order('user_id',{ascending:true}).order('device_id',{ascending:true}).order('source',{ascending:true}).order('model',{ascending:true})";
   const hourlyScanCall = "forEachHourlyUsagePage(";
+  const aggregateCollectorCall = "collectAggregateUsageRange(";
 
   assert.ok(
     normalize(readFile("insforge-src/shared/usage-rollup-core.js")).includes(rollupOrder),
@@ -36,12 +37,19 @@ test("usage pagination uses deterministic ordering", () => {
       normalize(readFile("insforge-src/functions-esm/vibeusage-usage-summary.js")),
       hourlyScanCall,
     ),
-    2,
+    1,
   );
   assert.equal(
     countOccurrences(
       normalize(readFile("insforge-src/functions-esm/vibeusage-usage-daily.js")),
-      hourlyScanCall,
+      aggregateCollectorCall,
+    ),
+    1,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-summary.js")),
+      aggregateCollectorCall,
     ),
     1,
   );
@@ -70,6 +78,16 @@ test("usage pagination uses deterministic ordering", () => {
   assert.ok(
     normalize(readFile("insforge-src/functions-esm/shared/db/usage-hourly.js")).includes(
       "forEachHourlyUsagePage=usageHourlyQueryCore.forEachHourlyUsagePage",
+    ),
+  );
+  assert.ok(
+    normalize(readFile("insforge-src/shared/usage-pricing-core.js")).includes(
+      "const{forEachHourlyUsagePage}=usageHourlyQueryCore",
+    ),
+  );
+  assert.ok(
+    normalize(readFile("insforge-src/shared/usage-pricing-core.js")).includes(
+      "asyncfunctioncollectAggregateUsageRange(",
     ),
   );
   assert.ok(
