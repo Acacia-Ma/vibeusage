@@ -1113,13 +1113,6 @@ if (!globalThis[CORE_KEY7]) {
   });
 }
 
-// insforge-src/functions-esm/shared/debug.js
-var debugCore = globalThis.__vibeusageDebugCore;
-if (!debugCore) throw new Error("debug core not initialized");
-var isDebugEnabled2 = debugCore.isDebugEnabled;
-var buildSlowQueryDebugPayload2 = debugCore.buildSlowQueryDebugPayload;
-var withSlowQueryDebugPayload2 = debugCore.withSlowQueryDebugPayload;
-
 // insforge-src/shared/http-core.mjs
 var CORE_KEY8 = "__vibeusageHttpCore";
 var corsHeaders = {
@@ -1173,17 +1166,54 @@ if (!globalThis[CORE_KEY8]) {
   });
 }
 
-// insforge-src/functions-esm/shared/http.js
+// insforge-src/shared/usage-response-core.mjs
+var CORE_KEY9 = "__vibeusageUsageResponseCore";
+var debugCore = globalThis.__vibeusageDebugCore;
 var httpCore = globalThis.__vibeusageHttpCore;
+if (!debugCore) throw new Error("debug core not initialized");
 if (!httpCore) throw new Error("http core not initialized");
-var corsHeaders2 = httpCore.corsHeaders;
-var handleOptions2 = httpCore.handleOptions;
-var json2 = httpCore.json;
-var requireMethod2 = httpCore.requireMethod;
-var readJson2 = httpCore.readJson;
+function resolveUsageResponseBody(body, { url, logger, durationMs, status } = {}) {
+  if (!debugCore.isDebugEnabled(url)) return body;
+  return debugCore.withSlowQueryDebugPayload(body, { logger, durationMs, status });
+}
+function createUsageJsonResponder({ url, logger, extraHeaders } = {}) {
+  return function respond(body, status = 200, durationMs = 0) {
+    return httpCore.json(
+      resolveUsageResponseBody(body, { url, logger, durationMs, status }),
+      status,
+      extraHeaders || null
+    );
+  };
+}
+if (!globalThis[CORE_KEY9]) {
+  Object.defineProperty(globalThis, CORE_KEY9, {
+    value: {
+      createUsageJsonResponder,
+      resolveUsageResponseBody
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/core/usage-response.js
+var usageResponseCore = globalThis.__vibeusageUsageResponseCore;
+if (!usageResponseCore) throw new Error("usage response core not initialized");
+var createUsageJsonResponder2 = usageResponseCore.createUsageJsonResponder;
+var resolveUsageResponseBody2 = usageResponseCore.resolveUsageResponseBody;
+
+// insforge-src/functions-esm/shared/http.js
+var httpCore2 = globalThis.__vibeusageHttpCore;
+if (!httpCore2) throw new Error("http core not initialized");
+var corsHeaders2 = httpCore2.corsHeaders;
+var handleOptions2 = httpCore2.handleOptions;
+var json2 = httpCore2.json;
+var requireMethod2 = httpCore2.requireMethod;
+var readJson2 = httpCore2.readJson;
 
 // insforge-src/shared/logging-core.mjs
-var CORE_KEY9 = "__vibeusageLoggingCore";
+var CORE_KEY10 = "__vibeusageLoggingCore";
 var envCore3 = globalThis.__vibeusageEnvCore;
 if (!envCore3) throw new Error("env core not initialized");
 function createRequestId() {
@@ -1281,8 +1311,8 @@ function logSlowQuery(logger, fields) {
 function getSlowQueryThresholdMs3() {
   return envCore3.getSlowQueryThresholdMs();
 }
-if (!globalThis[CORE_KEY9]) {
-  Object.defineProperty(globalThis, CORE_KEY9, {
+if (!globalThis[CORE_KEY10]) {
+  Object.defineProperty(globalThis, CORE_KEY10, {
     value: {
       createLogger,
       withRequestLogging,
@@ -1303,7 +1333,7 @@ var withRequestLogging2 = loggingCore.withRequestLogging;
 var logSlowQuery2 = loggingCore.logSlowQuery;
 
 // insforge-src/shared/project-usage-core.mjs
-var CORE_KEY10 = "__vibeusageProjectUsageCore";
+var CORE_KEY11 = "__vibeusageProjectUsageCore";
 var runtimePrimitivesCore2 = globalThis.__vibeusageRuntimePrimitivesCore;
 if (!runtimePrimitivesCore2) throw new Error("runtime primitives core not initialized");
 var { toBigInt: toBigInt2, toPositiveIntOrNull: toPositiveIntOrNull2 } = runtimePrimitivesCore2;
@@ -1390,8 +1420,8 @@ function aggregateProjectUsageRows(rows, limit) {
   if (!Number.isFinite(limit)) return entries;
   return entries.slice(0, Math.max(1, Math.floor(limit)));
 }
-if (!globalThis[CORE_KEY10]) {
-  Object.defineProperty(globalThis, CORE_KEY10, {
+if (!globalThis[CORE_KEY11]) {
+  Object.defineProperty(globalThis, CORE_KEY11, {
     value: {
       DEFAULT_PROJECT_USAGE_LIMIT,
       MAX_PROJECT_USAGE_LIMIT,
@@ -1436,11 +1466,7 @@ var vibeusage_project_usage_summary_default = withRequestLogging2(
     const opt = handleOptions2(request);
     if (opt) return opt;
     const url = new URL(request.url);
-    const debugEnabled = isDebugEnabled2(url);
-    const respond = (body, status, durationMs) => json2(
-      debugEnabled ? withSlowQueryDebugPayload2(body, { logger, durationMs, status }) : body,
-      status
-    );
+    const respond = createUsageJsonResponder2({ url, logger });
     if (request.method !== "GET") return respond({ error: "Method not allowed" }, 405, 0);
     const bearer = getBearerToken2(request.headers.get("Authorization"));
     if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);

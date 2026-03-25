@@ -7,6 +7,7 @@ import {
   normalizeHeatmapWeekStartsOn,
   normalizeHeatmapWeeks,
 } from "./shared/core/usage-heatmap.js";
+import { createUsageJsonResponder } from "./shared/core/usage-response.js";
 import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
 import {
   addDatePartsDays,
@@ -22,9 +23,8 @@ import {
   localDatePartsToUtc,
   parseDateParts,
 } from "./shared/date.js";
-import { isDebugEnabled, withSlowQueryDebugPayload } from "./shared/debug.js";
 import { getBaseUrl } from "./shared/env.js";
-import { handleOptions, json } from "./shared/http.js";
+import { handleOptions } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
 import { getSourceParam } from "./shared/source.js";
 import {
@@ -38,12 +38,7 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
   if (opt) return opt;
 
   const url = new URL(request.url);
-  const debugEnabled = isDebugEnabled(url);
-  const respond = (body, status, durationMs) =>
-    json(
-      debugEnabled ? withSlowQueryDebugPayload(body, { logger, durationMs, status }) : body,
-      status,
-    );
+  const respond = createUsageJsonResponder({ url, logger });
 
   if (request.method !== "GET") return respond({ error: "Method not allowed" }, 405, 0);
 

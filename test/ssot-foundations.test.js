@@ -174,6 +174,60 @@ test("backend canary debug and crypto helpers flow through shared cores", () => 
   assert.match(read("insforge-src/functions-esm/shared/crypto.js"), /shared\/crypto-core\.mjs/);
 });
 
+test("backend usage response assembly flows through a shared core", () => {
+  const stripUsageResponsePrelude = (content) =>
+    stripModulePrelude(content).replace(/^"use strict";\n/, "").replace(/^\s+/, "");
+  assert.equal(
+    stripUsageResponsePrelude(read("insforge-src/shared/usage-response-core.js")),
+    stripUsageResponsePrelude(read("insforge-src/shared/usage-response-core.mjs")),
+  );
+  assert.match(read("insforge-src/shared/usage-response-core.js"), /require\("\.\/debug-core"\)/);
+  assert.match(read("insforge-src/shared/usage-response-core.js"), /require\("\.\/http-core"\)/);
+  assert.match(read("insforge-src/shared/usage-response-core.mjs"), /import "\.\/debug-core\.mjs"/);
+  assert.match(read("insforge-src/shared/usage-response-core.mjs"), /import "\.\/http-core\.mjs"/);
+  assert.match(read("insforge-src/shared/core/usage-response.js"), /usage-response-core/);
+  assert.match(
+    read("insforge-src/functions-esm/shared/core/usage-response.js"),
+    /shared\/usage-response-core\.mjs/,
+  );
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /shared\/core\/usage-response\.js/);
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /shared\/core\/usage-response\.js/);
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-monthly.js"), /shared\/core\/usage-response\.js/);
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /shared\/core\/usage-response\.js/);
+  assert.match(read("insforge-src/functions-esm/vibeusage-usage-heatmap.js"), /shared\/core\/usage-response\.js/);
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js"),
+    /shared\/core\/usage-response\.js/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-project-usage-summary.js"),
+    /shared\/core\/usage-response\.js/,
+  );
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /withSlowQueryDebugPayload/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-summary.js"), /isDebugEnabled/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /withSlowQueryDebugPayload/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-daily.js"), /isDebugEnabled/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-monthly.js"), /withSlowQueryDebugPayload/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-monthly.js"), /isDebugEnabled/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /withSlowQueryDebugPayload/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-hourly.js"), /isDebugEnabled/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-heatmap.js"), /withSlowQueryDebugPayload/);
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-heatmap.js"), /isDebugEnabled/);
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js"),
+    /withSlowQueryDebugPayload/,
+  );
+  assert.doesNotMatch(read("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js"), /isDebugEnabled/);
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-project-usage-summary.js"),
+    /withSlowQueryDebugPayload/,
+  );
+  assert.doesNotMatch(
+    read("insforge-src/functions-esm/vibeusage-project-usage-summary.js"),
+    /isDebugEnabled/,
+  );
+});
+
 test("backend date and logging helpers flow through shared cores", () => {
   assert.equal(read("insforge-src/shared/date-core.js"), read("insforge-src/shared/date-core.mjs"));
   assert.equal(

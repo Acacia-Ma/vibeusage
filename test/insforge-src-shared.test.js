@@ -30,11 +30,14 @@ require("../insforge-src/shared/usage-hourly-core");
 const usageHourlyCore = globalThis.__vibeusageUsageHourlyCore;
 require("../insforge-src/shared/usage-heatmap-core");
 const usageHeatmapCore = globalThis.__vibeusageUsageHeatmapCore;
+require("../insforge-src/shared/usage-response-core");
+const usageResponseCore = globalThis.__vibeusageUsageResponseCore;
 require("../insforge-src/shared/project-usage-core");
 const projectUsageCore = globalThis.__vibeusageProjectUsageCore;
 require("../insforge-src/shared/usage-pricing-core");
 const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 const usageAggregateCollector = require("../insforge-src/shared/core/usage-aggregate-collector");
+const usageResponse = require("../insforge-src/shared/core/usage-response");
 
 if (!globalThis.crypto) {
   globalThis.crypto = webcrypto;
@@ -298,6 +301,41 @@ test("date helpers resolve local usage date ranges through shared core", () => {
     ok: false,
     error: "Date range too large (max 2 days)",
   });
+});
+
+test("usage response helper appends debug payload only when requested", async () => {
+  const logs = [];
+  const response = usageResponse.createUsageJsonResponder({
+    url: "https://example.com/vibeusage-usage-summary?debug=1",
+    logger: {
+      requestId: "req-debug",
+      log: (payload) => logs.push(payload),
+    },
+  })({ ok: true }, 201, 87);
+
+  assert.equal(response.status, 201);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.debug.request_id, "req-debug");
+  assert.equal(body.debug.status, 201);
+  assert.equal(body.debug.query_ms, 87);
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0].stage, "debug_payload");
+});
+
+test("usage response helper keeps non-debug responses unchanged", async () => {
+  const response = usageResponseCore.createUsageJsonResponder({
+    url: "https://example.com/vibeusage-usage-summary",
+    logger: {
+      requestId: "req-no-debug",
+      log: () => {
+        throw new Error("debug logger should not run when debug=0");
+      },
+    },
+  })({ ok: true }, 200, 45);
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true });
 });
 
 test("pricing defaults ignore VIBESCORE env when VIBEUSAGE missing", () => {

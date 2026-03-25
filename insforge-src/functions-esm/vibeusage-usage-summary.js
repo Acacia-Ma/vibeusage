@@ -2,6 +2,7 @@ import { getAccessContext, getBearerToken } from "./shared/auth.js";
 import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
 import { collectAggregateUsageRange } from "./shared/core/usage-aggregate-collector.js";
 import { shouldIncludeUsageRow } from "./shared/core/usage-filter.js";
+import { createUsageJsonResponder } from "./shared/core/usage-response.js";
 import {
   addDatePartsDays,
   formatDateParts,
@@ -11,9 +12,8 @@ import {
   parseDateParts,
   resolveUsageDateRangeLocal,
 } from "./shared/date.js";
-import { isDebugEnabled, withSlowQueryDebugPayload } from "./shared/debug.js";
 import { getBaseUrl } from "./shared/env.js";
-import { handleOptions, json } from "./shared/http.js";
+import { handleOptions } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
 import { getSourceParam } from "./shared/source.js";
 import "../shared/usage-pricing-core.mjs";
@@ -36,12 +36,7 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
   if (opt) return opt;
 
   const url = new URL(request.url);
-  const debugEnabled = isDebugEnabled(url);
-  const respond = (body, status, durationMs) =>
-    json(
-      debugEnabled ? withSlowQueryDebugPayload(body, { logger, durationMs, status }) : body,
-      status,
-    );
+  const respond = createUsageJsonResponder({ url, logger });
 
   if (request.method !== "GET") return respond({ error: "Method not allowed" }, 405, 0);
 
