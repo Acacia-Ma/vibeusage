@@ -21,6 +21,8 @@ require("../insforge-src/shared/usage-metrics-core");
 const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
 require("../insforge-src/shared/usage-row-core");
 const usageRowCore = globalThis.__vibeusageUsageRowCore;
+require("../insforge-src/shared/usage-hourly-core");
+const usageHourlyCore = globalThis.__vibeusageUsageHourlyCore;
 require("../insforge-src/shared/usage-heatmap-core");
 const usageHeatmapCore = globalThis.__vibeusageUsageHeatmapCore;
 require("../insforge-src/shared/usage-pricing-core");
@@ -737,6 +739,45 @@ test("usage row core can opt into default-source billing rules", () => {
 
   assert.ok(resolved);
   assert.equal(resolved.billable, 16n);
+});
+
+test("usage hourly core builds half-hour buckets and response payload", () => {
+  const { hourKeys, buckets, bucketMap } = usageHourlyCore.createHourlyBuckets("2025-12-21");
+  assert.equal(hourKeys.length, 48);
+  assert.equal(hourKeys[0], "2025-12-21T00:00:00");
+  assert.equal(hourKeys[47], "2025-12-21T23:30:00");
+  assert.equal(bucketMap.get("2025-12-21T01:00:00"), buckets[2]);
+
+  usageHourlyCore.addHourlyBucketTotals({
+    bucket: buckets[2],
+    totalTokens: "12",
+    billableTokens: 11n,
+    inputTokens: "5",
+    cachedInputTokens: "1",
+    outputTokens: "4",
+    reasoningOutputTokens: "2",
+  });
+
+  const response = usageHourlyCore.buildHourlyResponse(hourKeys, bucketMap, 1);
+  assert.equal(response[2].total_tokens, "12");
+  assert.equal(response[2].billable_total_tokens, "11");
+  assert.equal(response[2].reasoning_output_tokens, "2");
+  assert.equal(response[2].missing, true);
+  assert.equal(response[1].missing, undefined);
+});
+
+test("usage hourly core normalizes hour keys and slots", () => {
+  assert.equal(
+    usageHourlyCore.formatHourKeyFromValue("2025-12-21T01:30:00.000Z"),
+    "2025-12-21T01:30:00",
+  );
+  assert.equal(
+    usageHourlyCore.formatHourKeyFromValue(new Date("2025-12-21T01:44:00.000Z")),
+    "2025-12-21T01:30:00",
+  );
+  assert.equal(usageHourlyCore.resolveHalfHourSlot({ hour: 1, minute: 0 }), 2);
+  assert.equal(usageHourlyCore.resolveHalfHourSlot({ hour: 1, minute: 44 }), 3);
+  assert.equal(usageHourlyCore.parseHalfHourSlotFromKey("2025-12-21T01:30:00"), 3);
 });
 
 test("usage pricing core accumulates rolling usage rows into shared state", () => {

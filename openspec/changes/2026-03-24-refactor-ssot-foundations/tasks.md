@@ -47,6 +47,7 @@
 - [x] 4.2.23 Converge heatmap payload assembly through `usage-heatmap-core` while keeping time-window/query orchestration in the endpoint.
 - [x] 4.2.24 Converge model-breakdown source/model aggregation and totals formatting through `usage-pricing-core` while keeping alias resolution and bucket assembly in the endpoint.
 - [x] 4.2.25 Converge aggregate summary payload assembly through `usage-pricing-core` for `usage-summary` and `usage-daily`.
+- [x] 4.2.26 Converge hourly bucket assembly through `usage-hourly-core` while keeping query/sync orchestration in the endpoint.
 
 ## 5. Verification
 

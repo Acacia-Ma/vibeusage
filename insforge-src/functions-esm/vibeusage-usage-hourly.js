@@ -1,5 +1,12 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
 import { applyCanaryFilter } from "./shared/canary.js";
+import {
+  addHourlyBucketTotals,
+  buildHourlyResponse,
+  createHourlyBuckets,
+  formatHourKeyFromValue,
+  resolveHalfHourSlot,
+} from "./shared/core/usage-hourly.js";
 import { shouldIncludeUsageRow } from "./shared/core/usage-filter.js";
 import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
 import {
@@ -18,7 +25,6 @@ import { isDebugEnabled, withSlowQueryDebugPayload } from "./shared/debug.js";
 import { getBaseUrl } from "./shared/env.js";
 import { handleOptions, json } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
-import { toBigInt } from "./shared/numbers.js";
 import { getSourceParam } from "./shared/source.js";
 import {
   applyUsageModelFilter,
@@ -76,7 +82,7 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
     const endIso = endUtc.toISOString();
 
     const dayLabel = formatDateUTC(day);
-    const { hourKeys, buckets, bucketMap } = initHourlyBuckets(dayLabel);
+    const { hourKeys, buckets, bucketMap } = createHourlyBuckets(dayLabel);
     const syncMeta = await getSyncMeta({
       edgeClient: auth.edgeClient,
       userId: auth.userId,
@@ -123,7 +129,6 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
         const bucket = key ? bucketMap.get(key) : null;
         if (!bucket) continue;
 
-        bucket.total += toBigInt(row?.sum_total_tokens);
         const rowCount = Number(row?.count_rows);
         const billableCount = Number(row?.count_billable_total_tokens);
         const hasCompleteBillable =
@@ -149,11 +154,15 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
           },
           hasStoredBillable,
         });
-        bucket.billable += billable;
-        bucket.input += toBigInt(row?.sum_input_tokens);
-        bucket.cached += toBigInt(row?.sum_cached_input_tokens);
-        bucket.output += toBigInt(row?.sum_output_tokens);
-        bucket.reasoning += toBigInt(row?.sum_reasoning_output_tokens);
+        addHourlyBucketTotals({
+          bucket,
+          totalTokens: row?.sum_total_tokens,
+          billableTokens: billable,
+          inputTokens: row?.sum_input_tokens,
+          cachedInputTokens: row?.sum_cached_input_tokens,
+          outputTokens: row?.sum_output_tokens,
+          reasoningOutputTokens: row?.sum_reasoning_output_tokens,
+        });
       }
 
       return respond(
@@ -188,18 +197,22 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
           });
           if (!usageRow) continue;
           if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to: dayLabel })) continue;
-          const hour = usageRow.date.getUTCHours();
-          const minute = usageRow.date.getUTCMinutes();
-          const slot = hour * 2 + (minute >= 30 ? 1 : 0);
-          if (slot < 0 || slot > 47) continue;
+          const slot = resolveHalfHourSlot({
+            hour: usageRow.date.getUTCHours(),
+            minute: usageRow.date.getUTCMinutes(),
+          });
+          if (!Number.isFinite(slot)) continue;
 
           const bucket = buckets[slot];
-          bucket.total += toBigInt(row?.total_tokens);
-          bucket.billable += usageRow.billable;
-          bucket.input += toBigInt(row?.input_tokens);
-          bucket.cached += toBigInt(row?.cached_input_tokens);
-          bucket.output += toBigInt(row?.output_tokens);
-          bucket.reasoning += toBigInt(row?.reasoning_output_tokens);
+          addHourlyBucketTotals({
+            bucket,
+            totalTokens: row?.total_tokens,
+            billableTokens: usageRow.billable,
+            inputTokens: row?.input_tokens,
+            cachedInputTokens: row?.cached_input_tokens,
+            outputTokens: row?.output_tokens,
+            reasoningOutputTokens: row?.reasoning_output_tokens,
+          });
         }
       },
     });
@@ -248,7 +261,7 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
   const startIso = startUtc.toISOString();
   const endIso = endUtc.toISOString();
 
-  const { hourKeys, buckets, bucketMap } = initHourlyBuckets(dayKey);
+  const { hourKeys, buckets, bucketMap } = createHourlyBuckets(dayKey);
   const syncMeta = await getSyncMeta({
     edgeClient: auth.edgeClient,
     userId: auth.userId,
@@ -285,16 +298,19 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
         const hour = Number(localParts.hour);
         const minute = Number(localParts.minute);
         if (!Number.isFinite(hour) || !Number.isFinite(minute)) continue;
-        const slot = hour * 2 + (minute >= 30 ? 1 : 0);
-        if (slot < 0 || slot > 47) continue;
+        const slot = resolveHalfHourSlot({ hour, minute });
+        if (!Number.isFinite(slot)) continue;
 
         const bucket = buckets[slot];
-        bucket.total += toBigInt(row?.total_tokens);
-        bucket.billable += usageRow.billable;
-        bucket.input += toBigInt(row?.input_tokens);
-        bucket.cached += toBigInt(row?.cached_input_tokens);
-        bucket.output += toBigInt(row?.output_tokens);
-        bucket.reasoning += toBigInt(row?.reasoning_output_tokens);
+        addHourlyBucketTotals({
+          bucket,
+          totalTokens: row?.total_tokens,
+          billableTokens: usageRow.billable,
+          inputTokens: row?.input_tokens,
+          cachedInputTokens: row?.cached_input_tokens,
+          outputTokens: row?.output_tokens,
+          reasoningOutputTokens: row?.reasoning_output_tokens,
+        });
       }
     },
   });
@@ -323,81 +339,6 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
     queryDurationMs,
   );
 });
-
-function initHourlyBuckets(dayLabel) {
-  const hourKeys = [];
-  const buckets = Array.from({ length: 48 }, () => ({
-    total: 0n,
-    billable: 0n,
-    input: 0n,
-    cached: 0n,
-    output: 0n,
-    reasoning: 0n,
-  }));
-  const bucketMap = new Map();
-
-  for (let hour = 0; hour < 24; hour += 1) {
-    for (const minute of [0, 30]) {
-      const key = `${dayLabel}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
-      hourKeys.push(key);
-      const slot = hour * 2 + (minute >= 30 ? 1 : 0);
-      bucketMap.set(key, buckets[slot]);
-    }
-  }
-
-  return { hourKeys, buckets, bucketMap };
-}
-
-function buildHourlyResponse(hourKeys, bucketMap, missingAfterSlot) {
-  return hourKeys.map((key) => {
-    const bucket = bucketMap.get(key);
-    const row = {
-      hour: key,
-      total_tokens: bucket.total.toString(),
-      billable_total_tokens: bucket.billable.toString(),
-      input_tokens: bucket.input.toString(),
-      cached_input_tokens: bucket.cached.toString(),
-      output_tokens: bucket.output.toString(),
-      reasoning_output_tokens: bucket.reasoning.toString(),
-    };
-    if (typeof missingAfterSlot === "number") {
-      const slot = parseHalfHourSlotFromKey(key);
-      if (Number.isFinite(slot) && slot > missingAfterSlot) row.missing = true;
-    }
-    return row;
-  });
-}
-
-function formatHourKeyFromValue(value) {
-  if (!value) return null;
-  if (typeof value === "string" && value.length >= 16) {
-    const day = value.slice(0, 10);
-    const hour = value.slice(11, 13);
-    const minute = value.slice(14, 16);
-    const minuteNum = Number(minute);
-    if (Number.isFinite(minuteNum) && (minuteNum === 0 || minuteNum === 30) && day && hour) {
-      return `${day}T${hour}:${minute}:00`;
-    }
-  }
-  const dt = value instanceof Date ? value : new Date(value);
-  if (!Number.isFinite(dt.getTime())) return null;
-  const day = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(
-    dt.getUTCDate(),
-  ).padStart(2, "0")}`;
-  const hour = String(dt.getUTCHours()).padStart(2, "0");
-  const minute = String(dt.getUTCMinutes() >= 30 ? 30 : 0).padStart(2, "0");
-  return `${day}T${hour}:${minute}:00`;
-}
-
-function parseHalfHourSlotFromKey(key) {
-  if (typeof key !== "string" || key.length < 16) return null;
-  const hour = Number(key.slice(11, 13));
-  const minute = Number(key.slice(14, 16));
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
-  if (hour < 0 || hour > 23) return null;
-  if (minute !== 0 && minute !== 30) return null;
-  return hour * 2 + (minute >= 30 ? 1 : 0);
-}
 
 async function tryAggregateHourlyTotals({
   edgeClient,

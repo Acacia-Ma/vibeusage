@@ -1057,8 +1057,140 @@ if (!canaryCore) throw new Error("canary core not initialized");
 var isCanaryTag2 = canaryCore.isCanaryTag;
 var applyCanaryFilter2 = canaryCore.applyCanaryFilter;
 
+// insforge-src/functions-esm/shared/numbers.js
+var runtimePrimitivesCore2 = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore2) throw new Error("runtime primitives core not initialized");
+var toBigInt2 = runtimePrimitivesCore2.toBigInt;
+var toPositiveIntOrNull2 = runtimePrimitivesCore2.toPositiveIntOrNull;
+var toPositiveInt2 = runtimePrimitivesCore2.toPositiveInt;
+
+// insforge-src/shared/usage-hourly-core.mjs
+var CORE_KEY7 = "__vibeusageUsageHourlyCore";
+var runtimePrimitivesCore3 = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore3) throw new Error("runtime primitives core not initialized");
+function createHourlyBucket() {
+  return {
+    total: 0n,
+    billable: 0n,
+    input: 0n,
+    cached: 0n,
+    output: 0n,
+    reasoning: 0n
+  };
+}
+function resolveHalfHourSlot({ hour, minute } = {}) {
+  const hourNumber = Number(hour);
+  const minuteNumber = Number(minute);
+  if (!Number.isFinite(hourNumber) || !Number.isFinite(minuteNumber)) return null;
+  if (hourNumber < 0 || hourNumber > 23) return null;
+  if (minuteNumber < 0 || minuteNumber > 59) return null;
+  return hourNumber * 2 + (minuteNumber >= 30 ? 1 : 0);
+}
+function createHourlyBuckets(dayLabel) {
+  const hourKeys = [];
+  const buckets = Array.from({ length: 48 }, () => createHourlyBucket());
+  const bucketMap = /* @__PURE__ */ new Map();
+  for (let hour = 0; hour < 24; hour += 1) {
+    for (const minute of [0, 30]) {
+      const key = `${dayLabel}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
+      hourKeys.push(key);
+      const slot = resolveHalfHourSlot({ hour, minute });
+      bucketMap.set(key, buckets[slot]);
+    }
+  }
+  return { hourKeys, buckets, bucketMap };
+}
+function addHourlyBucketTotals({
+  bucket,
+  totalTokens,
+  billableTokens,
+  inputTokens,
+  cachedInputTokens,
+  outputTokens,
+  reasoningOutputTokens
+} = {}) {
+  if (!bucket) return bucket;
+  bucket.total += runtimePrimitivesCore3.toBigInt(totalTokens);
+  bucket.billable += runtimePrimitivesCore3.toBigInt(billableTokens);
+  bucket.input += runtimePrimitivesCore3.toBigInt(inputTokens);
+  bucket.cached += runtimePrimitivesCore3.toBigInt(cachedInputTokens);
+  bucket.output += runtimePrimitivesCore3.toBigInt(outputTokens);
+  bucket.reasoning += runtimePrimitivesCore3.toBigInt(reasoningOutputTokens);
+  return bucket;
+}
+function formatHourKeyFromValue(value) {
+  if (!value) return null;
+  if (typeof value === "string" && value.length >= 16) {
+    const day2 = value.slice(0, 10);
+    const hour2 = value.slice(11, 13);
+    const minute2 = value.slice(14, 16);
+    const minuteNum = Number(minute2);
+    if (Number.isFinite(minuteNum) && (minuteNum === 0 || minuteNum === 30) && day2 && hour2) {
+      return `${day2}T${hour2}:${minute2}:00`;
+    }
+  }
+  const dt = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(dt.getTime())) return null;
+  const day = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(
+    dt.getUTCDate()
+  ).padStart(2, "0")}`;
+  const hour = String(dt.getUTCHours()).padStart(2, "0");
+  const minute = String(dt.getUTCMinutes() >= 30 ? 30 : 0).padStart(2, "0");
+  return `${day}T${hour}:${minute}:00`;
+}
+function parseHalfHourSlotFromKey(key) {
+  if (typeof key !== "string" || key.length < 16) return null;
+  const hour = key.slice(11, 13);
+  const minute = key.slice(14, 16);
+  return resolveHalfHourSlot({ hour, minute });
+}
+function buildHourlyResponse(hourKeys, bucketMap, missingAfterSlot) {
+  return hourKeys.map((key) => {
+    const bucket = bucketMap.get(key) || createHourlyBucket();
+    const row = {
+      hour: key,
+      total_tokens: bucket.total.toString(),
+      billable_total_tokens: bucket.billable.toString(),
+      input_tokens: bucket.input.toString(),
+      cached_input_tokens: bucket.cached.toString(),
+      output_tokens: bucket.output.toString(),
+      reasoning_output_tokens: bucket.reasoning.toString()
+    };
+    if (typeof missingAfterSlot === "number") {
+      const slot = parseHalfHourSlotFromKey(key);
+      if (Number.isFinite(slot) && slot > missingAfterSlot) row.missing = true;
+    }
+    return row;
+  });
+}
+if (!globalThis[CORE_KEY7]) {
+  Object.defineProperty(globalThis, CORE_KEY7, {
+    value: {
+      createHourlyBucket,
+      resolveHalfHourSlot,
+      createHourlyBuckets,
+      addHourlyBucketTotals,
+      formatHourKeyFromValue,
+      parseHalfHourSlotFromKey,
+      buildHourlyResponse
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/core/usage-hourly.js
+var usageHourlyCore = globalThis.__vibeusageUsageHourlyCore;
+if (!usageHourlyCore) throw new Error("usage hourly core not initialized");
+var createHourlyBuckets2 = usageHourlyCore.createHourlyBuckets;
+var addHourlyBucketTotals2 = usageHourlyCore.addHourlyBucketTotals;
+var resolveHalfHourSlot2 = usageHourlyCore.resolveHalfHourSlot;
+var formatHourKeyFromValue2 = usageHourlyCore.formatHourKeyFromValue;
+var buildHourlyResponse2 = usageHourlyCore.buildHourlyResponse;
+
 // insforge-src/shared/usage-filter-core.mjs
-var CORE_KEY7 = "__vibeusageUsageFilterCore";
+var CORE_KEY8 = "__vibeusageUsageFilterCore";
 var usageModelCore2 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore2) throw new Error("usage-model core not initialized");
 var { extractDateKey: extractDateKey2, matchesCanonicalModelAtDate: matchesCanonicalModelAtDate2 } = usageModelCore2;
@@ -1072,8 +1204,8 @@ function shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimel
     timeline: aliasTimeline
   });
 }
-if (!globalThis[CORE_KEY7]) {
-  Object.defineProperty(globalThis, CORE_KEY7, {
+if (!globalThis[CORE_KEY8]) {
+  Object.defineProperty(globalThis, CORE_KEY8, {
     value: {
       shouldIncludeUsageRow
     },
@@ -1089,7 +1221,7 @@ if (!usageFilterCore) throw new Error("usage filter core not initialized");
 var shouldIncludeUsageRow2 = usageFilterCore.shouldIncludeUsageRow;
 
 // insforge-src/shared/pagination-core.mjs
-var CORE_KEY8 = "__vibeusagePaginationCore";
+var CORE_KEY9 = "__vibeusagePaginationCore";
 var MAX_PAGE_SIZE = 1e3;
 function normalizePageSize(value) {
   const size = Number(value);
@@ -1123,8 +1255,8 @@ async function forEachPage({ createQuery, pageSize, onPage }) {
   }
   return { error: null };
 }
-if (!globalThis[CORE_KEY8]) {
-  Object.defineProperty(globalThis, CORE_KEY8, {
+if (!globalThis[CORE_KEY9]) {
+  Object.defineProperty(globalThis, CORE_KEY9, {
     value: {
       MAX_PAGE_SIZE,
       normalizePageSize,
@@ -1137,7 +1269,7 @@ if (!globalThis[CORE_KEY8]) {
 }
 
 // insforge-src/shared/usage-hourly-query-core.mjs
-var CORE_KEY9 = "__vibeusageUsageHourlyQueryCore";
+var CORE_KEY10 = "__vibeusageUsageHourlyQueryCore";
 var usageModelCore3 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore3) throw new Error("usage-model core not initialized");
 var canaryCore2 = globalThis.__vibeusageCanaryCore;
@@ -1207,8 +1339,8 @@ async function forEachHourlyUsagePage({
   });
   return { error, rowCount };
 }
-if (!globalThis[CORE_KEY9]) {
-  Object.defineProperty(globalThis, CORE_KEY9, {
+if (!globalThis[CORE_KEY10]) {
+  Object.defineProperty(globalThis, CORE_KEY10, {
     value: {
       buildHourlyUsageQuery,
       forEachHourlyUsagePage
@@ -1226,7 +1358,7 @@ var buildHourlyUsageQuery2 = usageHourlyQueryCore.buildHourlyUsageQuery;
 var forEachHourlyUsagePage2 = usageHourlyQueryCore.forEachHourlyUsagePage;
 
 // insforge-src/shared/date-core.mjs
-var CORE_KEY10 = "__vibeusageDateCore";
+var CORE_KEY11 = "__vibeusageDateCore";
 var envCore2 = globalThis.__vibeusageEnvCore;
 if (!envCore2) throw new Error("env core not initialized");
 var TIMEZONE_FORMATTERS = /* @__PURE__ */ new Map();
@@ -1471,8 +1603,8 @@ function listDateStrings(from, to) {
 function getUsageMaxDays3() {
   return envCore2.getUsageMaxDays();
 }
-if (!globalThis[CORE_KEY10]) {
-  Object.defineProperty(globalThis, CORE_KEY10, {
+if (!globalThis[CORE_KEY11]) {
+  Object.defineProperty(globalThis, CORE_KEY11, {
     value: {
       isDate,
       toUtcDay,
@@ -1529,7 +1661,7 @@ var listDateStrings2 = dateCore.listDateStrings;
 var getUsageMaxDays4 = dateCore.getUsageMaxDays;
 
 // insforge-src/shared/debug-core.mjs
-var CORE_KEY11 = "__vibeusageDebugCore";
+var CORE_KEY12 = "__vibeusageDebugCore";
 var envCore3 = globalThis.__vibeusageEnvCore;
 if (!envCore3) throw new Error("env core not initialized");
 function isDebugEnabled(url) {
@@ -1571,8 +1703,8 @@ function withSlowQueryDebugPayload(body, options) {
     debug: buildSlowQueryDebugPayload(options)
   };
 }
-if (!globalThis[CORE_KEY11]) {
-  Object.defineProperty(globalThis, CORE_KEY11, {
+if (!globalThis[CORE_KEY12]) {
+  Object.defineProperty(globalThis, CORE_KEY12, {
     value: {
       isDebugEnabled,
       buildSlowQueryDebugPayload,
@@ -1592,7 +1724,7 @@ var buildSlowQueryDebugPayload2 = debugCore.buildSlowQueryDebugPayload;
 var withSlowQueryDebugPayload2 = debugCore.withSlowQueryDebugPayload;
 
 // insforge-src/shared/http-core.mjs
-var CORE_KEY12 = "__vibeusageHttpCore";
+var CORE_KEY13 = "__vibeusageHttpCore";
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -1629,8 +1761,8 @@ async function readJson(request) {
     return { error: "Invalid JSON", status: 400, data: null };
   }
 }
-if (!globalThis[CORE_KEY12]) {
-  Object.defineProperty(globalThis, CORE_KEY12, {
+if (!globalThis[CORE_KEY13]) {
+  Object.defineProperty(globalThis, CORE_KEY13, {
     value: {
       corsHeaders,
       handleOptions,
@@ -1654,7 +1786,7 @@ var requireMethod2 = httpCore.requireMethod;
 var readJson2 = httpCore.readJson;
 
 // insforge-src/shared/logging-core.mjs
-var CORE_KEY13 = "__vibeusageLoggingCore";
+var CORE_KEY14 = "__vibeusageLoggingCore";
 var envCore4 = globalThis.__vibeusageEnvCore;
 if (!envCore4) throw new Error("env core not initialized");
 function createRequestId() {
@@ -1752,8 +1884,8 @@ function logSlowQuery(logger, fields) {
 function getSlowQueryThresholdMs3() {
   return envCore4.getSlowQueryThresholdMs();
 }
-if (!globalThis[CORE_KEY13]) {
-  Object.defineProperty(globalThis, CORE_KEY13, {
+if (!globalThis[CORE_KEY14]) {
+  Object.defineProperty(globalThis, CORE_KEY14, {
     value: {
       createLogger,
       withRequestLogging,
@@ -1773,27 +1905,20 @@ var createLogger2 = loggingCore.createLogger;
 var withRequestLogging2 = loggingCore.withRequestLogging;
 var logSlowQuery2 = loggingCore.logSlowQuery;
 
-// insforge-src/functions-esm/shared/numbers.js
-var runtimePrimitivesCore2 = globalThis.__vibeusageRuntimePrimitivesCore;
-if (!runtimePrimitivesCore2) throw new Error("runtime primitives core not initialized");
-var toBigInt2 = runtimePrimitivesCore2.toBigInt;
-var toPositiveIntOrNull2 = runtimePrimitivesCore2.toPositiveIntOrNull;
-var toPositiveInt2 = runtimePrimitivesCore2.toPositiveInt;
-
 // insforge-src/functions-esm/shared/source.js
-var runtimePrimitivesCore3 = globalThis.__vibeusageRuntimePrimitivesCore;
-if (!runtimePrimitivesCore3) throw new Error("runtime primitives core not initialized");
-var MAX_SOURCE_LENGTH2 = runtimePrimitivesCore3.MAX_SOURCE_LENGTH;
-var normalizeSource2 = runtimePrimitivesCore3.normalizeSource;
-var getSourceParam2 = runtimePrimitivesCore3.getSourceParam;
+var runtimePrimitivesCore4 = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore4) throw new Error("runtime primitives core not initialized");
+var MAX_SOURCE_LENGTH2 = runtimePrimitivesCore4.MAX_SOURCE_LENGTH;
+var normalizeSource2 = runtimePrimitivesCore4.normalizeSource;
+var getSourceParam2 = runtimePrimitivesCore4.getSourceParam;
 
 // insforge-src/shared/usage-metrics-core.mjs
-var CORE_KEY14 = "__vibeusageUsageMetricsCore";
+var CORE_KEY15 = "__vibeusageUsageMetricsCore";
 var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
 var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
 var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
-var runtimePrimitivesCore4 = globalThis.__vibeusageRuntimePrimitivesCore;
-if (!runtimePrimitivesCore4) throw new Error("runtime primitives core not initialized");
+var runtimePrimitivesCore5 = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore5) throw new Error("runtime primitives core not initialized");
 function createTotals() {
   return {
     total_tokens: 0n,
@@ -1806,20 +1931,20 @@ function createTotals() {
 }
 function addRowTotals(target, row) {
   if (!target || !row) return;
-  target.total_tokens += runtimePrimitivesCore4.toBigInt(row?.total_tokens);
-  target.billable_total_tokens += runtimePrimitivesCore4.toBigInt(row?.billable_total_tokens);
-  target.input_tokens += runtimePrimitivesCore4.toBigInt(row?.input_tokens);
-  target.cached_input_tokens += runtimePrimitivesCore4.toBigInt(row?.cached_input_tokens);
-  target.output_tokens += runtimePrimitivesCore4.toBigInt(row?.output_tokens);
-  target.reasoning_output_tokens += runtimePrimitivesCore4.toBigInt(row?.reasoning_output_tokens);
+  target.total_tokens += runtimePrimitivesCore5.toBigInt(row?.total_tokens);
+  target.billable_total_tokens += runtimePrimitivesCore5.toBigInt(row?.billable_total_tokens);
+  target.input_tokens += runtimePrimitivesCore5.toBigInt(row?.input_tokens);
+  target.cached_input_tokens += runtimePrimitivesCore5.toBigInt(row?.cached_input_tokens);
+  target.output_tokens += runtimePrimitivesCore5.toBigInt(row?.output_tokens);
+  target.reasoning_output_tokens += runtimePrimitivesCore5.toBigInt(row?.reasoning_output_tokens);
 }
 function computeBillableTotalTokens({ source, totals } = {}) {
-  const normalizedSource = runtimePrimitivesCore4.normalizeSource(source) || "unknown";
-  const input = runtimePrimitivesCore4.toBigInt(totals?.input_tokens);
-  const cached = runtimePrimitivesCore4.toBigInt(totals?.cached_input_tokens);
-  const output = runtimePrimitivesCore4.toBigInt(totals?.output_tokens);
-  const reasoning = runtimePrimitivesCore4.toBigInt(totals?.reasoning_output_tokens);
-  const total = runtimePrimitivesCore4.toBigInt(totals?.total_tokens);
+  const normalizedSource = runtimePrimitivesCore5.normalizeSource(source) || "unknown";
+  const input = runtimePrimitivesCore5.toBigInt(totals?.input_tokens);
+  const cached = runtimePrimitivesCore5.toBigInt(totals?.cached_input_tokens);
+  const output = runtimePrimitivesCore5.toBigInt(totals?.output_tokens);
+  const reasoning = runtimePrimitivesCore5.toBigInt(totals?.reasoning_output_tokens);
+  const total = runtimePrimitivesCore5.toBigInt(totals?.total_tokens);
   const hasTotal = Boolean(totals && Object.prototype.hasOwnProperty.call(totals, "total_tokens"));
   if (BILLABLE_TOTAL.has(normalizedSource)) return total;
   if (BILLABLE_ADD_ALL.has(normalizedSource)) return input + cached + output + reasoning;
@@ -1838,14 +1963,14 @@ function resolveBillableTotals({
     row && Object.prototype.hasOwnProperty.call(row, billableField) && row[billableField] != null
   );
   const resolvedTotals = totals || row;
-  const billable = stored ? runtimePrimitivesCore4.toBigInt(row?.[billableField]) : computeBillableTotalTokens({ source, totals: resolvedTotals });
+  const billable = stored ? runtimePrimitivesCore5.toBigInt(row?.[billableField]) : computeBillableTotalTokens({ source, totals: resolvedTotals });
   return { billable, hasStoredBillable: stored };
 }
 function applyTotalsAndBillable({ totals, row, billable, hasStoredBillable } = {}) {
   if (!totals || !row) return;
   addRowTotals(totals, row);
   if (!hasStoredBillable) {
-    totals.billable_total_tokens += runtimePrimitivesCore4.toBigInt(billable);
+    totals.billable_total_tokens += runtimePrimitivesCore5.toBigInt(billable);
   }
 }
 function getSourceEntry(map, source) {
@@ -1884,8 +2009,8 @@ function parsePricingBucketKey(bucketKey, defaultDate) {
   }
   return { usageKey: bucketKey, dateKey: defaultDate };
 }
-if (!globalThis[CORE_KEY14]) {
-  Object.defineProperty(globalThis, CORE_KEY14, {
+if (!globalThis[CORE_KEY15]) {
+  Object.defineProperty(globalThis, CORE_KEY15, {
     value: {
       createTotals,
       addRowTotals,
@@ -1904,11 +2029,11 @@ if (!globalThis[CORE_KEY14]) {
 }
 
 // insforge-src/shared/usage-row-core.mjs
-var CORE_KEY15 = "__vibeusageUsageRowCore";
+var CORE_KEY16 = "__vibeusageUsageRowCore";
 var DEFAULT_SOURCE = "codex";
 var DEFAULT_MODEL2 = "unknown";
-var runtimePrimitivesCore5 = globalThis.__vibeusageRuntimePrimitivesCore;
-if (!runtimePrimitivesCore5) throw new Error("runtime primitives core not initialized");
+var runtimePrimitivesCore6 = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore6) throw new Error("runtime primitives core not initialized");
 var usageModelCore4 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore4) throw new Error("usage-model core not initialized");
 var usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
@@ -1938,7 +2063,7 @@ function resolveHourlyUsageRowState({
   } else if (!allowMissingTimestamp) {
     return null;
   }
-  const sourceKey = runtimePrimitivesCore5.normalizeSource(row?.source) || source || defaultSource;
+  const sourceKey = runtimePrimitivesCore6.normalizeSource(row?.source) || source || defaultSource;
   const billingSource = row?.source || source || (useDefaultSourceForBilling ? defaultSource : null);
   const normalizedModel = normalizeUsageModel2(row?.model) || defaultModel;
   const usageKey = normalizeUsageModelKey2(normalizedModel) || defaultModel;
@@ -1954,8 +2079,8 @@ function resolveHourlyUsageRowState({
     usageKey
   };
 }
-if (!globalThis[CORE_KEY15]) {
-  Object.defineProperty(globalThis, CORE_KEY15, {
+if (!globalThis[CORE_KEY16]) {
+  Object.defineProperty(globalThis, CORE_KEY16, {
     value: {
       resolveHourlyUsageRowState
     },
@@ -2036,7 +2161,7 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
     );
     const endIso2 = endUtc2.toISOString();
     const dayLabel = formatDateUTC2(day);
-    const { hourKeys: hourKeys2, buckets: buckets2, bucketMap: bucketMap2 } = initHourlyBuckets(dayLabel);
+    const { hourKeys: hourKeys2, buckets: buckets2, bucketMap: bucketMap2 } = createHourlyBuckets2(dayLabel);
     const syncMeta2 = await getSyncMeta({
       edgeClient: auth.edgeClient,
       userId: auth.userId,
@@ -2073,10 +2198,9 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
     });
     if (aggregateRows) {
       for (const row of aggregateRows) {
-        const key = formatHourKeyFromValue(row?.hour);
+        const key = formatHourKeyFromValue2(row?.hour);
         const bucket = key ? bucketMap2.get(key) : null;
         if (!bucket) continue;
-        bucket.total += toBigInt2(row?.sum_total_tokens);
         const rowCount3 = Number(row?.count_rows);
         const billableCount = Number(row?.count_billable_total_tokens);
         const hasCompleteBillable = Number.isFinite(rowCount3) && Number.isFinite(billableCount) && rowCount3 > 0 && billableCount === rowCount3;
@@ -2094,16 +2218,20 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
           },
           hasStoredBillable
         });
-        bucket.billable += billable;
-        bucket.input += toBigInt2(row?.sum_input_tokens);
-        bucket.cached += toBigInt2(row?.sum_cached_input_tokens);
-        bucket.output += toBigInt2(row?.sum_output_tokens);
-        bucket.reasoning += toBigInt2(row?.sum_reasoning_output_tokens);
+        addHourlyBucketTotals2({
+          bucket,
+          totalTokens: row?.sum_total_tokens,
+          billableTokens: billable,
+          inputTokens: row?.sum_input_tokens,
+          cachedInputTokens: row?.sum_cached_input_tokens,
+          outputTokens: row?.sum_output_tokens,
+          reasoningOutputTokens: row?.sum_reasoning_output_tokens
+        });
       }
       return respond(
         {
           day: dayLabel,
-          data: buildHourlyResponse(hourKeys2, bucketMap2, syncMeta2?.missingAfterSlot),
+          data: buildHourlyResponse2(hourKeys2, bucketMap2, syncMeta2?.missingAfterSlot),
           sync: buildSyncResponse(syncMeta2)
         },
         200,
@@ -2130,17 +2258,21 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
           });
           if (!usageRow) continue;
           if (!shouldIncludeUsageRow2({ row, canonicalModel: canonicalModel2, hasModelFilter: hasModelFilter2, aliasTimeline: aliasTimeline2, to: dayLabel })) continue;
-          const hour = usageRow.date.getUTCHours();
-          const minute = usageRow.date.getUTCMinutes();
-          const slot = hour * 2 + (minute >= 30 ? 1 : 0);
-          if (slot < 0 || slot > 47) continue;
+          const slot = resolveHalfHourSlot2({
+            hour: usageRow.date.getUTCHours(),
+            minute: usageRow.date.getUTCMinutes()
+          });
+          if (!Number.isFinite(slot)) continue;
           const bucket = buckets2[slot];
-          bucket.total += toBigInt2(row?.total_tokens);
-          bucket.billable += usageRow.billable;
-          bucket.input += toBigInt2(row?.input_tokens);
-          bucket.cached += toBigInt2(row?.cached_input_tokens);
-          bucket.output += toBigInt2(row?.output_tokens);
-          bucket.reasoning += toBigInt2(row?.reasoning_output_tokens);
+          addHourlyBucketTotals2({
+            bucket,
+            totalTokens: row?.total_tokens,
+            billableTokens: usageRow.billable,
+            inputTokens: row?.input_tokens,
+            cachedInputTokens: row?.cached_input_tokens,
+            outputTokens: row?.output_tokens,
+            reasoningOutputTokens: row?.reasoning_output_tokens
+          });
         }
       }
     });
@@ -2160,7 +2292,7 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
     return respond(
       {
         day: dayLabel,
-        data: buildHourlyResponse(hourKeys2, bucketMap2, syncMeta2?.missingAfterSlot),
+        data: buildHourlyResponse2(hourKeys2, bucketMap2, syncMeta2?.missingAfterSlot),
         sync: buildSyncResponse(syncMeta2)
       },
       200,
@@ -2182,7 +2314,7 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
   const endUtc = localDatePartsToUtc2(addDatePartsDays2(dayParts, 1), tzContext);
   const startIso = startUtc.toISOString();
   const endIso = endUtc.toISOString();
-  const { hourKeys, buckets, bucketMap } = initHourlyBuckets(dayKey);
+  const { hourKeys, buckets, bucketMap } = createHourlyBuckets2(dayKey);
   const syncMeta = await getSyncMeta({
     edgeClient: auth.edgeClient,
     userId: auth.userId,
@@ -2216,15 +2348,18 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
         const hour = Number(localParts.hour);
         const minute = Number(localParts.minute);
         if (!Number.isFinite(hour) || !Number.isFinite(minute)) continue;
-        const slot = hour * 2 + (minute >= 30 ? 1 : 0);
-        if (slot < 0 || slot > 47) continue;
+        const slot = resolveHalfHourSlot2({ hour, minute });
+        if (!Number.isFinite(slot)) continue;
         const bucket = buckets[slot];
-        bucket.total += toBigInt2(row?.total_tokens);
-        bucket.billable += usageRow.billable;
-        bucket.input += toBigInt2(row?.input_tokens);
-        bucket.cached += toBigInt2(row?.cached_input_tokens);
-        bucket.output += toBigInt2(row?.output_tokens);
-        bucket.reasoning += toBigInt2(row?.reasoning_output_tokens);
+        addHourlyBucketTotals2({
+          bucket,
+          totalTokens: row?.total_tokens,
+          billableTokens: usageRow.billable,
+          inputTokens: row?.input_tokens,
+          cachedInputTokens: row?.cached_input_tokens,
+          outputTokens: row?.output_tokens,
+          reasoningOutputTokens: row?.reasoning_output_tokens
+        });
       }
     }
   });
@@ -2244,82 +2379,13 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
   return respond(
     {
       day: dayKey,
-      data: buildHourlyResponse(hourKeys, bucketMap, syncMeta?.missingAfterSlot),
+      data: buildHourlyResponse2(hourKeys, bucketMap, syncMeta?.missingAfterSlot),
       sync: buildSyncResponse(syncMeta)
     },
     200,
     queryDurationMs
   );
 });
-function initHourlyBuckets(dayLabel) {
-  const hourKeys = [];
-  const buckets = Array.from({ length: 48 }, () => ({
-    total: 0n,
-    billable: 0n,
-    input: 0n,
-    cached: 0n,
-    output: 0n,
-    reasoning: 0n
-  }));
-  const bucketMap = /* @__PURE__ */ new Map();
-  for (let hour = 0; hour < 24; hour += 1) {
-    for (const minute of [0, 30]) {
-      const key = `${dayLabel}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
-      hourKeys.push(key);
-      const slot = hour * 2 + (minute >= 30 ? 1 : 0);
-      bucketMap.set(key, buckets[slot]);
-    }
-  }
-  return { hourKeys, buckets, bucketMap };
-}
-function buildHourlyResponse(hourKeys, bucketMap, missingAfterSlot) {
-  return hourKeys.map((key) => {
-    const bucket = bucketMap.get(key);
-    const row = {
-      hour: key,
-      total_tokens: bucket.total.toString(),
-      billable_total_tokens: bucket.billable.toString(),
-      input_tokens: bucket.input.toString(),
-      cached_input_tokens: bucket.cached.toString(),
-      output_tokens: bucket.output.toString(),
-      reasoning_output_tokens: bucket.reasoning.toString()
-    };
-    if (typeof missingAfterSlot === "number") {
-      const slot = parseHalfHourSlotFromKey(key);
-      if (Number.isFinite(slot) && slot > missingAfterSlot) row.missing = true;
-    }
-    return row;
-  });
-}
-function formatHourKeyFromValue(value) {
-  if (!value) return null;
-  if (typeof value === "string" && value.length >= 16) {
-    const day2 = value.slice(0, 10);
-    const hour2 = value.slice(11, 13);
-    const minute2 = value.slice(14, 16);
-    const minuteNum = Number(minute2);
-    if (Number.isFinite(minuteNum) && (minuteNum === 0 || minuteNum === 30) && day2 && hour2) {
-      return `${day2}T${hour2}:${minute2}:00`;
-    }
-  }
-  const dt = value instanceof Date ? value : new Date(value);
-  if (!Number.isFinite(dt.getTime())) return null;
-  const day = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(
-    dt.getUTCDate()
-  ).padStart(2, "0")}`;
-  const hour = String(dt.getUTCHours()).padStart(2, "0");
-  const minute = String(dt.getUTCMinutes() >= 30 ? 30 : 0).padStart(2, "0");
-  return `${day}T${hour}:${minute}:00`;
-}
-function parseHalfHourSlotFromKey(key) {
-  if (typeof key !== "string" || key.length < 16) return null;
-  const hour = Number(key.slice(11, 13));
-  const minute = Number(key.slice(14, 16));
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
-  if (hour < 0 || hour > 23) return null;
-  if (minute !== 0 && minute !== 30) return null;
-  return hour * 2 + (minute >= 30 ? 1 : 0);
-}
 async function tryAggregateHourlyTotals({
   edgeClient,
   userId,
