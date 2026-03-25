@@ -194,6 +194,42 @@ function createHourlyUsageEdgeClient(rows = []) {
   };
 }
 
+function createProjectUsageQueryEdgeClient() {
+  return {
+    database: {
+      from: (table) => {
+        assert.equal(table, "vibeusage_project_usage_hourly");
+        return {
+          selectValue: null,
+          filters: [],
+          orders: [],
+          limitValue: null,
+          select(value) {
+            this.selectValue = value;
+            return this;
+          },
+          eq(field, value) {
+            this.filters.push({ op: "eq", field, value });
+            return this;
+          },
+          neq(field, value) {
+            this.filters.push({ op: "neq", field, value });
+            return this;
+          },
+          order(field, options) {
+            this.orders.push({ field, options: options || null });
+            return this;
+          },
+          limit(value) {
+            this.limitValue = value;
+            return this;
+          },
+        };
+      },
+    },
+  };
+}
+
 test("insforge shared logging module exists", () => {
   const loggingPath = path.join(__dirname, "..", "insforge-src", "shared", "logging.js");
   assert.ok(fs.existsSync(loggingPath), "expected insforge-src/shared/logging.js");
@@ -1401,7 +1437,7 @@ test("usage heatmap core builds thresholds, streak, and grid from shared values"
   assert.deepEqual(payload.weeks[0][6], { day: "2025-02-15", value: "100", level: 4 });
 });
 
-test("usage heatmap core normalizes request params and accumulates day values", () => {
+test("usage heatmap core normalizes request params, resolves request context, and accumulates day values", () => {
   const valuesByDay = new Map();
 
   usageHeatmapCore.accumulateHeatmapDayValue({
@@ -1424,6 +1460,56 @@ test("usage heatmap core normalizes request params and accumulates day values", 
   assert.equal(usageHeatmapCore.normalizeHeatmapWeekStartsOn("fri"), null);
   assert.equal(usageHeatmapCore.normalizeHeatmapToDate("2025-03-01"), "2025-03-01");
   assert.equal(usageHeatmapCore.normalizeHeatmapToDate("2025-03-40"), null);
+
+  const utcContext = usageHeatmapCore.resolveUsageHeatmapRequestContext({
+    url: new URL(
+      "https://example.com/functions/v1/vibeusage-usage-heatmap?weeks=2&week_starts_on=mon&to=2025-03-06",
+    ),
+    tzContext: { offsetMinutes: 0 },
+  });
+  assert.deepEqual(utcContext, {
+    ok: true,
+    timeMode: "utc",
+    weeks: 2,
+    weekStartsOn: "mon",
+    from: "2025-02-24",
+    to: "2025-03-06",
+    gridStart: new Date("2025-02-24T00:00:00.000Z"),
+    end: new Date("2025-03-06T00:00:00.000Z"),
+    startIso: "2025-02-24T00:00:00.000Z",
+    endIso: "2025-03-07T00:00:00.000Z",
+  });
+
+  const localContext = usageHeatmapCore.resolveUsageHeatmapRequestContext({
+    url: new URL(
+      "https://example.com/functions/v1/vibeusage-usage-heatmap?weeks=1&week_starts_on=sun&to=2025-03-06",
+    ),
+    tzContext: { offsetMinutes: 540 },
+  });
+  assert.deepEqual(localContext, {
+    ok: true,
+    timeMode: "local",
+    weeks: 1,
+    weekStartsOn: "sun",
+    from: "2025-03-02",
+    to: "2025-03-06",
+    gridStart: new Date("2025-03-02T00:00:00.000Z"),
+    end: new Date("2025-03-06T00:00:00.000Z"),
+    startIso: "2025-03-01T15:00:00.000Z",
+    endIso: "2025-03-06T15:00:00.000Z",
+  });
+
+  assert.deepEqual(
+    usageHeatmapCore.resolveUsageHeatmapRequestContext({
+      url: new URL("https://example.com/functions/v1/vibeusage-usage-heatmap?weeks=0"),
+      tzContext: { offsetMinutes: 0 },
+    }),
+    {
+      ok: false,
+      status: 400,
+      error: "Invalid weeks",
+    },
+  );
 });
 
 test("project usage core normalizes aggregate rows and fallback detection", () => {
@@ -1510,4 +1596,41 @@ test("project usage core aggregates and sorts fallback rows", () => {
       },
     ],
   );
+});
+
+test("project usage core builds aggregate and fallback queries through shared filters", () => {
+  const aggregateQuery = projectUsageCore.buildProjectUsageAggregateQuery({
+    edgeClient: createProjectUsageQueryEdgeClient(),
+    userId: "user-1",
+    source: "openrouter",
+    limit: 3,
+  });
+  assert.equal(
+    aggregateQuery.selectValue,
+    "project_key,project_ref,sum_total_tokens:sum(total_tokens),sum_billable_total_tokens:sum(billable_total_tokens)",
+  );
+  assert.deepEqual(aggregateQuery.filters, [
+    { op: "eq", field: "user_id", value: "user-1" },
+    { op: "eq", field: "source", value: "openrouter" },
+    { op: "neq", field: "source", value: "canary" },
+  ]);
+  assert.deepEqual(aggregateQuery.orders, [
+    { field: "sum_billable_total_tokens", options: { ascending: false } },
+    { field: "sum_total_tokens", options: { ascending: false } },
+  ]);
+  assert.equal(aggregateQuery.limitValue, 3);
+
+  const fallbackQuery = projectUsageCore.buildProjectUsageFallbackQuery({
+    edgeClient: createProjectUsageQueryEdgeClient(),
+    userId: "user-2",
+    source: "canary",
+  });
+  assert.equal(
+    fallbackQuery.selectValue,
+    "project_key,project_ref,total_tokens,billable_total_tokens",
+  );
+  assert.deepEqual(fallbackQuery.filters, [
+    { op: "eq", field: "user_id", value: "user-2" },
+    { op: "eq", field: "source", value: "canary" },
+  ]);
 });

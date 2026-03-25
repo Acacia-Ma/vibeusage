@@ -1,10 +1,13 @@
 "use strict";
 
 require("./runtime-primitives-core");
+require("./canary-core");
 
 const CORE_KEY = "__vibeusageProjectUsageCore";
 const runtimePrimitivesCore = globalThis.__vibeusageRuntimePrimitivesCore;
+const canaryCore = globalThis.__vibeusageCanaryCore;
 if (!runtimePrimitivesCore) throw new Error("runtime primitives core not initialized");
+if (!canaryCore) throw new Error("canary core not initialized");
 
 const { toBigInt, toPositiveIntOrNull } = runtimePrimitivesCore;
 const DEFAULT_PROJECT_USAGE_LIMIT = 3;
@@ -62,6 +65,39 @@ function shouldFallbackProjectUsageAggregate(message) {
   return normalized.includes("schema cache") && normalized.includes("relationship") && normalized.includes("'sum'");
 }
 
+function buildProjectUsageBaseQuery({ edgeClient, userId, source, select } = {}) {
+  const from = edgeClient?.database?.from;
+  if (typeof from !== "function") {
+    throw new Error("edgeClient.database.from is required");
+  }
+  let query = from("vibeusage_project_usage_hourly").select(select).eq("user_id", userId);
+  if (source) query = query.eq("source", source);
+  if (!canaryCore.isCanaryTag(source)) query = query.neq("source", "canary");
+  return query;
+}
+
+function buildProjectUsageAggregateQuery({ edgeClient, userId, source, limit } = {}) {
+  return buildProjectUsageBaseQuery({
+    edgeClient,
+    userId,
+    source,
+    select:
+      "project_key,project_ref,sum_total_tokens:sum(total_tokens),sum_billable_total_tokens:sum(billable_total_tokens)",
+  })
+    .order("sum_billable_total_tokens", { ascending: false })
+    .order("sum_total_tokens", { ascending: false })
+    .limit(limit);
+}
+
+function buildProjectUsageFallbackQuery({ edgeClient, userId, source } = {}) {
+  return buildProjectUsageBaseQuery({
+    edgeClient,
+    userId,
+    source,
+    select: "project_key,project_ref,total_tokens,billable_total_tokens",
+  });
+}
+
 function aggregateProjectUsageRows(rows, limit) {
   const map = new Map();
   for (const row of Array.isArray(rows) ? rows : []) {
@@ -109,6 +145,8 @@ if (!globalThis[CORE_KEY]) {
       DEFAULT_PROJECT_USAGE_LIMIT,
       MAX_PROJECT_USAGE_LIMIT,
       aggregateProjectUsageRows,
+      buildProjectUsageAggregateQuery,
+      buildProjectUsageFallbackQuery,
       normalizeProjectUsageAggregateValue,
       normalizeProjectUsageEntry,
       normalizeProjectUsageLimit,

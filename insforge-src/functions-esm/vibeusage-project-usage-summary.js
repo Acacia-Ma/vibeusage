@@ -1,11 +1,12 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
-import { isCanaryTag } from "./shared/canary.js";
 import { createUsageJsonResponder } from "./shared/core/usage-response.js";
 import { getBaseUrl } from "./shared/env.js";
 import { handleOptions } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
 import {
   aggregateProjectUsageRows,
+  buildProjectUsageAggregateQuery,
+  buildProjectUsageFallbackQuery,
   normalizeProjectUsageLimit,
   normalizeProjectUsageRows,
   shouldFallbackProjectUsageAggregate,
@@ -41,18 +42,12 @@ export default withRequestLogging(
     const limit = normalizeProjectUsageLimit(url.searchParams.get("limit"));
     const queryStartMs = Date.now();
 
-    let query = auth.edgeClient.database
-      .from("vibeusage_project_usage_hourly")
-      .select(
-        "project_key,project_ref,sum_total_tokens:sum(total_tokens),sum_billable_total_tokens:sum(billable_total_tokens)",
-      )
-      .eq("user_id", auth.userId);
-    if (source) query = query.eq("source", source);
-    if (!isCanaryTag(source)) query = query.neq("source", "canary");
-    query = query
-      .order("sum_billable_total_tokens", { ascending: false })
-      .order("sum_total_tokens", { ascending: false })
-      .limit(limit);
+    const query = buildProjectUsageAggregateQuery({
+      edgeClient: auth.edgeClient,
+      userId: auth.userId,
+      source,
+      limit,
+    });
 
     const { data, error } = await query;
     let entries = null;
@@ -102,12 +97,7 @@ export default withRequestLogging(
 
 async function fetchProjectUsageFallback({ edgeClient, userId, source, limit }) {
   try {
-    let query = edgeClient.database
-      .from("vibeusage_project_usage_hourly")
-      .select("project_key,project_ref,total_tokens,billable_total_tokens")
-      .eq("user_id", userId);
-    if (source) query = query.eq("source", source);
-    if (!isCanaryTag(source)) query = query.neq("source", "canary");
+    const query = buildProjectUsageFallbackQuery({ edgeClient, userId, source });
     const { data, error } = await query;
     if (error) return { ok: false, error: error.message };
     return { ok: true, entries: aggregateProjectUsageRows(data, limit) };

@@ -9,6 +9,8 @@ module.exports = {
   DEFAULT_PROJECT_USAGE_LIMIT: projectUsageCore.DEFAULT_PROJECT_USAGE_LIMIT,
   MAX_PROJECT_USAGE_LIMIT: projectUsageCore.MAX_PROJECT_USAGE_LIMIT,
   aggregateProjectUsageRows: projectUsageCore.aggregateProjectUsageRows,
+  buildProjectUsageAggregateQuery: projectUsageCore.buildProjectUsageAggregateQuery,
+  buildProjectUsageFallbackQuery: projectUsageCore.buildProjectUsageFallbackQuery,
   normalizeProjectUsageAggregateValue: projectUsageCore.normalizeProjectUsageAggregateValue,
   normalizeProjectUsageEntry: projectUsageCore.normalizeProjectUsageEntry,
   normalizeProjectUsageLimit: projectUsageCore.normalizeProjectUsageLimit,

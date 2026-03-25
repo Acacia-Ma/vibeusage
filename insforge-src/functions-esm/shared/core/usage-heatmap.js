@@ -9,3 +9,5 @@ export const buildUsageHeatmapPayload = usageHeatmapCore.buildUsageHeatmapPayloa
 export const normalizeHeatmapToDate = usageHeatmapCore.normalizeHeatmapToDate;
 export const normalizeHeatmapWeekStartsOn = usageHeatmapCore.normalizeHeatmapWeekStartsOn;
 export const normalizeHeatmapWeeks = usageHeatmapCore.normalizeHeatmapWeeks;
+export const resolveUsageHeatmapRequestContext =
+  usageHeatmapCore.resolveUsageHeatmapRequestContext;

@@ -1400,7 +1400,19 @@ var isWithinInterval2 = dateCore.isWithinInterval;
 var CORE_KEY7 = "__vibeusageUsageHeatmapCore";
 var dateCore2 = globalThis.__vibeusageDateCore;
 if (!dateCore2) throw new Error("date core not initialized");
-var { addUtcDays: addUtcDays3, formatDateUTC: formatDateUTC3, parseUtcDateString: parseUtcDateString3 } = dateCore2;
+var {
+  addDatePartsDays: addDatePartsDays3,
+  addUtcDays: addUtcDays3,
+  computeHeatmapWindowUtc: computeHeatmapWindowUtc3,
+  dateFromPartsUTC: dateFromPartsUTC3,
+  formatDateParts: formatDateParts3,
+  formatDateUTC: formatDateUTC3,
+  getLocalParts: getLocalParts3,
+  isUtcTimeZone: isUtcTimeZone3,
+  localDatePartsToUtc: localDatePartsToUtc3,
+  parseDateParts: parseDateParts3,
+  parseUtcDateString: parseUtcDateString3
+} = dateCore2;
 function accumulateHeatmapDayValue({ valuesByDay, dayKey, billable } = {}) {
   if (!(valuesByDay instanceof Map)) throw new Error("valuesByDay map is required");
   if (typeof dayKey !== "string" || !dayKey) throw new Error("valid dayKey is required");
@@ -1428,6 +1440,64 @@ function normalizeHeatmapToDate(raw) {
   const value = String(raw).trim();
   const dt = parseUtcDateString3(value);
   return dt ? formatDateUTC3(dt) : null;
+}
+function resolveUsageHeatmapRequestContext({ url, tzContext, now = /* @__PURE__ */ new Date() } = {}) {
+  const weeks = normalizeHeatmapWeeks(url?.searchParams?.get("weeks"));
+  if (!weeks) return { ok: false, status: 400, error: "Invalid weeks" };
+  const weekStartsOn = normalizeHeatmapWeekStartsOn(url?.searchParams?.get("week_starts_on"));
+  if (!weekStartsOn) return { ok: false, status: 400, error: "Invalid week_starts_on" };
+  const toRaw = url?.searchParams?.get("to");
+  if (isUtcTimeZone3(tzContext)) {
+    const to2 = normalizeHeatmapToDate(toRaw);
+    if (!to2) return { ok: false, status: 400, error: "Invalid to" };
+    const { from: from2, gridStart: gridStart2, end: end2 } = computeHeatmapWindowUtc3({ weeks, weekStartsOn, to: to2 });
+    return {
+      ok: true,
+      timeMode: "utc",
+      weeks,
+      weekStartsOn,
+      from: from2,
+      to: to2,
+      gridStart: gridStart2,
+      end: end2,
+      startIso: gridStart2.toISOString(),
+      endIso: addUtcDays3(end2, 1).toISOString()
+    };
+  }
+  const todayParts = getLocalParts3(now, tzContext);
+  const toParts = toRaw ? parseDateParts3(toRaw) : {
+    year: todayParts.year,
+    month: todayParts.month,
+    day: todayParts.day
+  };
+  if (!toParts) return { ok: false, status: 400, error: "Invalid to" };
+  const end = dateFromPartsUTC3(toParts);
+  if (!end) return { ok: false, status: 400, error: "Invalid to" };
+  const desired = weekStartsOn === "mon" ? 1 : 0;
+  const endDow = end.getUTCDay();
+  const endWeekStart = addUtcDays3(end, -((endDow - desired + 7) % 7));
+  const gridStart = addUtcDays3(endWeekStart, -7 * (weeks - 1));
+  const from = formatDateUTC3(gridStart);
+  const to = formatDateParts3(toParts);
+  const startParts = parseDateParts3(from);
+  if (!startParts || !to) return { ok: false, status: 400, error: "Invalid to" };
+  const startUtc = localDatePartsToUtc3(startParts, tzContext);
+  const endUtc = localDatePartsToUtc3(addDatePartsDays3(toParts, 1), tzContext);
+  if (!Number.isFinite(startUtc.getTime()) || !Number.isFinite(endUtc.getTime())) {
+    return { ok: false, status: 400, error: "Invalid to" };
+  }
+  return {
+    ok: true,
+    timeMode: "local",
+    weeks,
+    weekStartsOn,
+    from,
+    to,
+    gridStart,
+    end,
+    startIso: startUtc.toISOString(),
+    endIso: endUtc.toISOString()
+  };
 }
 function quantileNearestRank(sortedBigints, q) {
   if (!Array.isArray(sortedBigints) || sortedBigints.length === 0) return 0n;
@@ -1527,6 +1597,7 @@ if (!globalThis[CORE_KEY7]) {
       accumulateHeatmapDayValue,
       buildUsageHeatmapPayload,
       computeActiveStreakDays,
+      resolveUsageHeatmapRequestContext,
       normalizeHeatmapToDate,
       normalizeHeatmapWeekStartsOn,
       normalizeHeatmapWeeks,
@@ -1546,6 +1617,7 @@ var buildUsageHeatmapPayload2 = usageHeatmapCore.buildUsageHeatmapPayload;
 var normalizeHeatmapToDate2 = usageHeatmapCore.normalizeHeatmapToDate;
 var normalizeHeatmapWeekStartsOn2 = usageHeatmapCore.normalizeHeatmapWeekStartsOn;
 var normalizeHeatmapWeeks2 = usageHeatmapCore.normalizeHeatmapWeeks;
+var resolveUsageHeatmapRequestContext2 = usageHeatmapCore.resolveUsageHeatmapRequestContext;
 
 // insforge-src/shared/usage-filter-request-core.mjs
 var CORE_KEY8 = "__vibeusageUsageFilterRequestCore";
@@ -2362,105 +2434,11 @@ var vibeusage_usage_heatmap_default = withRequestLogging2("vibeusage-usage-heatm
   const requestParams = resolveUsageFilterRequestParams2({ url });
   if (!requestParams.ok) return respond({ error: requestParams.error }, requestParams.status || 400, 0);
   const { source, model } = requestParams;
-  const weeksRaw = url.searchParams.get("weeks");
-  const weeks = normalizeHeatmapWeeks2(weeksRaw);
-  if (!weeks) return respond({ error: "Invalid weeks" }, 400, 0);
-  const weekStartsOnRaw = url.searchParams.get("week_starts_on");
-  const weekStartsOn = normalizeHeatmapWeekStartsOn2(weekStartsOnRaw);
-  if (!weekStartsOn) return respond({ error: "Invalid week_starts_on" }, 400, 0);
-  const toRaw = url.searchParams.get("to");
-  if (isUtcTimeZone2(tzContext)) {
-    const to2 = normalizeHeatmapToDate2(toRaw);
-    if (!to2) return respond({ error: "Invalid to" }, 400, 0);
-    const { from: from2, gridStart: gridStart2, end: end2 } = computeHeatmapWindowUtc2({
-      weeks,
-      weekStartsOn,
-      to: to2
-    });
-    const auth2 = await getAccessContext2({ baseUrl: getBaseUrl2(), bearer, allowPublic: true });
-    if (!auth2.ok) return respond({ error: auth2.error || "Unauthorized" }, auth2.status || 401, 0);
-    const startIso2 = gridStart2.toISOString();
-    const endUtc2 = addUtcDays2(end2, 1);
-    const endIso2 = endUtc2.toISOString();
-    const { canonicalModel: canonicalModel2, usageModels: usageModels2, hasModelFilter: hasModelFilter2, aliasTimeline: aliasTimeline2 } = await resolveUsageFilterRequestContext2({
-      edgeClient: auth2.edgeClient,
-      model,
-      effectiveDate: to2
-    });
-    const valuesByDay2 = /* @__PURE__ */ new Map();
-    const queryStartMs2 = Date.now();
-    let rowCount2 = 0;
-    const { error: error2, rowCount: scannedRows2 } = await collectHourlyUsageRows2({
-      edgeClient: auth2.edgeClient,
-      userId: auth2.userId,
-      source,
-      usageModels: usageModels2,
-      canonicalModel: canonicalModel2,
-      hasModelFilter: hasModelFilter2,
-      aliasTimeline: aliasTimeline2,
-      effectiveDate: to2,
-      startIso: startIso2,
-      endIso: endIso2,
-      select: "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-      onUsageRow: ({ usageRow }) => {
-        accumulateHeatmapDayValue2({
-          valuesByDay: valuesByDay2,
-          dayKey: formatDateUTC2(usageRow.date),
-          billable: usageRow.billable
-        });
-      }
-    });
-    rowCount2 += scannedRows2;
-    const queryDurationMs2 = Date.now() - queryStartMs2;
-    logSlowQuery2(logger, {
-      query_label: "usage_heatmap",
-      duration_ms: queryDurationMs2,
-      row_count: rowCount2,
-      range_weeks: weeks,
-      range_days: weeks * 7,
-      source: source || null,
-      model: canonicalModel2 || null,
-      tz: tzContext?.timeZone || null,
-      tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null
-    });
-    if (error2) return respond({ error: error2.message }, 500, queryDurationMs2);
-    return respond(
-      buildUsageHeatmapPayload2({
-        valuesByDay: valuesByDay2,
-        gridStart: gridStart2,
-        end: end2,
-        weeks,
-        from: from2,
-        to: to2,
-        weekStartsOn,
-        getDayKey: formatDateUTC2,
-        renderDay: formatDateUTC2
-      }),
-      200,
-      queryDurationMs2
-    );
+  const requestContext = resolveUsageHeatmapRequestContext2({ url, tzContext });
+  if (!requestContext.ok) {
+    return respond({ error: requestContext.error }, requestContext.status || 400, 0);
   }
-  const todayParts = getLocalParts2(/* @__PURE__ */ new Date(), tzContext);
-  const toParts = toRaw ? parseDateParts2(toRaw) : {
-    year: todayParts.year,
-    month: todayParts.month,
-    day: todayParts.day
-  };
-  if (!toParts) return respond({ error: "Invalid to" }, 400, 0);
-  const end = dateFromPartsUTC2(toParts);
-  if (!end) return respond({ error: "Invalid to" }, 400, 0);
-  const desired = weekStartsOn === "mon" ? 1 : 0;
-  const endDow = end.getUTCDay();
-  const endWeekStart = addUtcDays2(end, -((endDow - desired + 7) % 7));
-  const gridStart = addUtcDays2(endWeekStart, -7 * (weeks - 1));
-  const from = formatDateUTC2(gridStart);
-  const to = formatDateParts2(toParts);
-  const startParts = parseDateParts2(from);
-  if (!startParts) return respond({ error: "Invalid to" }, 400, 0);
-  const startUtc = localDatePartsToUtc2(startParts, tzContext);
-  const endUtc = localDatePartsToUtc2(addDatePartsDays2(toParts, 1), tzContext);
-  const startIso = startUtc.toISOString();
-  const endIso = endUtc.toISOString();
+  const { timeMode, weeks, weekStartsOn, from, to, gridStart, end, startIso, endIso } = requestContext;
   const auth = await getAccessContext2({ baseUrl: getBaseUrl2(), bearer, allowPublic: true });
   if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
   const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } = await resolveUsageFilterRequestContext2({
@@ -2486,7 +2464,7 @@ var vibeusage_usage_heatmap_default = withRequestLogging2("vibeusage-usage-heatm
     onUsageRow: ({ usageRow }) => {
       accumulateHeatmapDayValue2({
         valuesByDay,
-        dayKey: formatLocalDateKey2(usageRow.date, tzContext),
+        dayKey: timeMode === "utc" ? formatDateUTC2(usageRow.date) : formatLocalDateKey2(usageRow.date, tzContext),
         billable: usageRow.billable
       });
     }

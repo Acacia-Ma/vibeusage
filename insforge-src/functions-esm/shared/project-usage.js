@@ -6,6 +6,8 @@ if (!projectUsageCore) throw new Error("project usage core not initialized");
 export const DEFAULT_PROJECT_USAGE_LIMIT = projectUsageCore.DEFAULT_PROJECT_USAGE_LIMIT;
 export const MAX_PROJECT_USAGE_LIMIT = projectUsageCore.MAX_PROJECT_USAGE_LIMIT;
 export const aggregateProjectUsageRows = projectUsageCore.aggregateProjectUsageRows;
+export const buildProjectUsageAggregateQuery = projectUsageCore.buildProjectUsageAggregateQuery;
+export const buildProjectUsageFallbackQuery = projectUsageCore.buildProjectUsageFallbackQuery;
 export const normalizeProjectUsageAggregateValue = projectUsageCore.normalizeProjectUsageAggregateValue;
 export const normalizeProjectUsageEntry = projectUsageCore.normalizeProjectUsageEntry;
 export const normalizeProjectUsageLimit = projectUsageCore.normalizeProjectUsageLimit;

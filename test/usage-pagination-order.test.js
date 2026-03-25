@@ -139,7 +139,7 @@ test("usage pagination uses deterministic ordering", () => {
       normalize(readFile("insforge-src/functions-esm/vibeusage-usage-heatmap.js")),
       rowCollectorCall,
     ),
-    2,
+    1,
   );
   assert.equal(
     countOccurrences(

@@ -6,7 +6,19 @@ const CORE_KEY = "__vibeusageUsageHeatmapCore";
 const dateCore = globalThis.__vibeusageDateCore;
 if (!dateCore) throw new Error("date core not initialized");
 
-const { addUtcDays, formatDateUTC, parseUtcDateString } = dateCore;
+const {
+  addDatePartsDays,
+  addUtcDays,
+  computeHeatmapWindowUtc,
+  dateFromPartsUTC,
+  formatDateParts,
+  formatDateUTC,
+  getLocalParts,
+  isUtcTimeZone,
+  localDatePartsToUtc,
+  parseDateParts,
+  parseUtcDateString,
+} = dateCore;
 
 function accumulateHeatmapDayValue({ valuesByDay, dayKey, billable } = {}) {
   if (!(valuesByDay instanceof Map)) throw new Error("valuesByDay map is required");
@@ -38,6 +50,75 @@ function normalizeHeatmapToDate(raw) {
   const value = String(raw).trim();
   const dt = parseUtcDateString(value);
   return dt ? formatDateUTC(dt) : null;
+}
+
+function resolveUsageHeatmapRequestContext({ url, tzContext, now = new Date() } = {}) {
+  const weeks = normalizeHeatmapWeeks(url?.searchParams?.get("weeks"));
+  if (!weeks) return { ok: false, status: 400, error: "Invalid weeks" };
+
+  const weekStartsOn = normalizeHeatmapWeekStartsOn(url?.searchParams?.get("week_starts_on"));
+  if (!weekStartsOn) return { ok: false, status: 400, error: "Invalid week_starts_on" };
+
+  const toRaw = url?.searchParams?.get("to");
+  if (isUtcTimeZone(tzContext)) {
+    const to = normalizeHeatmapToDate(toRaw);
+    if (!to) return { ok: false, status: 400, error: "Invalid to" };
+
+    const { from, gridStart, end } = computeHeatmapWindowUtc({ weeks, weekStartsOn, to });
+    return {
+      ok: true,
+      timeMode: "utc",
+      weeks,
+      weekStartsOn,
+      from,
+      to,
+      gridStart,
+      end,
+      startIso: gridStart.toISOString(),
+      endIso: addUtcDays(end, 1).toISOString(),
+    };
+  }
+
+  const todayParts = getLocalParts(now, tzContext);
+  const toParts = toRaw
+    ? parseDateParts(toRaw)
+    : {
+        year: todayParts.year,
+        month: todayParts.month,
+        day: todayParts.day,
+      };
+  if (!toParts) return { ok: false, status: 400, error: "Invalid to" };
+
+  const end = dateFromPartsUTC(toParts);
+  if (!end) return { ok: false, status: 400, error: "Invalid to" };
+
+  const desired = weekStartsOn === "mon" ? 1 : 0;
+  const endDow = end.getUTCDay();
+  const endWeekStart = addUtcDays(end, -((endDow - desired + 7) % 7));
+  const gridStart = addUtcDays(endWeekStart, -7 * (weeks - 1));
+  const from = formatDateUTC(gridStart);
+  const to = formatDateParts(toParts);
+  const startParts = parseDateParts(from);
+  if (!startParts || !to) return { ok: false, status: 400, error: "Invalid to" };
+
+  const startUtc = localDatePartsToUtc(startParts, tzContext);
+  const endUtc = localDatePartsToUtc(addDatePartsDays(toParts, 1), tzContext);
+  if (!Number.isFinite(startUtc.getTime()) || !Number.isFinite(endUtc.getTime())) {
+    return { ok: false, status: 400, error: "Invalid to" };
+  }
+
+  return {
+    ok: true,
+    timeMode: "local",
+    weeks,
+    weekStartsOn,
+    from,
+    to,
+    gridStart,
+    end,
+    startIso: startUtc.toISOString(),
+    endIso: endUtc.toISOString(),
+  };
 }
 
 function quantileNearestRank(sortedBigints, q) {
@@ -146,6 +227,7 @@ if (!globalThis[CORE_KEY]) {
       accumulateHeatmapDayValue,
       buildUsageHeatmapPayload,
       computeActiveStreakDays,
+      resolveUsageHeatmapRequestContext,
       normalizeHeatmapToDate,
       normalizeHeatmapWeekStartsOn,
       normalizeHeatmapWeeks,
