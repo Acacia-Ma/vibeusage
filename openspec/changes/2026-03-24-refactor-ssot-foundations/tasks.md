@@ -45,6 +45,8 @@
 - [x] 4.2.21 Converge summary rolling-window usage aggregation through `usage-pricing-core` while keeping time-range orchestration in the endpoint.
 - [x] 4.2.22 Converge raw hourly row normalization through `usage-row-core` while keeping endpoint-specific timestamp fallback explicit.
 - [x] 4.2.23 Converge heatmap payload assembly through `usage-heatmap-core` while keeping time-window/query orchestration in the endpoint.
+- [x] 4.2.24 Converge model-breakdown source/model aggregation and totals formatting through `usage-pricing-core` while keeping alias resolution and bucket assembly in the endpoint.
+- [x] 4.2.25 Converge aggregate summary payload assembly through `usage-pricing-core` for `usage-summary` and `usage-daily`.
 
 ## 5. Verification
 

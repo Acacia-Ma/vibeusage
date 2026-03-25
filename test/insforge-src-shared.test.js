@@ -499,6 +499,137 @@ test("usage pricing core resolves aggregate pricing summary state", async () => 
   assert.deepEqual(Array.from(summaryState.canonicalModels.values()), ["alpha"]);
 });
 
+test("usage pricing core builds aggregate payload from shared pricing summary", () => {
+  const totals = usageMetricsCore.createTotals();
+  usageMetricsCore.addRowTotals(totals, {
+    total_tokens: 2000000,
+    billable_total_tokens: 2000000,
+    input_tokens: 1000000,
+    cached_input_tokens: 0,
+    output_tokens: 1000000,
+    reasoning_output_tokens: 0,
+  });
+
+  const payload = usagePricingCore.buildAggregateUsagePayload({
+    totals,
+    hasModelParam: true,
+    pricingSummary: {
+      impliedModelId: "alpha",
+      impliedModelDisplay: "Alpha",
+      overallCost: {
+        profile: {
+          model: "alpha",
+          source: "openrouter",
+          effective_from: "2025-02-01",
+          rates_micro_per_million: {
+            input: 1000000,
+            cached_input: 0,
+            output: 1000000,
+            reasoning_output: 1000000,
+          },
+        },
+        pricing_mode: "overlap",
+      },
+      summaryPricingMode: "overlap",
+      totalCostMicros: 2000000n,
+    },
+  });
+
+  assert.deepEqual(payload.selection, {
+    model_id: "alpha",
+    model: "Alpha",
+  });
+  assert.deepEqual(payload.summary, {
+    totals: {
+      total_tokens: "2000000",
+      billable_total_tokens: "2000000",
+      input_tokens: "1000000",
+      cached_input_tokens: "0",
+      output_tokens: "1000000",
+      reasoning_output_tokens: "0",
+      total_cost_usd: "2.000000",
+    },
+    pricing: {
+      model: "alpha",
+      pricing_mode: "overlap",
+      source: "openrouter",
+      effective_from: "2025-02-01",
+      rates_per_million_usd: {
+        input: "1.000000",
+        cached_input: "0.000000",
+        output: "1.000000",
+        reasoning_output: "1.000000",
+      },
+    },
+  });
+});
+
+test("usage pricing core builds model breakdown sources from shared state", () => {
+  const state = usagePricingCore.createModelBreakdownState();
+
+  usagePricingCore.accumulateModelBreakdownRow({
+    state,
+    row: {
+      source: "codex",
+      total_tokens: 10,
+      billable_total_tokens: 7,
+      input_tokens: 6,
+      cached_input_tokens: 0,
+      output_tokens: 4,
+      reasoning_output_tokens: 0,
+    },
+    identity: {
+      model_id: "alpha",
+      model: "Alpha",
+    },
+  });
+  usagePricingCore.accumulateModelBreakdownRow({
+    state,
+    row: {
+      source: "codex",
+      total_tokens: 12,
+      billable_total_tokens: 9,
+      input_tokens: 8,
+      cached_input_tokens: 0,
+      output_tokens: 4,
+      reasoning_output_tokens: 0,
+    },
+    identity: {
+      model_id: "beta",
+      model: "Beta",
+    },
+  });
+
+  usagePricingCore.attributeModelBreakdownBucketCost({
+    state,
+    source: "codex",
+    identity: { model_id: "alpha", model: "Alpha" },
+    costMicros: 1000000n,
+  });
+  usagePricingCore.attributeModelBreakdownBucketCost({
+    state,
+    source: "codex",
+    identity: { model_id: "beta", model: "Beta" },
+    costMicros: 2000000n,
+  });
+
+  const sources = usagePricingCore.buildModelBreakdownSources({
+    state,
+    pricingProfile: pricing.getDefaultPricingProfile(),
+  });
+
+  assert.equal(sources.length, 1);
+  assert.equal(sources[0].source, "codex");
+  assert.equal(sources[0].totals.total_tokens, "22");
+  assert.equal(sources[0].totals.billable_total_tokens, "16");
+  assert.equal(sources[0].totals.total_cost_usd, "3.000000");
+  assert.equal(sources[0].models.length, 2);
+  assert.equal(sources[0].models[0].model_id, "beta");
+  assert.equal(sources[0].models[0].totals.total_cost_usd, "2.000000");
+  assert.equal(sources[0].models[1].model_id, "alpha");
+  assert.equal(sources[0].models[1].totals.total_cost_usd, "1.000000");
+});
+
 test("usage pricing core accumulates aggregate usage rows into shared state", () => {
   const state = usagePricingCore.createAggregateUsageState({
     hasModelParam: false,

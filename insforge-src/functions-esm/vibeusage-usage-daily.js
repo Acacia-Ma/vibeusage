@@ -15,7 +15,6 @@ import { isDebugEnabled, withSlowQueryDebugPayload } from "./shared/debug.js";
 import { getBaseUrl } from "./shared/env.js";
 import { handleOptions, json } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
-import { buildPricingMetadata, formatUsdFromMicros } from "./shared/pricing.js";
 import { getSourceParam } from "./shared/source.js";
 import "../shared/usage-pricing-core.mjs";
 import {
@@ -29,6 +28,7 @@ if (!usagePricingCore) throw new Error("usage pricing core not initialized");
 const {
   createAggregateUsageState,
   accumulateAggregateUsageRow,
+  buildAggregateUsagePayload,
   resolveAggregateUsagePricing,
 } = usagePricingCore;
 
@@ -161,6 +161,11 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
     totals: aggregateState.totals,
     defaultModel: DEFAULT_MODEL,
   });
+  const aggregatePayload = buildAggregateUsagePayload({
+    totals: aggregateState.totals,
+    pricingSummary,
+    hasModelParam,
+  });
 
   const rows = dayKeys.map((day) => {
     const bucket = buckets.get(day);
@@ -175,33 +180,13 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
     };
   });
 
-  const summary = {
-    totals: {
-      total_tokens: aggregateState.totals.total_tokens.toString(),
-      billable_total_tokens: aggregateState.totals.billable_total_tokens.toString(),
-      input_tokens: aggregateState.totals.input_tokens.toString(),
-      cached_input_tokens: aggregateState.totals.cached_input_tokens.toString(),
-      output_tokens: aggregateState.totals.output_tokens.toString(),
-      reasoning_output_tokens: aggregateState.totals.reasoning_output_tokens.toString(),
-      total_cost_usd: formatUsdFromMicros(pricingSummary.totalCostMicros),
-    },
-    pricing: buildPricingMetadata({
-      profile: pricingSummary.overallCost.profile,
-      pricingMode: pricingSummary.summaryPricingMode,
-    }),
-  };
-
   return respond(
     {
       from,
       to,
-      model_id: hasModelParam ? pricingSummary.impliedModelId || null : null,
-      model:
-        hasModelParam && pricingSummary.impliedModelId
-          ? pricingSummary.impliedModelDisplay
-          : null,
+      ...aggregatePayload.selection,
       data: rows,
-      summary,
+      summary: aggregatePayload.summary,
     },
     200,
     queryDurationMs,

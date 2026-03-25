@@ -39,7 +39,7 @@ const {
   parsePricingBucketKey,
   resolveDisplayName,
 } = usageMetricsCore;
-const { resolvePricingProfile, computeUsageCost } = pricingCore;
+const { resolvePricingProfile, computeUsageCost, formatUsdFromMicros } = pricingCore;
 const { formatLocalDateKey, listDateStrings } = dateCore;
 const { resolveHourlyUsageRowState } = usageRowCore;
 
@@ -198,6 +198,158 @@ function buildRollingUsagePayload({
     avg_per_active_day: avgPerActiveDay.toString(),
     avg_per_day: avgPerDay.toString(),
   };
+}
+
+function buildAggregateUsagePayload({
+  totals,
+  pricingSummary,
+  hasModelParam = false,
+} = {}) {
+  const resolvedTotals = totals || createTotals();
+  const impliedModelId = pricingSummary?.impliedModelId || null;
+  return {
+    selection: {
+      model_id: hasModelParam ? impliedModelId : null,
+      model:
+        hasModelParam && impliedModelId
+          ? pricingSummary?.impliedModelDisplay || impliedModelId
+          : null,
+    },
+    summary: {
+      totals: {
+        total_tokens: runtimePrimitivesCore.toBigInt(resolvedTotals?.total_tokens).toString(),
+        billable_total_tokens: runtimePrimitivesCore
+          .toBigInt(resolvedTotals?.billable_total_tokens)
+          .toString(),
+        input_tokens: runtimePrimitivesCore.toBigInt(resolvedTotals?.input_tokens).toString(),
+        cached_input_tokens: runtimePrimitivesCore
+          .toBigInt(resolvedTotals?.cached_input_tokens)
+          .toString(),
+        output_tokens: runtimePrimitivesCore.toBigInt(resolvedTotals?.output_tokens).toString(),
+        reasoning_output_tokens: runtimePrimitivesCore
+          .toBigInt(resolvedTotals?.reasoning_output_tokens)
+          .toString(),
+        total_cost_usd: formatUsdFromMicros(pricingSummary?.totalCostMicros || 0n),
+      },
+      pricing: pricingCore.buildPricingMetadata({
+        profile: pricingSummary?.overallCost?.profile || pricingCore.getDefaultPricingProfile(),
+        pricingMode:
+          pricingSummary?.summaryPricingMode || pricingSummary?.overallCost?.pricing_mode || "add",
+      }),
+    },
+  };
+}
+
+function createModelBreakdownState() {
+  return {
+    sourcesMap: new Map(),
+  };
+}
+
+function getModelBreakdownSourceEntry(state, source) {
+  if (!state?.sourcesMap) return null;
+  const entry = getSourceEntry(state.sourcesMap, source);
+  if (!(entry.models instanceof Map)) {
+    entry.models = new Map();
+  }
+  return entry;
+}
+
+function getModelBreakdownCanonicalEntry(sourceEntry, identity, defaultModel = DEFAULT_MODEL) {
+  if (!sourceEntry) return null;
+  const models = sourceEntry.models instanceof Map ? sourceEntry.models : new Map();
+  sourceEntry.models = models;
+  const key = identity?.model_id || defaultModel;
+  if (models.has(key)) return models.get(key);
+  const entry = {
+    model_id: key,
+    model: identity?.model || key,
+    totals: createTotals(),
+  };
+  models.set(key, entry);
+  return entry;
+}
+
+function accumulateModelBreakdownRow({
+  state,
+  row,
+  identity,
+  defaultModel = DEFAULT_MODEL,
+} = {}) {
+  if (!state || !row) return { sourceEntry: null, modelEntry: null };
+  const sourceEntry = getModelBreakdownSourceEntry(state, row.source);
+  addRowTotals(sourceEntry?.totals, row);
+  const modelEntry = getModelBreakdownCanonicalEntry(sourceEntry, identity, defaultModel);
+  addRowTotals(modelEntry?.totals, row);
+  return { sourceEntry, modelEntry };
+}
+
+function addModelBreakdownCostMicros(entry, costMicros) {
+  if (!entry) return;
+  entry.cost_micros = runtimePrimitivesCore.toBigInt(entry.cost_micros) + runtimePrimitivesCore.toBigInt(costMicros);
+}
+
+function attributeModelBreakdownBucketCost({
+  state,
+  source,
+  identity,
+  costMicros,
+  defaultModel = DEFAULT_MODEL,
+} = {}) {
+  if (!source) return { sourceEntry: null, modelEntry: null };
+  const sourceEntry = getModelBreakdownSourceEntry(state, source);
+  addModelBreakdownCostMicros(sourceEntry, costMicros);
+  const modelEntry = getModelBreakdownCanonicalEntry(sourceEntry, identity, defaultModel);
+  addModelBreakdownCostMicros(modelEntry, costMicros);
+  return { sourceEntry, modelEntry };
+}
+
+function resolveModelBreakdownCostMicros(entry, pricingProfile) {
+  if (!entry) return 0n;
+  if (typeof entry.cost_micros === "bigint") return entry.cost_micros;
+  return computeUsageCost(entry.totals, pricingProfile).cost_micros;
+}
+
+function formatModelBreakdownEntry(entry, pricingProfile) {
+  const totals = entry?.totals || createTotals();
+  const costMicros = resolveModelBreakdownCostMicros(entry, pricingProfile);
+  const { cost_micros: _ignored, ...rest } = entry || {};
+  return {
+    ...rest,
+    totals: {
+      total_tokens: totals.total_tokens.toString(),
+      billable_total_tokens: totals.billable_total_tokens.toString(),
+      input_tokens: totals.input_tokens.toString(),
+      cached_input_tokens: totals.cached_input_tokens.toString(),
+      output_tokens: totals.output_tokens.toString(),
+      reasoning_output_tokens: totals.reasoning_output_tokens.toString(),
+      total_cost_usd: formatUsdFromMicros(costMicros),
+    },
+  };
+}
+
+function compareModelBreakdownEntries(a, b) {
+  const aSort = runtimePrimitivesCore.toBigInt(a?.totals?.billable_total_tokens ?? a?.totals?.total_tokens);
+  const bSort = runtimePrimitivesCore.toBigInt(b?.totals?.billable_total_tokens ?? b?.totals?.total_tokens);
+  if (aSort === bSort) return String(a?.model || "").localeCompare(String(b?.model || ""));
+  return aSort > bSort ? -1 : 1;
+}
+
+function buildModelBreakdownSources({ state, pricingProfile } = {}) {
+  if (!(state?.sourcesMap instanceof Map)) return [];
+  return Array.from(state.sourcesMap.values())
+    .map((entry) => {
+      const models = Array.from(entry.models?.values?.() || [])
+        .map((modelEntry) => formatModelBreakdownEntry(modelEntry, pricingProfile))
+        .sort(compareModelBreakdownEntries);
+      const totals = formatModelBreakdownEntry(entry, pricingProfile).totals;
+      return {
+        source: entry.source,
+        totals,
+        models,
+      };
+    })
+    .sort((a, b) => a.source.localeCompare(b.source));
 }
 
 async function resolveBucketedUsagePricing({
@@ -391,6 +543,11 @@ if (!globalThis[CORE_KEY]) {
       createRollingUsageState,
       accumulateRollingUsageRow,
       buildRollingUsagePayload,
+      buildAggregateUsagePayload,
+      createModelBreakdownState,
+      accumulateModelBreakdownRow,
+      attributeModelBreakdownBucketCost,
+      buildModelBreakdownSources,
       resolveBucketedUsagePricing,
       accumulateSourceCostMicros,
       resolveImpliedModelId,

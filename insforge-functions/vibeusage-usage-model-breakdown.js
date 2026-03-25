@@ -1742,13 +1742,6 @@ var createLogger2 = loggingCore.createLogger;
 var withRequestLogging2 = loggingCore.withRequestLogging;
 var logSlowQuery2 = loggingCore.logSlowQuery;
 
-// insforge-src/functions-esm/shared/numbers.js
-var runtimePrimitivesCore2 = globalThis.__vibeusageRuntimePrimitivesCore;
-if (!runtimePrimitivesCore2) throw new Error("runtime primitives core not initialized");
-var toBigInt2 = runtimePrimitivesCore2.toBigInt;
-var toPositiveIntOrNull2 = runtimePrimitivesCore2.toPositiveIntOrNull;
-var toPositiveInt2 = runtimePrimitivesCore2.toPositiveInt;
-
 // insforge-src/shared/pricing-core.mjs
 var CORE_KEY13 = "__vibeusagePricingCore";
 var MICROS_PER_DOLLAR = 1000000n;
@@ -1764,14 +1757,14 @@ var DEFAULT_PROFILE = {
     reasoning_output: 14e6
   }
 };
-var runtimePrimitivesCore3 = globalThis.__vibeusageRuntimePrimitivesCore;
-if (!runtimePrimitivesCore3) throw new Error("runtime primitives core not initialized");
+var runtimePrimitivesCore2 = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore2) throw new Error("runtime primitives core not initialized");
 var usageModelCore3 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore3) throw new Error("usage-model core not initialized");
 var envCore5 = globalThis.__vibeusageEnvCore;
 if (!envCore5) throw new Error("env core not initialized");
 function normalizeSource2(value) {
-  return runtimePrimitivesCore3.normalizeSource(value);
+  return runtimePrimitivesCore2.normalizeSource(value);
 }
 function normalizeModelValue(value) {
   const normalized = usageModelCore3.normalizeModel?.(value) || null;
@@ -1837,11 +1830,11 @@ async function resolvePricingProfile({ edgeClient, effectiveDate, model, source 
 }
 function computeUsageCost(totals, profile) {
   const pricing = normalizeProfile(profile || DEFAULT_PROFILE);
-  const input = runtimePrimitivesCore3.toBigInt(totals?.input_tokens);
-  const cached = runtimePrimitivesCore3.toBigInt(totals?.cached_input_tokens);
-  const output = runtimePrimitivesCore3.toBigInt(totals?.output_tokens);
-  const reasoning = runtimePrimitivesCore3.toBigInt(totals?.reasoning_output_tokens);
-  const total = runtimePrimitivesCore3.toBigInt(totals?.total_tokens);
+  const input = runtimePrimitivesCore2.toBigInt(totals?.input_tokens);
+  const cached = runtimePrimitivesCore2.toBigInt(totals?.cached_input_tokens);
+  const output = runtimePrimitivesCore2.toBigInt(totals?.output_tokens);
+  const reasoning = runtimePrimitivesCore2.toBigInt(totals?.reasoning_output_tokens);
+  const total = runtimePrimitivesCore2.toBigInt(totals?.total_tokens);
   const sumAdd = input + cached + output + reasoning;
   const sumOverlap = input + output;
   const canOverlap = cached <= input && reasoning <= output;
@@ -1880,7 +1873,7 @@ function buildPricingMetadata({ profile, pricingMode }) {
   };
 }
 function formatUsdFromMicros(micros) {
-  const value = runtimePrimitivesCore3.toBigInt(micros);
+  const value = runtimePrimitivesCore2.toBigInt(micros);
   const dollars = value / MICROS_PER_DOLLAR;
   const remainder = value % MICROS_PER_DOLLAR;
   return `${dollars.toString()}.${remainder.toString().padStart(6, "0")}`;
@@ -1900,12 +1893,12 @@ function normalizeProfile(profile) {
     source: typeof profile.source === "string" ? profile.source : DEFAULT_PROFILE.source,
     effective_from: typeof profile.effective_from === "string" ? profile.effective_from : DEFAULT_PROFILE.effective_from,
     rates_micro_per_million: {
-      input: runtimePrimitivesCore3.toPositiveInt(profile?.rates_micro_per_million?.input),
-      cached_input: runtimePrimitivesCore3.toPositiveInt(
+      input: runtimePrimitivesCore2.toPositiveInt(profile?.rates_micro_per_million?.input),
+      cached_input: runtimePrimitivesCore2.toPositiveInt(
         profile?.rates_micro_per_million?.cached_input
       ),
-      output: runtimePrimitivesCore3.toPositiveInt(profile?.rates_micro_per_million?.output),
-      reasoning_output: runtimePrimitivesCore3.toPositiveInt(
+      output: runtimePrimitivesCore2.toPositiveInt(profile?.rates_micro_per_million?.output),
+      reasoning_output: runtimePrimitivesCore2.toPositiveInt(
         profile?.rates_micro_per_million?.reasoning_output
       )
     }
@@ -1936,19 +1929,19 @@ var buildPricingMetadata2 = pricingCore.buildPricingMetadata;
 var formatUsdFromMicros2 = pricingCore.formatUsdFromMicros;
 
 // insforge-src/functions-esm/shared/source.js
-var runtimePrimitivesCore4 = globalThis.__vibeusageRuntimePrimitivesCore;
-if (!runtimePrimitivesCore4) throw new Error("runtime primitives core not initialized");
-var MAX_SOURCE_LENGTH2 = runtimePrimitivesCore4.MAX_SOURCE_LENGTH;
-var normalizeSource3 = runtimePrimitivesCore4.normalizeSource;
-var getSourceParam2 = runtimePrimitivesCore4.getSourceParam;
+var runtimePrimitivesCore3 = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore3) throw new Error("runtime primitives core not initialized");
+var MAX_SOURCE_LENGTH2 = runtimePrimitivesCore3.MAX_SOURCE_LENGTH;
+var normalizeSource3 = runtimePrimitivesCore3.normalizeSource;
+var getSourceParam2 = runtimePrimitivesCore3.getSourceParam;
 
 // insforge-src/shared/usage-metrics-core.mjs
 var CORE_KEY14 = "__vibeusageUsageMetricsCore";
 var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
 var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
 var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
-var runtimePrimitivesCore5 = globalThis.__vibeusageRuntimePrimitivesCore;
-if (!runtimePrimitivesCore5) throw new Error("runtime primitives core not initialized");
+var runtimePrimitivesCore4 = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore4) throw new Error("runtime primitives core not initialized");
 function createTotals() {
   return {
     total_tokens: 0n,
@@ -1961,20 +1954,20 @@ function createTotals() {
 }
 function addRowTotals(target, row) {
   if (!target || !row) return;
-  target.total_tokens += runtimePrimitivesCore5.toBigInt(row?.total_tokens);
-  target.billable_total_tokens += runtimePrimitivesCore5.toBigInt(row?.billable_total_tokens);
-  target.input_tokens += runtimePrimitivesCore5.toBigInt(row?.input_tokens);
-  target.cached_input_tokens += runtimePrimitivesCore5.toBigInt(row?.cached_input_tokens);
-  target.output_tokens += runtimePrimitivesCore5.toBigInt(row?.output_tokens);
-  target.reasoning_output_tokens += runtimePrimitivesCore5.toBigInt(row?.reasoning_output_tokens);
+  target.total_tokens += runtimePrimitivesCore4.toBigInt(row?.total_tokens);
+  target.billable_total_tokens += runtimePrimitivesCore4.toBigInt(row?.billable_total_tokens);
+  target.input_tokens += runtimePrimitivesCore4.toBigInt(row?.input_tokens);
+  target.cached_input_tokens += runtimePrimitivesCore4.toBigInt(row?.cached_input_tokens);
+  target.output_tokens += runtimePrimitivesCore4.toBigInt(row?.output_tokens);
+  target.reasoning_output_tokens += runtimePrimitivesCore4.toBigInt(row?.reasoning_output_tokens);
 }
 function computeBillableTotalTokens({ source, totals } = {}) {
-  const normalizedSource = runtimePrimitivesCore5.normalizeSource(source) || "unknown";
-  const input = runtimePrimitivesCore5.toBigInt(totals?.input_tokens);
-  const cached = runtimePrimitivesCore5.toBigInt(totals?.cached_input_tokens);
-  const output = runtimePrimitivesCore5.toBigInt(totals?.output_tokens);
-  const reasoning = runtimePrimitivesCore5.toBigInt(totals?.reasoning_output_tokens);
-  const total = runtimePrimitivesCore5.toBigInt(totals?.total_tokens);
+  const normalizedSource = runtimePrimitivesCore4.normalizeSource(source) || "unknown";
+  const input = runtimePrimitivesCore4.toBigInt(totals?.input_tokens);
+  const cached = runtimePrimitivesCore4.toBigInt(totals?.cached_input_tokens);
+  const output = runtimePrimitivesCore4.toBigInt(totals?.output_tokens);
+  const reasoning = runtimePrimitivesCore4.toBigInt(totals?.reasoning_output_tokens);
+  const total = runtimePrimitivesCore4.toBigInt(totals?.total_tokens);
   const hasTotal = Boolean(totals && Object.prototype.hasOwnProperty.call(totals, "total_tokens"));
   if (BILLABLE_TOTAL.has(normalizedSource)) return total;
   if (BILLABLE_ADD_ALL.has(normalizedSource)) return input + cached + output + reasoning;
@@ -1993,14 +1986,14 @@ function resolveBillableTotals({
     row && Object.prototype.hasOwnProperty.call(row, billableField) && row[billableField] != null
   );
   const resolvedTotals = totals || row;
-  const billable = stored ? runtimePrimitivesCore5.toBigInt(row?.[billableField]) : computeBillableTotalTokens({ source, totals: resolvedTotals });
+  const billable = stored ? runtimePrimitivesCore4.toBigInt(row?.[billableField]) : computeBillableTotalTokens({ source, totals: resolvedTotals });
   return { billable, hasStoredBillable: stored };
 }
 function applyTotalsAndBillable({ totals, row, billable, hasStoredBillable } = {}) {
   if (!totals || !row) return;
   addRowTotals(totals, row);
   if (!hasStoredBillable) {
-    totals.billable_total_tokens += runtimePrimitivesCore5.toBigInt(billable);
+    totals.billable_total_tokens += runtimePrimitivesCore4.toBigInt(billable);
   }
 }
 function getSourceEntry(map, source) {
@@ -2062,8 +2055,8 @@ if (!globalThis[CORE_KEY14]) {
 var CORE_KEY15 = "__vibeusageUsageRowCore";
 var DEFAULT_SOURCE = "codex";
 var DEFAULT_MODEL2 = "unknown";
-var runtimePrimitivesCore6 = globalThis.__vibeusageRuntimePrimitivesCore;
-if (!runtimePrimitivesCore6) throw new Error("runtime primitives core not initialized");
+var runtimePrimitivesCore5 = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore5) throw new Error("runtime primitives core not initialized");
 var usageModelCore4 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore4) throw new Error("usage-model core not initialized");
 var usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
@@ -2093,7 +2086,7 @@ function resolveHourlyUsageRowState({
   } else if (!allowMissingTimestamp) {
     return null;
   }
-  const sourceKey = runtimePrimitivesCore6.normalizeSource(row?.source) || source || defaultSource;
+  const sourceKey = runtimePrimitivesCore5.normalizeSource(row?.source) || source || defaultSource;
   const billingSource = row?.source || source || (useDefaultSourceForBilling ? defaultSource : null);
   const normalizedModel = normalizeUsageModel2(row?.model) || defaultModel;
   const usageKey = normalizeUsageModelKey2(normalizedModel) || defaultModel;
@@ -2131,8 +2124,8 @@ var usageRowCore = globalThis.__vibeusageUsageRowCore;
 if (!usageRowCore) throw new Error("usage row core not initialized");
 var pricingCore2 = globalThis.__vibeusagePricingCore;
 if (!pricingCore2) throw new Error("pricing core not initialized");
-var runtimePrimitivesCore7 = globalThis.__vibeusageRuntimePrimitivesCore;
-if (!runtimePrimitivesCore7) throw new Error("runtime primitives core not initialized");
+var runtimePrimitivesCore6 = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore6) throw new Error("runtime primitives core not initialized");
 var dateCore2 = globalThis.__vibeusageDateCore;
 if (!dateCore2) throw new Error("date core not initialized");
 var {
@@ -2150,7 +2143,7 @@ var {
   parsePricingBucketKey: parsePricingBucketKey2,
   resolveDisplayName: resolveDisplayName2
 } = usageMetricsCore2;
-var { resolvePricingProfile: resolvePricingProfile3, computeUsageCost: computeUsageCost3 } = pricingCore2;
+var { resolvePricingProfile: resolvePricingProfile3, computeUsageCost: computeUsageCost3, formatUsdFromMicros: formatUsdFromMicros3 } = pricingCore2;
 var { formatLocalDateKey: formatLocalDateKey3, listDateStrings: listDateStrings3 } = dateCore2;
 var { resolveHourlyUsageRowState: resolveHourlyUsageRowState2 } = usageRowCore;
 function createAggregateUsageState({
@@ -2258,7 +2251,7 @@ function accumulateRollingUsageRow({
   let dayKey = null;
   dayKey = formatLocalDateKey3(date, tzContext);
   if (dayKey) {
-    const billableTokens = hasStoredBillable ? runtimePrimitivesCore7.toBigInt(row?.billable_total_tokens) : billable;
+    const billableTokens = hasStoredBillable ? runtimePrimitivesCore6.toBigInt(row?.billable_total_tokens) : billable;
     if (billableTokens > 0n) {
       const prev = state.activeByDay.get(dayKey) || 0n;
       state.activeByDay.set(dayKey, prev + billableTokens);
@@ -2278,7 +2271,7 @@ function buildRollingUsagePayload({
 } = {}) {
   const windowDays = listDateStrings3(fromDay, toDay).length;
   const activeDays = state?.activeByDay instanceof Map ? Array.from(state.activeByDay.values()).filter((value) => value > 0n).length : 0;
-  const billableTotalTokens = runtimePrimitivesCore7.toBigInt(state?.totals?.billable_total_tokens);
+  const billableTotalTokens = runtimePrimitivesCore6.toBigInt(state?.totals?.billable_total_tokens);
   const avgPerActiveDay = activeDays > 0 ? billableTotalTokens / BigInt(activeDays) : 0n;
   const avgPerDay = windowDays > 0 ? billableTotalTokens / BigInt(windowDays) : 0n;
   return {
@@ -2290,6 +2283,133 @@ function buildRollingUsagePayload({
     avg_per_active_day: avgPerActiveDay.toString(),
     avg_per_day: avgPerDay.toString()
   };
+}
+function buildAggregateUsagePayload({
+  totals,
+  pricingSummary,
+  hasModelParam = false
+} = {}) {
+  const resolvedTotals = totals || createTotals2();
+  const impliedModelId = pricingSummary?.impliedModelId || null;
+  return {
+    selection: {
+      model_id: hasModelParam ? impliedModelId : null,
+      model: hasModelParam && impliedModelId ? pricingSummary?.impliedModelDisplay || impliedModelId : null
+    },
+    summary: {
+      totals: {
+        total_tokens: runtimePrimitivesCore6.toBigInt(resolvedTotals?.total_tokens).toString(),
+        billable_total_tokens: runtimePrimitivesCore6.toBigInt(resolvedTotals?.billable_total_tokens).toString(),
+        input_tokens: runtimePrimitivesCore6.toBigInt(resolvedTotals?.input_tokens).toString(),
+        cached_input_tokens: runtimePrimitivesCore6.toBigInt(resolvedTotals?.cached_input_tokens).toString(),
+        output_tokens: runtimePrimitivesCore6.toBigInt(resolvedTotals?.output_tokens).toString(),
+        reasoning_output_tokens: runtimePrimitivesCore6.toBigInt(resolvedTotals?.reasoning_output_tokens).toString(),
+        total_cost_usd: formatUsdFromMicros3(pricingSummary?.totalCostMicros || 0n)
+      },
+      pricing: pricingCore2.buildPricingMetadata({
+        profile: pricingSummary?.overallCost?.profile || pricingCore2.getDefaultPricingProfile(),
+        pricingMode: pricingSummary?.summaryPricingMode || pricingSummary?.overallCost?.pricing_mode || "add"
+      })
+    }
+  };
+}
+function createModelBreakdownState() {
+  return {
+    sourcesMap: /* @__PURE__ */ new Map()
+  };
+}
+function getModelBreakdownSourceEntry(state, source) {
+  if (!state?.sourcesMap) return null;
+  const entry = getSourceEntry2(state.sourcesMap, source);
+  if (!(entry.models instanceof Map)) {
+    entry.models = /* @__PURE__ */ new Map();
+  }
+  return entry;
+}
+function getModelBreakdownCanonicalEntry(sourceEntry, identity, defaultModel = DEFAULT_MODEL3) {
+  if (!sourceEntry) return null;
+  const models = sourceEntry.models instanceof Map ? sourceEntry.models : /* @__PURE__ */ new Map();
+  sourceEntry.models = models;
+  const key = identity?.model_id || defaultModel;
+  if (models.has(key)) return models.get(key);
+  const entry = {
+    model_id: key,
+    model: identity?.model || key,
+    totals: createTotals2()
+  };
+  models.set(key, entry);
+  return entry;
+}
+function accumulateModelBreakdownRow({
+  state,
+  row,
+  identity,
+  defaultModel = DEFAULT_MODEL3
+} = {}) {
+  if (!state || !row) return { sourceEntry: null, modelEntry: null };
+  const sourceEntry = getModelBreakdownSourceEntry(state, row.source);
+  addRowTotals2(sourceEntry?.totals, row);
+  const modelEntry = getModelBreakdownCanonicalEntry(sourceEntry, identity, defaultModel);
+  addRowTotals2(modelEntry?.totals, row);
+  return { sourceEntry, modelEntry };
+}
+function addModelBreakdownCostMicros(entry, costMicros) {
+  if (!entry) return;
+  entry.cost_micros = runtimePrimitivesCore6.toBigInt(entry.cost_micros) + runtimePrimitivesCore6.toBigInt(costMicros);
+}
+function attributeModelBreakdownBucketCost({
+  state,
+  source,
+  identity,
+  costMicros,
+  defaultModel = DEFAULT_MODEL3
+} = {}) {
+  if (!source) return { sourceEntry: null, modelEntry: null };
+  const sourceEntry = getModelBreakdownSourceEntry(state, source);
+  addModelBreakdownCostMicros(sourceEntry, costMicros);
+  const modelEntry = getModelBreakdownCanonicalEntry(sourceEntry, identity, defaultModel);
+  addModelBreakdownCostMicros(modelEntry, costMicros);
+  return { sourceEntry, modelEntry };
+}
+function resolveModelBreakdownCostMicros(entry, pricingProfile) {
+  if (!entry) return 0n;
+  if (typeof entry.cost_micros === "bigint") return entry.cost_micros;
+  return computeUsageCost3(entry.totals, pricingProfile).cost_micros;
+}
+function formatModelBreakdownEntry(entry, pricingProfile) {
+  const totals = entry?.totals || createTotals2();
+  const costMicros = resolveModelBreakdownCostMicros(entry, pricingProfile);
+  const { cost_micros: _ignored, ...rest } = entry || {};
+  return {
+    ...rest,
+    totals: {
+      total_tokens: totals.total_tokens.toString(),
+      billable_total_tokens: totals.billable_total_tokens.toString(),
+      input_tokens: totals.input_tokens.toString(),
+      cached_input_tokens: totals.cached_input_tokens.toString(),
+      output_tokens: totals.output_tokens.toString(),
+      reasoning_output_tokens: totals.reasoning_output_tokens.toString(),
+      total_cost_usd: formatUsdFromMicros3(costMicros)
+    }
+  };
+}
+function compareModelBreakdownEntries(a, b) {
+  const aSort = runtimePrimitivesCore6.toBigInt(a?.totals?.billable_total_tokens ?? a?.totals?.total_tokens);
+  const bSort = runtimePrimitivesCore6.toBigInt(b?.totals?.billable_total_tokens ?? b?.totals?.total_tokens);
+  if (aSort === bSort) return String(a?.model || "").localeCompare(String(b?.model || ""));
+  return aSort > bSort ? -1 : 1;
+}
+function buildModelBreakdownSources({ state, pricingProfile } = {}) {
+  if (!(state?.sourcesMap instanceof Map)) return [];
+  return Array.from(state.sourcesMap.values()).map((entry) => {
+    const models = Array.from(entry.models?.values?.() || []).map((modelEntry) => formatModelBreakdownEntry(modelEntry, pricingProfile)).sort(compareModelBreakdownEntries);
+    const totals = formatModelBreakdownEntry(entry, pricingProfile).totals;
+    return {
+      source: entry.source,
+      totals,
+      models
+    };
+  }).sort((a, b) => a.source.localeCompare(b.source));
 }
 async function resolveBucketedUsagePricing({
   edgeClient,
@@ -2453,6 +2573,11 @@ if (!globalThis[CORE_KEY16]) {
       createRollingUsageState,
       accumulateRollingUsageRow,
       buildRollingUsagePayload,
+      buildAggregateUsagePayload,
+      createModelBreakdownState,
+      accumulateModelBreakdownRow,
+      attributeModelBreakdownBucketCost,
+      buildModelBreakdownSources,
       resolveBucketedUsagePricing,
       accumulateSourceCostMicros,
       resolveImpliedModelId,
@@ -2502,7 +2627,15 @@ var DEFAULT_SOURCE2 = "codex";
 var DEFAULT_MODEL4 = "unknown";
 var usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 if (!usagePricingCore) throw new Error("usage pricing core not initialized");
-var { resolveBucketedUsagePricing: resolveBucketedUsagePricing2, resolveImpliedModelId: resolveImpliedModelId2, resolveSummaryPricingMode: resolveSummaryPricingMode2 } = usagePricingCore;
+var {
+  createModelBreakdownState: createModelBreakdownState2,
+  accumulateModelBreakdownRow: accumulateModelBreakdownRow2,
+  attributeModelBreakdownBucketCost: attributeModelBreakdownBucketCost2,
+  buildModelBreakdownSources: buildModelBreakdownSources2,
+  resolveBucketedUsagePricing: resolveBucketedUsagePricing2,
+  resolveImpliedModelId: resolveImpliedModelId2,
+  resolveSummaryPricingMode: resolveSummaryPricingMode2
+} = usagePricingCore;
 var vibeusage_usage_model_breakdown_default = withRequestLogging2(
   "vibeusage-usage-model-breakdown",
   async function(request, logger) {
@@ -2600,12 +2733,10 @@ var vibeusage_usage_model_breakdown_default = withRequestLogging2(
     });
     const usageModels = timelineContext.usageModels;
     const aliasTimeline = timelineContext.aliasTimeline;
-    const sourcesMap = /* @__PURE__ */ new Map();
+    const breakdownState = createModelBreakdownState2();
     const costBuckets = /* @__PURE__ */ new Map();
     const grandTotals = createTotals3();
     for (const row of rowsBuffer) {
-      const sourceEntry = getSourceEntry4(sourcesMap, row.source);
-      addRowTotals3(sourceEntry.totals, row);
       addRowTotals3(grandTotals, row);
       const dateKey = row.dateKey || to;
       const identity = resolveIdentityAtDate3({
@@ -2614,8 +2745,12 @@ var vibeusage_usage_model_breakdown_default = withRequestLogging2(
         dateKey,
         timeline: aliasTimeline
       });
-      const canonicalEntry = getCanonicalEntry(sourceEntry.models, identity);
-      addRowTotals3(canonicalEntry.totals, row);
+      accumulateModelBreakdownRow2({
+        state: breakdownState,
+        row,
+        identity,
+        defaultModel: DEFAULT_MODEL4
+      });
       const bucketKey = buildPricingBucketKey3(row.source, row.usageKey || DEFAULT_MODEL4, dateKey);
       const bucket = costBuckets.get(bucketKey) || {
         source: row.source,
@@ -2630,12 +2765,13 @@ var vibeusage_usage_model_breakdown_default = withRequestLogging2(
       usageModels,
       effectiveDate: to,
       onBucketCost: ({ bucket, identity, cost }) => {
-        const sourceEntry = bucket?.source ? sourcesMap.get(bucket.source) : null;
-        addCostMicros(sourceEntry, cost.cost_micros);
-        if (sourceEntry) {
-          const modelEntry = getCanonicalEntry(sourceEntry.models, identity);
-          addCostMicros(modelEntry, cost.cost_micros);
-        }
+        attributeModelBreakdownBucketCost2({
+          state: breakdownState,
+          source: bucket?.source,
+          identity,
+          costMicros: cost.cost_micros,
+          defaultModel: DEFAULT_MODEL4
+        });
       }
     });
     const impliedModelId = resolveImpliedModelId2({
@@ -2647,15 +2783,10 @@ var vibeusage_usage_model_breakdown_default = withRequestLogging2(
       model: impliedModelId,
       effectiveDate: to
     });
-    const sources = Array.from(sourcesMap.values()).map((entry) => {
-      const models = Array.from(entry.models.values()).map((modelEntry) => formatTotals(modelEntry, pricingProfile)).sort(compareTotals);
-      const totals = formatTotals(entry, pricingProfile).totals;
-      return {
-        source: entry.source,
-        totals,
-        models
-      };
-    }).sort((a, b) => a.source.localeCompare(b.source));
+    const sources = buildModelBreakdownSources2({
+      state: breakdownState,
+      pricingProfile
+    });
     const overallCost = computeUsageCost2(grandTotals, pricingProfile);
     const summaryPricingMode = resolveSummaryPricingMode2({
       pricingModes: bucketedPricing.pricingModes,
@@ -2677,60 +2808,6 @@ var vibeusage_usage_model_breakdown_default = withRequestLogging2(
     );
   }
 );
-function getSourceEntry4(map, source) {
-  if (map.has(source)) return map.get(source);
-  const entry = {
-    source,
-    totals: createTotals3(),
-    models: /* @__PURE__ */ new Map()
-  };
-  map.set(source, entry);
-  return entry;
-}
-function getCanonicalEntry(map, identity) {
-  const key = identity?.model_id || DEFAULT_MODEL4;
-  if (map.has(key)) return map.get(key);
-  const entry = {
-    model_id: key,
-    model: identity?.model || key,
-    totals: createTotals3()
-  };
-  map.set(key, entry);
-  return entry;
-}
-function formatTotals(entry, pricingProfile) {
-  const totals = entry.totals;
-  const costMicros = resolveCostMicros(entry, pricingProfile);
-  const { cost_micros: _ignored, ...rest } = entry;
-  return {
-    ...rest,
-    totals: {
-      total_tokens: totals.total_tokens.toString(),
-      billable_total_tokens: totals.billable_total_tokens.toString(),
-      input_tokens: totals.input_tokens.toString(),
-      cached_input_tokens: totals.cached_input_tokens.toString(),
-      output_tokens: totals.output_tokens.toString(),
-      reasoning_output_tokens: totals.reasoning_output_tokens.toString(),
-      total_cost_usd: formatUsdFromMicros2(costMicros)
-    }
-  };
-}
-function compareTotals(a, b) {
-  const aSort = toBigInt2(a?.totals?.billable_total_tokens ?? a?.totals?.total_tokens);
-  const bSort = toBigInt2(b?.totals?.billable_total_tokens ?? b?.totals?.total_tokens);
-  if (aSort === bSort) return String(a?.model || "").localeCompare(String(b?.model || ""));
-  return aSort > bSort ? -1 : 1;
-}
-function addCostMicros(entry, costMicros) {
-  if (!entry) return;
-  entry.cost_micros = toBigInt2(entry.cost_micros) + toBigInt2(costMicros);
-}
-function resolveCostMicros(entry, pricingProfile) {
-  if (!entry) return 0n;
-  if (typeof entry.cost_micros === "bigint") return entry.cost_micros;
-  const cost = computeUsageCost2(entry.totals, pricingProfile);
-  return cost.cost_micros;
-}
 export {
   vibeusage_usage_model_breakdown_default as default
 };

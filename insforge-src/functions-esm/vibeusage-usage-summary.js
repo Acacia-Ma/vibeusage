@@ -16,7 +16,6 @@ import { isDebugEnabled, withSlowQueryDebugPayload } from "./shared/debug.js";
 import { getBaseUrl } from "./shared/env.js";
 import { handleOptions, json } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
-import { buildPricingMetadata, formatUsdFromMicros } from "./shared/pricing.js";
 import { getSourceParam } from "./shared/source.js";
 import "../shared/usage-pricing-core.mjs";
 import { getModelParam, resolveUsageFilterContext } from "./shared/usage-summary-support.js";
@@ -31,6 +30,7 @@ const {
   createRollingUsageState,
   accumulateRollingUsageRow,
   buildRollingUsagePayload,
+  buildAggregateUsagePayload,
   resolveAggregateUsagePricing,
 } = usagePricingCore;
 
@@ -228,27 +228,18 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
     totals: aggregateState.totals,
     defaultModel: DEFAULT_MODEL,
   });
+  const aggregatePayload = buildAggregateUsagePayload({
+    totals: aggregateState.totals,
+    pricingSummary,
+    hasModelParam,
+  });
 
   const responsePayload = {
     from,
     to,
     days: dayKeys.length,
-    model_id: hasModelParam ? pricingSummary.impliedModelId || null : null,
-    model:
-      hasModelParam && pricingSummary.impliedModelId ? pricingSummary.impliedModelDisplay : null,
-    totals: {
-      total_tokens: aggregateState.totals.total_tokens.toString(),
-      billable_total_tokens: aggregateState.totals.billable_total_tokens.toString(),
-      input_tokens: aggregateState.totals.input_tokens.toString(),
-      cached_input_tokens: aggregateState.totals.cached_input_tokens.toString(),
-      output_tokens: aggregateState.totals.output_tokens.toString(),
-      reasoning_output_tokens: aggregateState.totals.reasoning_output_tokens.toString(),
-      total_cost_usd: formatUsdFromMicros(pricingSummary.totalCostMicros),
-    },
-    pricing: buildPricingMetadata({
-      profile: pricingSummary.overallCost.profile,
-      pricingMode: pricingSummary.summaryPricingMode,
-    }),
+    ...aggregatePayload.selection,
+    ...aggregatePayload.summary,
   };
   if (rollingPayload) responsePayload.rolling = rollingPayload;
   return respond(responsePayload, 200, queryDurationMs);

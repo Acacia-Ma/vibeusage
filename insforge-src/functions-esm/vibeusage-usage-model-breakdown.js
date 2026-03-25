@@ -13,8 +13,7 @@ import { isDebugEnabled, withSlowQueryDebugPayload } from "./shared/debug.js";
 import { getBaseUrl } from "./shared/env.js";
 import { handleOptions, json } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
-import { toBigInt } from "./shared/numbers.js";
-import { buildPricingMetadata, computeUsageCost, formatUsdFromMicros, resolvePricingProfile } from "./shared/pricing.js";
+import { buildPricingMetadata, computeUsageCost, resolvePricingProfile } from "./shared/pricing.js";
 import { getSourceParam } from "./shared/source.js";
 import "../shared/usage-pricing-core.mjs";
 import {
@@ -31,8 +30,15 @@ const DEFAULT_SOURCE = "codex";
 const DEFAULT_MODEL = "unknown";
 const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 if (!usagePricingCore) throw new Error("usage pricing core not initialized");
-const { resolveBucketedUsagePricing, resolveImpliedModelId, resolveSummaryPricingMode } =
-  usagePricingCore;
+const {
+  createModelBreakdownState,
+  accumulateModelBreakdownRow,
+  attributeModelBreakdownBucketCost,
+  buildModelBreakdownSources,
+  resolveBucketedUsagePricing,
+  resolveImpliedModelId,
+  resolveSummaryPricingMode,
+} = usagePricingCore;
 
 export default withRequestLogging(
   "vibeusage-usage-model-breakdown",
@@ -149,13 +155,11 @@ export default withRequestLogging(
     const usageModels = timelineContext.usageModels;
     const aliasTimeline = timelineContext.aliasTimeline;
 
-    const sourcesMap = new Map();
+    const breakdownState = createModelBreakdownState();
     const costBuckets = new Map();
     const grandTotals = createTotals();
 
     for (const row of rowsBuffer) {
-      const sourceEntry = getSourceEntry(sourcesMap, row.source);
-      addRowTotals(sourceEntry.totals, row);
       addRowTotals(grandTotals, row);
       const dateKey = row.dateKey || to;
       const identity = resolveIdentityAtDate({
@@ -164,8 +168,12 @@ export default withRequestLogging(
         dateKey,
         timeline: aliasTimeline,
       });
-      const canonicalEntry = getCanonicalEntry(sourceEntry.models, identity);
-      addRowTotals(canonicalEntry.totals, row);
+      accumulateModelBreakdownRow({
+        state: breakdownState,
+        row,
+        identity,
+        defaultModel: DEFAULT_MODEL,
+      });
 
       const bucketKey = buildPricingBucketKey(row.source, row.usageKey || DEFAULT_MODEL, dateKey);
       const bucket = costBuckets.get(bucketKey) || {
@@ -182,12 +190,13 @@ export default withRequestLogging(
       usageModels,
       effectiveDate: to,
       onBucketCost: ({ bucket, identity, cost }) => {
-        const sourceEntry = bucket?.source ? sourcesMap.get(bucket.source) : null;
-        addCostMicros(sourceEntry, cost.cost_micros);
-        if (sourceEntry) {
-          const modelEntry = getCanonicalEntry(sourceEntry.models, identity);
-          addCostMicros(modelEntry, cost.cost_micros);
-        }
+        attributeModelBreakdownBucketCost({
+          state: breakdownState,
+          source: bucket?.source,
+          identity,
+          costMicros: cost.cost_micros,
+          defaultModel: DEFAULT_MODEL,
+        });
       },
     });
 
@@ -201,19 +210,10 @@ export default withRequestLogging(
       effectiveDate: to,
     });
 
-    const sources = Array.from(sourcesMap.values())
-      .map((entry) => {
-        const models = Array.from(entry.models.values())
-          .map((modelEntry) => formatTotals(modelEntry, pricingProfile))
-          .sort(compareTotals);
-        const totals = formatTotals(entry, pricingProfile).totals;
-        return {
-          source: entry.source,
-          totals,
-          models,
-        };
-      })
-      .sort((a, b) => a.source.localeCompare(b.source));
+    const sources = buildModelBreakdownSources({
+      state: breakdownState,
+      pricingProfile,
+    });
 
     const overallCost = computeUsageCost(grandTotals, pricingProfile);
     const summaryPricingMode = resolveSummaryPricingMode({
@@ -237,63 +237,3 @@ export default withRequestLogging(
     );
   },
 );
-
-function getSourceEntry(map, source) {
-  if (map.has(source)) return map.get(source);
-  const entry = {
-    source,
-    totals: createTotals(),
-    models: new Map(),
-  };
-  map.set(source, entry);
-  return entry;
-}
-
-function getCanonicalEntry(map, identity) {
-  const key = identity?.model_id || DEFAULT_MODEL;
-  if (map.has(key)) return map.get(key);
-  const entry = {
-    model_id: key,
-    model: identity?.model || key,
-    totals: createTotals(),
-  };
-  map.set(key, entry);
-  return entry;
-}
-
-function formatTotals(entry, pricingProfile) {
-  const totals = entry.totals;
-  const costMicros = resolveCostMicros(entry, pricingProfile);
-  const { cost_micros: _ignored, ...rest } = entry;
-  return {
-    ...rest,
-    totals: {
-      total_tokens: totals.total_tokens.toString(),
-      billable_total_tokens: totals.billable_total_tokens.toString(),
-      input_tokens: totals.input_tokens.toString(),
-      cached_input_tokens: totals.cached_input_tokens.toString(),
-      output_tokens: totals.output_tokens.toString(),
-      reasoning_output_tokens: totals.reasoning_output_tokens.toString(),
-      total_cost_usd: formatUsdFromMicros(costMicros),
-    },
-  };
-}
-
-function compareTotals(a, b) {
-  const aSort = toBigInt(a?.totals?.billable_total_tokens ?? a?.totals?.total_tokens);
-  const bSort = toBigInt(b?.totals?.billable_total_tokens ?? b?.totals?.total_tokens);
-  if (aSort === bSort) return String(a?.model || "").localeCompare(String(b?.model || ""));
-  return aSort > bSort ? -1 : 1;
-}
-
-function addCostMicros(entry, costMicros) {
-  if (!entry) return;
-  entry.cost_micros = toBigInt(entry.cost_micros) + toBigInt(costMicros);
-}
-
-function resolveCostMicros(entry, pricingProfile) {
-  if (!entry) return 0n;
-  if (typeof entry.cost_micros === "bigint") return entry.cost_micros;
-  const cost = computeUsageCost(entry.totals, pricingProfile);
-  return cost.cost_micros;
-}
