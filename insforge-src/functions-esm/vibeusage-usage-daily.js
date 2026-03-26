@@ -1,5 +1,7 @@
-import { collectAggregateUsageRange } from "./shared/core/usage-aggregate-collector.js";
-import { resolveAggregateUsageRequestContext } from "./shared/core/usage-aggregate-request.js";
+import {
+  finishAggregateUsageRequest,
+  startAggregateUsageRequest,
+} from "./shared/core/usage-aggregate.js";
 import { applyDailyBucket, initDailyBuckets } from "./shared/core/usage-daily.js";
 import {
   prepareUsageEndpoint,
@@ -9,17 +11,10 @@ import {
 import {
   getUsageTimeZoneContext,
 } from "./shared/date.js";
-import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
-import "../shared/usage-pricing-core.mjs";
+import { withRequestLogging } from "./shared/logging.js";
 import "../shared/usage-metrics-core.mjs";
 
 const DEFAULT_MODEL = "unknown";
-const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
-if (!usagePricingCore) throw new Error("usage pricing core not initialized");
-const {
-  createAggregateUsageState,
-  resolveAggregateUsagePayload,
-} = usagePricingCore;
 const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
 
@@ -34,48 +29,16 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
   if (!access.ok) return access.response;
   const { auth } = access;
 
-  const requestContext = await resolveAggregateUsageRequestContext({
+  let buckets = null;
+  const aggregateExecution = await startAggregateUsageRequest({
     url,
     tzContext,
     edgeClient: auth.edgeClient,
     auth,
-  });
-  if (!requestContext.ok) return respondUsageRequestError(respond, requestContext);
-  const {
-    source,
-    hasModelParam,
-    from,
-    to,
-    dayKeys,
-    startIso,
-    endIso,
-    canonicalModel,
-    usageModels,
-    hasModelFilter,
-    aliasTimeline,
-  } = requestContext;
-
-  const { buckets } = initDailyBuckets(dayKeys);
-  const aggregateState = createAggregateUsageState({
-    hasModelParam,
     defaultModel: DEFAULT_MODEL,
-  });
-
-  const queryStartMs = Date.now();
-  let rowCount = 0;
-  const rollupHit = false;
-  const aggregateRes = await collectAggregateUsageRange({
-    edgeClient: auth.edgeClient,
-    userId: auth.userId,
-    source,
-    usageModels,
-    canonicalModel,
-    hasModelFilter,
-    aliasTimeline,
-    effectiveDate: to,
-    startIso,
-    endIso,
-    state: aggregateState,
+    onResolvedRequestContext: (requestContext) => {
+      buckets = initDailyBuckets(requestContext.dayKeys).buckets;
+    },
     shouldAccumulateRow: (row) => {
       const ts = row?.hour_start;
       if (!ts) return false;
@@ -85,31 +48,26 @@ export default withRequestLogging("vibeusage-usage-daily", async function (reque
       applyDailyBucket({ buckets, row, tzContext, billable: accumulation.billable });
     },
   });
-  rowCount += aggregateRes.rowCount;
-  if (aggregateRes.error) {
-    return respond({ error: aggregateRes.error.message }, 500, Date.now() - queryStartMs);
+  if (!aggregateExecution.ok) {
+    if (aggregateExecution.kind === "request") {
+      return respondUsageRequestError(respond, aggregateExecution.result);
+    }
+    return respond({ error: aggregateExecution.error.message }, 500, Date.now() - aggregateExecution.queryStartMs);
   }
+  const { requestContext, aggregateState, queryStartMs, rowCount } = aggregateExecution;
+  const { from, to, dayKeys } = requestContext;
 
-  const queryDurationMs = Date.now() - queryStartMs;
-  logSlowQuery(logger, {
-    query_label: "usage_daily",
-    duration_ms: queryDurationMs,
-    row_count: rowCount,
-    range_days: dayKeys.length,
-    source: source || null,
-    model: canonicalModel || null,
-    tz: tzContext?.timeZone || null,
-    tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null,
-    rollup_hit: rollupHit,
-  });
-
-  const { aggregatePayload } = await resolveAggregateUsagePayload({
+  const { aggregatePayload, queryDurationMs } = await finishAggregateUsageRequest({
     edgeClient: auth.edgeClient,
-    canonicalModel,
-    effectiveDate: to,
-    state: aggregateState,
-    hasModelParam,
+    requestContext,
+    aggregateState,
+    tzContext,
+    logger,
+    queryLabel: "usage_daily",
+    queryStartMs,
+    rowCount,
     defaultModel: DEFAULT_MODEL,
+    rollupHit: false,
   });
 
   const rows = dayKeys.map((day) => {

@@ -1,6 +1,8 @@
 import { DETAILED_HOURLY_USAGE_SELECT, forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
-import { collectAggregateUsageRange } from "./shared/core/usage-aggregate-collector.js";
-import { resolveAggregateUsageRequestContext } from "./shared/core/usage-aggregate-request.js";
+import {
+  finishAggregateUsageRequest,
+  startAggregateUsageRequest,
+} from "./shared/core/usage-aggregate.js";
 import {
   prepareUsageEndpoint,
   requireUsageAccess,
@@ -15,7 +17,7 @@ import {
   localDatePartsToUtc,
   parseDateParts,
 } from "./shared/date.js";
-import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
+import { withRequestLogging } from "./shared/logging.js";
 import "../shared/usage-pricing-core.mjs";
 
 const DEFAULT_SOURCE = "codex";
@@ -23,11 +25,9 @@ const DEFAULT_MODEL = "unknown";
 const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 if (!usagePricingCore) throw new Error("usage pricing core not initialized");
 const {
-  createAggregateUsageState,
   createRollingUsageState,
   accumulateRollingUsageRow,
   buildRollingUsagePayload,
-  resolveAggregateUsagePayload,
 } = usagePricingCore;
 
 export default withRequestLogging("vibeusage-usage-summary", async function (request, logger) {
@@ -42,34 +42,22 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
   if (!access.ok) return access.response;
   const { auth } = access;
 
-  const requestContext = await resolveAggregateUsageRequestContext({
+  const aggregateExecution = await startAggregateUsageRequest({
     url,
     tzContext,
     edgeClient: auth.edgeClient,
     auth,
-  });
-  if (!requestContext.ok) return respondUsageRequestError(respond, requestContext);
-  const {
-    source,
-    hasModelParam,
-    from,
-    to,
-    dayKeys,
-    startIso,
-    endIso,
-    canonicalModel,
-    usageModels,
-    hasModelFilter,
-    aliasTimeline,
-  } = requestContext;
-
-  const aggregateState = createAggregateUsageState({
-    hasModelParam,
     defaultModel: DEFAULT_MODEL,
+    defaultSource: DEFAULT_SOURCE,
   });
-
-  const queryStartMs = Date.now();
-  let rowCount = 0;
+  if (!aggregateExecution.ok) {
+    if (aggregateExecution.kind === "request") {
+      return respondUsageRequestError(respond, aggregateExecution.result);
+    }
+    return respond({ error: aggregateExecution.error.message }, 500, Date.now() - aggregateExecution.queryStartMs);
+  }
+  const { requestContext, aggregateState, queryStartMs, rowCount } = aggregateExecution;
+  const { source, from, to, canonicalModel, usageModels, hasModelFilter, aliasTimeline } = requestContext;
 
   const sumHourlyRangeInto = async (rangeStartIso, rangeEndIso, onRow) => {
     const { error } = await forEachHourlyUsagePage({
@@ -121,25 +109,6 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
     };
   };
 
-  const aggregateRes = await collectAggregateUsageRange({
-    edgeClient: auth.edgeClient,
-    userId: auth.userId,
-    source,
-    usageModels,
-    canonicalModel,
-    hasModelFilter,
-    aliasTimeline,
-    effectiveDate: to,
-    startIso,
-    endIso,
-    state: aggregateState,
-    defaultSource: DEFAULT_SOURCE,
-  });
-  rowCount += aggregateRes.rowCount;
-  if (aggregateRes.error) {
-    return respond({ error: aggregateRes.error.message }, 500, Date.now() - queryStartMs);
-  }
-
   let rollingPayload = null;
   if (rollingEnabled) {
     const localTodayParts = getLocalParts(new Date(), tzContext);
@@ -158,32 +127,22 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
     rollingPayload = { last_7d: last7Res.payload, last_30d: last30Res.payload };
   }
 
-  const queryDurationMs = Date.now() - queryStartMs;
-  logSlowQuery(logger, {
-    query_label: "usage_summary",
-    duration_ms: queryDurationMs,
-    row_count: rowCount,
-    range_days: dayKeys.length,
-    source: source || null,
-    model: canonicalModel || null,
-    tz: tzContext?.timeZone || null,
-    tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null,
-    rollup_hit: false,
-  });
-
-  const { aggregatePayload } = await resolveAggregateUsagePayload({
+  const { aggregatePayload, queryDurationMs } = await finishAggregateUsageRequest({
     edgeClient: auth.edgeClient,
-    canonicalModel,
-    effectiveDate: to,
-    state: aggregateState,
-    hasModelParam,
+    requestContext,
+    aggregateState,
+    tzContext,
+    logger,
+    queryLabel: "usage_summary",
+    queryStartMs,
+    rowCount,
     defaultModel: DEFAULT_MODEL,
   });
 
   const responsePayload = {
     from,
     to,
-    days: dayKeys.length,
+    days: requestContext.dayKeys.length,
     ...aggregatePayload.selection,
     ...aggregatePayload.summary,
   };

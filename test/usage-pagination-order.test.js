@@ -27,6 +27,8 @@ test("usage pagination uses deterministic ordering", () => {
   const rowCollectorCall = "collectHourlyUsageRows(";
   const aggregateCollectorCall = "collectAggregateUsageRange(";
   const aggregateRequestCall = "resolveAggregateUsageRequestContext(";
+  const aggregateEndpointStartCall = "startAggregateUsageRequest(";
+  const aggregateEndpointFinishCall = "finishAggregateUsageRequest(";
 
   assert.ok(
     normalize(readFile("insforge-src/shared/usage-rollup-core.js")).includes(rollupOrder),
@@ -46,28 +48,28 @@ test("usage pagination uses deterministic ordering", () => {
       normalize(readFile("insforge-src/functions-esm/vibeusage-usage-daily.js")),
       aggregateCollectorCall,
     ),
-    1,
+    0,
   );
   assert.equal(
     countOccurrences(
       normalize(readFile("insforge-src/functions-esm/vibeusage-usage-summary.js")),
       aggregateCollectorCall,
     ),
-    1,
+    0,
   );
   assert.equal(
     countOccurrences(
       normalize(readFile("insforge-src/functions-esm/vibeusage-usage-summary.js")),
       aggregateRequestCall,
     ),
-    1,
+    0,
   );
   assert.equal(
     countOccurrences(
       normalize(readFile("insforge-src/functions-esm/vibeusage-usage-daily.js")),
       aggregateRequestCall,
     ),
-    1,
+    0,
   );
   assert.equal(
     countOccurrences(
@@ -125,6 +127,44 @@ test("usage pagination uses deterministic ordering", () => {
     normalize(readFile("insforge-src/shared/usage-aggregate-request-core.js")).includes(
       "asyncfunctionresolveAggregateUsageRequestContext(",
     ),
+  );
+  assert.ok(
+    normalize(readFile("insforge-src/functions-esm/shared/core/usage-aggregate.js")).includes(
+      "asyncfunctionstartAggregateUsageRequest(",
+    ),
+  );
+  assert.ok(
+    normalize(readFile("insforge-src/functions-esm/shared/core/usage-aggregate.js")).includes(
+      "asyncfunctionfinishAggregateUsageRequest(",
+    ),
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-summary.js")),
+      aggregateEndpointStartCall,
+    ),
+    1,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-summary.js")),
+      aggregateEndpointFinishCall,
+    ),
+    1,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-daily.js")),
+      aggregateEndpointStartCall,
+    ),
+    1,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-daily.js")),
+      aggregateEndpointFinishCall,
+    ),
+    1,
   );
   assert.ok(
     normalize(readFile("insforge-src/shared/usage-row-collector-core.js")).includes(
