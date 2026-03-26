@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { buildCopyRegistry, REQUIRED_COPY_COLUMNS } = require("../src/shared/copy-registry");
+const { buildCopyRegistry, REQUIRED_COPY_COLUMNS } = require("../src/shared/copy-registry.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const COPY_PATH = path.join(ROOT, "dashboard", "src", "content", "copy.csv");

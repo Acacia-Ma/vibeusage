@@ -3,7 +3,7 @@ import { normalizeAccessToken, resolveAuthAccessToken } from "./auth-token";
 import { formatDateLocal } from "./date-range";
 import { refreshInsforgeSession } from "./insforge-auth-client";
 import { createInsforgeClient } from "./insforge-client";
-import * as vibeusageFunctionContract from "../../../src/shared/vibeusage-function-contract.js";
+import vibeusageFunctionContract from "../../../src/shared/vibeusage-function-contract.cjs";
 import {
   getMockUsageDaily,
   getMockUsageHourly,

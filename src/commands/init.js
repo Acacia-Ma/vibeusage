@@ -60,7 +60,7 @@ const {
   createSpinner,
 } = require("../lib/cli-ui");
 const { renderLocalReport, renderAuthTransition, renderSuccessBox } = require("../lib/init-flow");
-const { DEFAULT_DASHBOARD_URL } = require("../shared/runtime-defaults");
+const { DEFAULT_DASHBOARD_URL } = require("../shared/runtime-defaults.cjs");
 
 const ASCII_LOGO = [
   "██╗   ██╗██╗██████╗ ███████╗██╗   ██╗███████╗ █████╗  ██████╗ ███████╗",

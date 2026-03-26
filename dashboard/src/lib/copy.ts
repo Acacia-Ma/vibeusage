@@ -1,5 +1,5 @@
 import copyRaw from "../content/copy.csv?raw";
-import * as copyRegistryModule from "../../../src/shared/copy-registry.js";
+import copyRegistryModule from "../../../src/shared/copy-registry.cjs";
 
 type AnyRecord = Record<string, any>;
 

@@ -6,7 +6,7 @@ const path = require("node:path");
 
 const { beginBrowserAuth, openInBrowser } = require("../../src/lib/browser-auth");
 const { auditOpencodeUsage } = require("../../src/lib/opencode-usage-audit");
-const { DEFAULT_INSFORGE_BASE_URL } = require("../../src/shared/runtime-defaults");
+const { DEFAULT_INSFORGE_BASE_URL } = require("../../src/shared/runtime-defaults.cjs");
 
 function parseArgs(argv) {
   const out = {

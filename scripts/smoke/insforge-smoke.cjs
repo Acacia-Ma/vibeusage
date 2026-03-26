@@ -14,7 +14,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { DEFAULT_INSFORGE_BASE_URL } = require("../../src/shared/runtime-defaults");
+const { DEFAULT_INSFORGE_BASE_URL } = require("../../src/shared/runtime-defaults.cjs");
 loadDotEnv();
 
 const AUTH_RETRY_DELAY_MS = normalizePositiveInt(process.env.VIBEUSAGE_SMOKE_AUTH_RETRY_MS, 5000);

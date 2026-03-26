@@ -2,7 +2,7 @@ const {
   DEFAULT_INSFORGE_BASE_URL,
   DEFAULT_DASHBOARD_URL,
   DEFAULT_HTTP_TIMEOUT_MS,
-} = require("../shared/runtime-defaults");
+} = require("../shared/runtime-defaults.cjs");
 
 function resolveRuntimeConfig({ cli = {}, config = {}, env = process.env, defaults = {} } = {}) {
   const baseUrl = pickString(

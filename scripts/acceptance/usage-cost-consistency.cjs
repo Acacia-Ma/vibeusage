@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-const { DEFAULT_INSFORGE_BASE_URL } = require("../../src/shared/runtime-defaults");
+const { DEFAULT_INSFORGE_BASE_URL } = require("../../src/shared/runtime-defaults.cjs");
 
 /**
  * Online regression check for usage cost consistency.

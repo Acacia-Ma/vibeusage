@@ -1,4 +1,4 @@
-import * as runtimeDefaults from "../../../src/shared/runtime-defaults.js";
+import runtimeDefaults from "../../../src/shared/runtime-defaults.cjs";
 
 const { DEFAULT_INSFORGE_BASE_URL } = runtimeDefaults as any;
 

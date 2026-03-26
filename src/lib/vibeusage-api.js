@@ -4,7 +4,7 @@ const { createInsforgeClient } = require("./insforge-client");
 const {
   BACKEND_RUNTIME_UNAVAILABLE_MESSAGE,
   FUNCTION_SLUGS,
-} = require("../shared/vibeusage-function-contract");
+} = require("../shared/vibeusage-function-contract.cjs");
 
 async function signInWithPassword({ baseUrl, email, password }) {
   const client = createInsforgeClient({ baseUrl });

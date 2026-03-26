@@ -15,20 +15,20 @@ function stripModulePrelude(content) {
 }
 
 test("copy registry runtime and tooling reuse the shared parser", () => {
-  assert.match(read("dashboard/src/lib/copy.ts"), /src\/shared\/copy-registry\.js/);
-  assert.match(read("scripts/validate-copy-registry.cjs"), /src\/shared\/copy-registry/);
-  assert.match(read("dashboard/vite.config.js"), /src\/shared\/copy-registry\.js/);
+  assert.match(read("dashboard/src/lib/copy.ts"), /src\/shared\/copy-registry\.cjs/);
+  assert.match(read("scripts/validate-copy-registry.cjs"), /src\/shared\/copy-registry\.cjs/);
+  assert.match(read("dashboard/vite.config.js"), /src\/shared\/copy-registry\.cjs/);
 });
 
 test("runtime defaults are imported from a shared module", () => {
-  assert.match(read("src/lib/runtime-config.js"), /shared\/runtime-defaults/);
-  assert.match(read("dashboard/src/lib/config.ts"), /shared\/runtime-defaults\.js/);
-  assert.match(read("scripts\/acceptance\/usage-cost-consistency.cjs"), /shared\/runtime-defaults/);
+  assert.match(read("src/lib/runtime-config.js"), /shared\/runtime-defaults\.cjs/);
+  assert.match(read("dashboard/src/lib/config.ts"), /shared\/runtime-defaults\.cjs/);
+  assert.match(read("scripts\/acceptance\/usage-cost-consistency.cjs"), /shared\/runtime-defaults\.cjs/);
 });
 
 test("dashboard and cli API clients reuse the shared function contract", () => {
-  assert.match(read("dashboard/src/lib/vibeusage-api.ts"), /shared\/vibeusage-function-contract\.js/);
-  assert.match(read("src/lib/vibeusage-api.js"), /shared\/vibeusage-function-contract/);
+  assert.match(read("dashboard/src/lib/vibeusage-api.ts"), /shared\/vibeusage-function-contract\.cjs/);
+  assert.match(read("src/lib/vibeusage-api.js"), /shared\/vibeusage-function-contract\.cjs/);
 });
 
 test("backend model semantics flow through a single shared core", () => {
