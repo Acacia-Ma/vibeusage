@@ -5120,6 +5120,10 @@ test("vibeusage-usage-summary honors alias effective_from across range", () =>
                 const query = createQueryMock({ rows: hourlyRows });
                 return { select: () => query };
               }
+              if (table === "vibeusage_tracker_daily_rollup") {
+                const query = createQueryMock({ rows: [] });
+                return { select: () => query };
+              }
               if (table === "vibeusage_model_aliases") {
                 return createQueryMock({ rows: aliasRows });
               }
@@ -5220,6 +5224,10 @@ test("vibeusage-usage-summary canonical model filter stays correct across pagina
                   },
                 };
                 return query;
+              }
+              if (table === "vibeusage_tracker_daily_rollup") {
+                const query = createQueryMock({ rows: [] });
+                return { select: () => query };
               }
               if (table === "vibeusage_model_aliases") {
                 return createQueryMock({ rows: aliasRows });
@@ -5327,6 +5335,10 @@ test("vibeusage-usage-summary prices per-alias effective_from when unfiltered", 
             from: (table) => {
               if (table === "vibeusage_tracker_hourly") {
                 const query = createQueryMock({ rows: hourlyRows });
+                return { select: () => query };
+              }
+              if (table === "vibeusage_tracker_daily_rollup") {
+                const query = createQueryMock({ rows: [] });
                 return { select: () => query };
               }
               if (table === "vibeusage_model_aliases") {
@@ -5699,6 +5711,84 @@ test("vibeusage-usage-summary rejects oversized ranges", { concurrency: 1 }, asy
     else process.env.VIBEUSAGE_USAGE_MAX_DAYS = prevMaxDays;
   }
 });
+
+test("vibeusage-usage-summary uses rollup rows for full-day ranges when enabled", () =>
+  withRollupEnabled(async () => {
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
+
+    const userId = "22222222-2222-2222-2222-222222222222";
+    const userJwt = createUserJwt(userId);
+    const touched = {
+      hourly: 0,
+      rollup: 0,
+    };
+    const rollupRows = Array.from({ length: 30 }, (_, index) => ({
+      day: `2025-12-${String(index + 1).padStart(2, "0")}`,
+      source: "codex",
+      model: "gpt-5",
+      total_tokens: "10",
+      billable_total_tokens: "10",
+      input_tokens: "4",
+      cached_input_tokens: "1",
+      output_tokens: "6",
+      reasoning_output_tokens: "0",
+    }));
+
+    globalThis.createClient = (args) => {
+      if (args && args.edgeFunctionToken === userJwt) {
+        return {
+          auth: {
+            getCurrentUser: async () => ({ data: { user: { id: userId } }, error: null }),
+          },
+          database: {
+            from: (table) => {
+              if (table === "vibeusage_tracker_daily_rollup") {
+                touched.rollup += 1;
+                return createQueryMock({ rows: rollupRows });
+              }
+              if (table === "vibeusage_tracker_hourly") {
+                touched.hourly += 1;
+                return createQueryMock({ rows: [] });
+              }
+              if (table === "vibeusage_model_aliases") {
+                return createQueryMock({ rows: [] });
+              }
+              if (table === "vibeusage_pricing_profiles") {
+                const query = createQueryMock({ rows: [] });
+                query.or = () => query;
+                return query;
+              }
+              if (table === "vibeusage_pricing_model_aliases") {
+                return createQueryMock({ rows: [] });
+              }
+              throw new Error(`Unexpected table ${table}`);
+            },
+          },
+        };
+      }
+      throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
+    };
+
+    const req = new Request(
+      "http://localhost/functions/vibeusage-usage-summary?from=2025-12-01&to=2025-12-30&tz=UTC",
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${userJwt}` },
+      },
+    );
+
+    const res = await fn(req);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+
+    assert.equal(body.totals.total_tokens, "300");
+    assert.equal(body.totals.billable_total_tokens, "300");
+    assert.equal(body.totals.input_tokens, "120");
+    assert.equal(body.totals.cached_input_tokens, "30");
+    assert.equal(body.totals.output_tokens, "180");
+    assert.ok(touched.rollup > 0, "expected daily rollup table to be queried");
+    assert.equal(touched.hourly, 0, "expected full-day range to avoid hourly fallback");
+  }));
 
 test("getUsageMaxDays defaults to 800 days", { concurrency: 1 }, () => {
   const { getUsageMaxDays } = require("../insforge-src/shared/date");

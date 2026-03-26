@@ -24,6 +24,7 @@ export async function startAggregateUsageRequest({
   onResolvedRequestContext,
   shouldAccumulateRow,
   onAccumulatedRow,
+  preferRollup = false,
 } = {}) {
   const requestContext = await resolveAggregateUsageRequestContext({
     url,
@@ -46,6 +47,11 @@ export async function startAggregateUsageRequest({
     hasModelParam: requestContext.hasModelParam,
     defaultModel,
   });
+  const createState = () =>
+    createAggregateUsageState({
+      hasModelParam: requestContext.hasModelParam,
+      defaultModel,
+    });
   const queryStartMs = Date.now();
   const aggregateRes = await collectAggregateUsageRange({
     edgeClient,
@@ -59,9 +65,11 @@ export async function startAggregateUsageRequest({
     startIso: requestContext.startIso,
     endIso: requestContext.endIso,
     state: aggregateState,
+    createState,
     defaultSource,
     shouldAccumulateRow,
     onAccumulatedRow,
+    preferRollup,
   });
   if (aggregateRes.error) {
     return {
@@ -71,16 +79,17 @@ export async function startAggregateUsageRequest({
       queryStartMs,
       rowCount: aggregateRes.rowCount,
       requestContext,
-      aggregateState,
+      aggregateState: aggregateRes.state,
     };
   }
 
   return {
     ok: true,
     requestContext,
-    aggregateState,
+    aggregateState: aggregateRes.state,
     queryStartMs,
     rowCount: aggregateRes.rowCount,
+    rollupHit: aggregateRes.rollupHit,
   };
 }
 

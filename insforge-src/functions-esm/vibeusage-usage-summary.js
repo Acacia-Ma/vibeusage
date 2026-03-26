@@ -49,6 +49,7 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
     auth,
     defaultModel: DEFAULT_MODEL,
     defaultSource: DEFAULT_SOURCE,
+    preferRollup: true,
   });
   if (!aggregateExecution.ok) {
     if (aggregateExecution.kind === "request") {
@@ -56,7 +57,7 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
     }
     return respond({ error: aggregateExecution.error.message }, 500, Date.now() - aggregateExecution.queryStartMs);
   }
-  const { requestContext, aggregateState, queryStartMs, rowCount } = aggregateExecution;
+  const { requestContext, aggregateState, queryStartMs, rowCount, rollupHit } = aggregateExecution;
   const { source, from, to, canonicalModel, usageModels, hasModelFilter, aliasTimeline } = requestContext;
 
   const sumHourlyRangeInto = async (rangeStartIso, rangeEndIso, onRow) => {
@@ -137,6 +138,7 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
     queryStartMs,
     rowCount,
     defaultModel: DEFAULT_MODEL,
+    rollupHit,
   });
 
   const responsePayload = {

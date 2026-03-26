@@ -50,7 +50,11 @@ function sumRollupRows(rows) {
 }
 
 function isRollupEnabled() {
-  return false;
+  const envCore = globalThis.__vibeusageEnvCore;
+  const raw = envCore.readEnvValue?.("VIBEUSAGE_ROLLUP_ENABLED");
+  if (raw == null) return false;
+  const normalized = String(raw).trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
 }
 
 if (!globalThis[CORE_KEY]) {
