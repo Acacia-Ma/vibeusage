@@ -1189,7 +1189,7 @@
     {
       "id": "test_insforge-src-core-db_test_1578f54c",
       "type": "text",
-      "text": "**insforge-src-core-db.test**\n`test/insforge-src-core-db.test.js`\n\nTest module.\n\n包含：\n- insforge-src-core-db.test (687 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**insforge-src-core-db.test**\n`test/insforge-src-core-db.test.js`\n\nTest module.\n\n包含：\n- insforge-src-core-db.test (685 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 2260,
       "y": 19116,
       "width": 280,
@@ -1886,7 +1886,7 @@
     {
       "id": "test_ssot-foundations_test_90aa72dd",
       "type": "text",
-      "text": "**ssot-foundations.test**\n`test/ssot-foundations.test.js`\n\nTest module.\n\n包含：\n- ssot-foundations.test (1089 行)\n- read (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**ssot-foundations.test**\n`test/ssot-foundations.test.js`\n\nTest module.\n\n包含：\n- ssot-foundations.test (1094 行)\n- read (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 4060,
       "y": 20196,
       "width": 280,
@@ -2107,7 +2107,7 @@
     {
       "id": "test_usage-pagination-order_test_e45c4df4",
       "type": "text",
-      "text": "**usage-pagination-order.test**\n`test/usage-pagination-order.test.js`\n\nTest module.\n\n包含：\n- usage-pagination-order.test (247 行)\n- readFile (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**usage-pagination-order.test**\n`test/usage-pagination-order.test.js`\n\nTest module.\n\n包含：\n- usage-pagination-order.test (254 行)\n- readFile (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 100,
       "y": 20916,
       "width": 280,
@@ -5138,7 +5138,7 @@
     {
       "id": "utils_usage-monthly-core_60c2e082",
       "type": "text",
-      "text": "**usage-monthly-core**\n`insforge-src/shared/usage-monthly-core.js`\n\nShared utilities.\n\n包含：\n- usage-monthly-core (81 行)\n- initMonthlyBuckets (2 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**usage-monthly-core**\n`insforge-src/shared/usage-monthly-core.js`\n\nShared utilities.\n\n包含：\n- usage-monthly-core (65 行)\n- initMonthlyBuckets (2 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 100,
       "y": 9616,
       "width": 280,
@@ -5461,7 +5461,7 @@
     {
       "id": "utils_usage-monthly_4c7fe340",
       "type": "text",
-      "text": "**usage-monthly**\n`insforge-src/shared/core/usage-monthly.js`\n\nShared utilities.\n\n包含：\n- usage-monthly (17 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**usage-monthly**\n`insforge-src/shared/core/usage-monthly.js`\n\nShared utilities.\n\n包含：\n- usage-monthly (14 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 3700,
       "y": 7816,
       "width": 280,
@@ -5674,7 +5674,7 @@
     {
       "id": "undefined_vibeusage-usage-monthly_b0646c2a",
       "type": "text",
-      "text": "**vibeusage-usage-monthly**\n`insforge-src/functions-esm/vibeusage-usage-monthly.js`\n\nGeneral module.\n\n包含：\n- vibeusage-usage-monthly (127 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**vibeusage-usage-monthly**\n`insforge-src/functions-esm/vibeusage-usage-monthly.js`\n\nGeneral module.\n\n包含：\n- vibeusage-usage-monthly (121 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 1180,
       "y": 7096,
       "width": 280,
@@ -6181,7 +6181,7 @@
     {
       "id": "utils_usage-monthly_3962c808",
       "type": "text",
-      "text": "**usage-monthly**\n`insforge-src/functions-esm/shared/core/usage-monthly.js`\n\nShared utilities.\n\n包含：\n- usage-monthly (12 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**usage-monthly**\n`insforge-src/functions-esm/shared/core/usage-monthly.js`\n\nShared utilities.\n\n包含：\n- usage-monthly (10 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 4060,
       "y": 6016,
       "width": 280,
