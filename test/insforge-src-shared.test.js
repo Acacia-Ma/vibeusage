@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { webcrypto } = require("node:crypto");
+const { createClient } = require("@insforge/sdk");
 const { logSlowQuery } = require("../insforge-src/shared/logging");
 const {
   getUsageMaxDays,
@@ -1763,4 +1764,24 @@ test("project usage core builds aggregate and fallback queries through shared fi
     { op: "eq", field: "user_id", value: "user-2" },
     { op: "eq", field: "source", value: "canary" },
   ]);
+});
+
+test("project usage core keeps insforge database instance binding intact", () => {
+  const edgeClient = createClient({
+    baseUrl: "https://example.com",
+    edgeFunctionToken: "token-123",
+  });
+
+  const detachedFrom = edgeClient.database.from;
+  assert.throws(() => detachedFrom("demo_table"), /postgrest/);
+
+  const query = projectUsageCore.buildProjectUsageFallbackQuery({
+    edgeClient,
+    userId: "user-1",
+    source: "openrouter",
+  });
+
+  assert.equal(typeof query, "object");
+  assert.equal(typeof query.eq, "function");
+  assert.equal(typeof query.then, "function");
 });

@@ -66,11 +66,14 @@ function shouldFallbackProjectUsageAggregate(message) {
 }
 
 function buildProjectUsageBaseQuery({ edgeClient, userId, source, select } = {}) {
-  const from = edgeClient?.database?.from;
-  if (typeof from !== "function") {
+  const database = edgeClient?.database;
+  if (!database || typeof database.from !== "function") {
     throw new Error("edgeClient.database.from is required");
   }
-  let query = from("vibeusage_project_usage_hourly").select(select).eq("user_id", userId);
+  let query = database
+    .from("vibeusage_project_usage_hourly")
+    .select(select)
+    .eq("user_id", userId);
   if (source) query = query.eq("source", source);
   if (!canaryCore.isCanaryTag(source)) query = query.neq("source", "canary");
   return query;
