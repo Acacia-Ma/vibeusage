@@ -27,6 +27,14 @@ const { DETAILED_HOURLY_USAGE_SELECT, forEachHourlyUsagePage } = usageHourlyQuer
 const { fetchRollupRows, isRollupEnabled } = usageRollupCore;
 const MIN_ROLLUP_RANGE_DAYS = 30;
 
+function createRollupDebugState({ preferRollup = false, enabled = false } = {}) {
+  return {
+    enabled,
+    hit: false,
+    fallbackReason: preferRollup ? null : "rollup_not_requested",
+  };
+}
+
 async function collectAggregateUsageRange({
   edgeClient,
   userId,
@@ -54,11 +62,14 @@ async function collectAggregateUsageRange({
   let aggregateState = state && typeof state === "object" ? state : buildAggregateState();
   let rowCount = 0;
   let rollupHit = false;
+  const rollupEnabled = preferRollup && isRollupEnabled();
+  const rollupDebug = createRollupDebugState({ preferRollup, enabled: rollupEnabled });
 
   const resetAggregation = () => {
     aggregateState = buildAggregateState();
     rowCount = 0;
     rollupHit = false;
+    rollupDebug.hit = false;
   };
 
   const ingestRow = async (row) => {
@@ -151,6 +162,8 @@ async function collectAggregateUsageRange({
     rowCount += rows.length;
     if (rows.length > 0) {
       rollupHit = true;
+      rollupDebug.hit = true;
+      rollupDebug.fallbackReason = null;
     }
     for (const row of rows) {
       await ingestRow(normalizeRollupRow(row));
@@ -159,13 +172,19 @@ async function collectAggregateUsageRange({
   };
 
   const collectWithRollup = async () => {
-    if (!preferRollup || !isRollupEnabled()) {
+    if (!preferRollup) {
+      return await sumHourlyRange(startIso, endIso);
+    }
+
+    if (!rollupEnabled) {
+      rollupDebug.fallbackReason = "rollup_disabled";
       return await sumHourlyRange(startIso, endIso);
     }
 
     const rangeStartUtc = new Date(startIso);
     const rangeEndUtc = new Date(endIso);
     if (!Number.isFinite(rangeStartUtc.getTime()) || !Number.isFinite(rangeEndUtc.getTime())) {
+      rollupDebug.fallbackReason = "invalid_range";
       return await sumHourlyRange(startIso, endIso);
     }
 
@@ -185,7 +204,13 @@ async function collectAggregateUsageRange({
     const startIsBoundary = rangeStartUtc.getTime() === rangeStartDayUtc.getTime();
     const endIsBoundary = rangeEndUtc.getTime() === rangeEndDayUtc.getTime();
 
-    if (sameUtcDay || rangeDays < MIN_ROLLUP_RANGE_DAYS) {
+    if (sameUtcDay) {
+      rollupDebug.fallbackReason = "same_day_range";
+      return await sumHourlyRange(startIso, endIso);
+    }
+
+    if (rangeDays < MIN_ROLLUP_RANGE_DAYS) {
+      rollupDebug.fallbackReason = "range_below_rollup_threshold";
       return await sumHourlyRange(startIso, endIso);
     }
 
@@ -215,6 +240,7 @@ async function collectAggregateUsageRange({
     }
 
     if (hourlyError || middleRollupRows === 0) {
+      rollupDebug.fallbackReason = hourlyError ? "rollup_query_failed" : "rollup_empty_middle";
       resetAggregation();
       return await sumHourlyRange(startIso, endIso);
     }
@@ -228,6 +254,7 @@ async function collectAggregateUsageRange({
     rowCount,
     state: aggregateState,
     rollupHit,
+    rollupDebug,
   };
 }
 

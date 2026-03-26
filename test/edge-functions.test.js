@@ -5486,6 +5486,9 @@ test("vibeusage-usage-summary emits debug payload when requested", () =>
       assert.ok(Number.isFinite(payload.debug.query_ms));
       assert.ok(Number.isFinite(payload.debug.slow_threshold_ms));
       assert.equal(typeof payload.debug.slow_query, "boolean");
+      assert.equal(payload.debug.rollup_enabled, true);
+      assert.equal(payload.debug.rollup_hit, false);
+      assert.equal(payload.debug.rollup_fallback_reason, "range_below_rollup_threshold");
 
       const noDebugReq = new Request(
         "http://localhost/functions/vibeusage-usage-summary?from=2025-12-21&to=2025-12-21",
@@ -5770,7 +5773,7 @@ test("vibeusage-usage-summary uses rollup rows for full-day ranges when enabled"
     };
 
     const req = new Request(
-      "http://localhost/functions/vibeusage-usage-summary?from=2025-12-01&to=2025-12-30&tz=UTC",
+      "http://localhost/functions/vibeusage-usage-summary?from=2025-12-01&to=2025-12-30&tz=UTC&debug=1",
       {
         method: "GET",
         headers: { Authorization: `Bearer ${userJwt}` },
@@ -5786,6 +5789,10 @@ test("vibeusage-usage-summary uses rollup rows for full-day ranges when enabled"
     assert.equal(body.totals.input_tokens, "120");
     assert.equal(body.totals.cached_input_tokens, "30");
     assert.equal(body.totals.output_tokens, "180");
+    assert.ok(body.debug);
+    assert.equal(body.debug.rollup_enabled, true);
+    assert.equal(body.debug.rollup_hit, true);
+    assert.equal(body.debug.rollup_fallback_reason, null);
     assert.ok(touched.rollup > 0, "expected daily rollup table to be queried");
     assert.equal(touched.hourly, 0, "expected full-day range to avoid hourly fallback");
   }));

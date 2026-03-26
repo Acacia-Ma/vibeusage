@@ -90,6 +90,7 @@ export async function startAggregateUsageRequest({
     queryStartMs,
     rowCount: aggregateRes.rowCount,
     rollupHit: aggregateRes.rollupHit,
+    rollupDebug: aggregateRes.rollupDebug,
   };
 }
 

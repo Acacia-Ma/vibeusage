@@ -2105,17 +2105,89 @@ if (!globalThis[CORE_KEY15]) {
   });
 }
 
+// insforge-src/shared/usage-rollup-core.mjs
+var CORE_KEY16 = "__vibeusageUsageRollupCore";
+var canaryCore2 = globalThis.__vibeusageCanaryCore;
+if (!canaryCore2) throw new Error("canary core not initialized");
+var paginationCore2 = globalThis.__vibeusagePaginationCore;
+if (!paginationCore2) throw new Error("pagination core not initialized");
+var usageMetricsCore3 = globalThis.__vibeusageUsageMetricsCore;
+if (!usageMetricsCore3) throw new Error("usage metrics core not initialized");
+var { applyCanaryFilter: applyCanaryFilter3 } = canaryCore2;
+var { forEachPage: forEachPage3 } = paginationCore2;
+var { createTotals: createTotals3, addRowTotals: addRowTotals3 } = usageMetricsCore3;
+async function fetchRollupRows({ edgeClient, userId, fromDay, toDay, source, model }) {
+  const rows = [];
+  const { error } = await forEachPage3({
+    createQuery: () => {
+      let query = edgeClient.database.from("vibeusage_tracker_daily_rollup").select(
+        "day,source,model,total_tokens,billable_total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens"
+      ).eq("user_id", userId).gte("day", fromDay).lte("day", toDay);
+      if (source) query = query.eq("source", source);
+      if (model) query = query.eq("model", model);
+      query = applyCanaryFilter3(query, { source, model });
+      return query.order("day", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
+    },
+    onPage: (pageRows) => {
+      if (!Array.isArray(pageRows) || pageRows.length === 0) return;
+      rows.push(...pageRows);
+    }
+  });
+  if (error) return { ok: false, error };
+  return { ok: true, rows };
+}
+function sumRollupRows(rows) {
+  const totals = createTotals3();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    addRowTotals3(totals, row);
+  }
+  return totals;
+}
+function isRollupEnabled() {
+  const envCore6 = globalThis.__vibeusageEnvCore;
+  const raw = envCore6.readEnvValue?.("VIBEUSAGE_ROLLUP_ENABLED");
+  if (raw == null) return false;
+  const normalized = String(raw).trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+if (!globalThis[CORE_KEY16]) {
+  Object.defineProperty(globalThis, CORE_KEY16, {
+    value: {
+      fetchRollupRows,
+      sumRollupRows,
+      isRollupEnabled
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
 // insforge-src/shared/usage-aggregate-collector-core.mjs
-var CORE_KEY16 = "__vibeusageUsageAggregateCollectorCore";
+var CORE_KEY17 = "__vibeusageUsageAggregateCollectorCore";
 var usageFilterCore = globalThis.__vibeusageUsageFilterCore;
 if (!usageFilterCore) throw new Error("usage filter core not initialized");
+var dateCore3 = globalThis.__vibeusageDateCore;
+if (!dateCore3) throw new Error("date core not initialized");
 var usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 if (!usagePricingCore) throw new Error("usage pricing core not initialized");
 var usageHourlyQueryCore = globalThis.__vibeusageUsageHourlyQueryCore;
 if (!usageHourlyQueryCore) throw new Error("usage hourly query core not initialized");
+var usageRollupCore = globalThis.__vibeusageUsageRollupCore;
+if (!usageRollupCore) throw new Error("usage rollup core not initialized");
+var { addUtcDays: addUtcDays2, formatDateUTC: formatDateUTC2 } = dateCore3;
 var { shouldIncludeUsageRow: shouldIncludeUsageRow2 } = usageFilterCore;
 var { accumulateAggregateUsageRow: accumulateAggregateUsageRow2, createAggregateUsageState: createAggregateUsageState2 } = usagePricingCore;
 var { DETAILED_HOURLY_USAGE_SELECT: DETAILED_HOURLY_USAGE_SELECT2, forEachHourlyUsagePage: forEachHourlyUsagePage2 } = usageHourlyQueryCore;
+var { fetchRollupRows: fetchRollupRows2, isRollupEnabled: isRollupEnabled2 } = usageRollupCore;
+var MIN_ROLLUP_RANGE_DAYS = 30;
+function createRollupDebugState({ preferRollup = false, enabled = false } = {}) {
+  return {
+    enabled,
+    hit: false,
+    fallbackReason: preferRollup ? null : "rollup_not_requested"
+  };
+}
 async function collectAggregateUsageRange({
   edgeClient,
   userId,
@@ -2132,53 +2204,192 @@ async function collectAggregateUsageRange({
   pageSize,
   select = DETAILED_HOURLY_USAGE_SELECT2,
   onAccumulatedRow,
-  shouldAccumulateRow
+  shouldAccumulateRow,
+  createState,
+  preferRollup = false
 } = {}) {
-  const aggregateState = state && typeof state === "object" ? state : createAggregateUsageState2();
-  const { error, rowCount } = await forEachHourlyUsagePage2({
-    edgeClient,
-    userId,
-    source,
-    usageModels,
-    canonicalModel,
-    startIso,
-    endIso,
-    pageSize,
-    select,
-    onPage: async (rows) => {
-      for (const row of rows) {
-        if (!shouldIncludeUsageRow2({
-          row,
-          canonicalModel,
-          hasModelFilter,
-          aliasTimeline,
-          to: effectiveDate
-        })) {
-          continue;
-        }
-        if (typeof shouldAccumulateRow === "function" && !shouldAccumulateRow(row)) {
-          continue;
-        }
-        const accumulation = accumulateAggregateUsageRow2({
-          state: aggregateState,
-          row,
-          effectiveDate,
-          defaultSource
-        });
-        if (typeof onAccumulatedRow === "function") {
-          await onAccumulatedRow({
-            row,
-            accumulation,
-            state: aggregateState
-          });
+  const buildAggregateState = typeof createState === "function" ? createState : () => state && typeof state === "object" ? state : createAggregateUsageState2();
+  let aggregateState = state && typeof state === "object" ? state : buildAggregateState();
+  let rowCount = 0;
+  let rollupHit = false;
+  const rollupEnabled = preferRollup && isRollupEnabled2();
+  const rollupDebug = createRollupDebugState({ preferRollup, enabled: rollupEnabled });
+  const resetAggregation = () => {
+    aggregateState = buildAggregateState();
+    rowCount = 0;
+    rollupHit = false;
+    rollupDebug.hit = false;
+  };
+  const ingestRow = async (row) => {
+    if (!shouldIncludeUsageRow2({
+      row,
+      canonicalModel,
+      hasModelFilter,
+      aliasTimeline,
+      to: effectiveDate
+    })) {
+      return;
+    }
+    if (typeof shouldAccumulateRow === "function" && !shouldAccumulateRow(row)) {
+      return;
+    }
+    const accumulation = accumulateAggregateUsageRow2({
+      state: aggregateState,
+      row,
+      effectiveDate,
+      defaultSource
+    });
+    if (typeof onAccumulatedRow === "function") {
+      await onAccumulatedRow({
+        row,
+        accumulation,
+        state: aggregateState
+      });
+    }
+  };
+  const normalizeRollupRow = (row) => {
+    if (!row?.day || row?.hour_start) return row;
+    return {
+      ...row,
+      hour_start: `${row.day}T00:00:00.000Z`
+    };
+  };
+  const sumHourlyRange = async (rangeStartIso, rangeEndIso) => {
+    const { error } = await forEachHourlyUsagePage2({
+      edgeClient,
+      userId,
+      source,
+      usageModels,
+      canonicalModel,
+      startIso: rangeStartIso,
+      endIso: rangeEndIso,
+      pageSize,
+      select,
+      onPage: async (rows) => {
+        for (const row of rows) {
+          rowCount += 1;
+          await ingestRow(row);
         }
       }
+    });
+    if (error) return { ok: false, error };
+    return { ok: true };
+  };
+  const sumRollupRange = async (fromDay, toDay) => {
+    let rows = [];
+    if (hasModelFilter && Array.isArray(usageModels) && usageModels.length > 0) {
+      for (const usageModel of usageModels) {
+        const rollupRes = await fetchRollupRows2({
+          edgeClient,
+          userId,
+          fromDay,
+          toDay,
+          source,
+          model: usageModel
+        });
+        if (!rollupRes.ok) return { ok: false, error: rollupRes.error };
+        rows = rows.concat(Array.isArray(rollupRes.rows) ? rollupRes.rows : []);
+      }
+    } else {
+      const rollupRes = await fetchRollupRows2({
+        edgeClient,
+        userId,
+        fromDay,
+        toDay,
+        source,
+        model: canonicalModel || null
+      });
+      if (!rollupRes.ok) return { ok: false, error: rollupRes.error };
+      rows = Array.isArray(rollupRes.rows) ? rollupRes.rows : [];
     }
-  });
-  return { error, rowCount, state: aggregateState };
+    rowCount += rows.length;
+    if (rows.length > 0) {
+      rollupHit = true;
+      rollupDebug.hit = true;
+      rollupDebug.fallbackReason = null;
+    }
+    for (const row of rows) {
+      await ingestRow(normalizeRollupRow(row));
+    }
+    return { ok: true, rowsCount: rows.length };
+  };
+  const collectWithRollup = async () => {
+    if (!preferRollup) {
+      return await sumHourlyRange(startIso, endIso);
+    }
+    if (!rollupEnabled) {
+      rollupDebug.fallbackReason = "rollup_disabled";
+      return await sumHourlyRange(startIso, endIso);
+    }
+    const rangeStartUtc = new Date(startIso);
+    const rangeEndUtc = new Date(endIso);
+    if (!Number.isFinite(rangeStartUtc.getTime()) || !Number.isFinite(rangeEndUtc.getTime())) {
+      rollupDebug.fallbackReason = "invalid_range";
+      return await sumHourlyRange(startIso, endIso);
+    }
+    const rangeStartDayUtc = new Date(
+      Date.UTC(
+        rangeStartUtc.getUTCFullYear(),
+        rangeStartUtc.getUTCMonth(),
+        rangeStartUtc.getUTCDate()
+      )
+    );
+    const rangeEndDayUtc = new Date(
+      Date.UTC(rangeEndUtc.getUTCFullYear(), rangeEndUtc.getUTCMonth(), rangeEndUtc.getUTCDate())
+    );
+    const sameUtcDay = rangeStartDayUtc.getTime() === rangeEndDayUtc.getTime();
+    const rangeDays = Math.floor((rangeEndDayUtc.getTime() - rangeStartDayUtc.getTime()) / 864e5) + 1;
+    const startIsBoundary = rangeStartUtc.getTime() === rangeStartDayUtc.getTime();
+    const endIsBoundary = rangeEndUtc.getTime() === rangeEndDayUtc.getTime();
+    if (sameUtcDay) {
+      rollupDebug.fallbackReason = "same_day_range";
+      return await sumHourlyRange(startIso, endIso);
+    }
+    if (rangeDays < MIN_ROLLUP_RANGE_DAYS) {
+      rollupDebug.fallbackReason = "range_below_rollup_threshold";
+      return await sumHourlyRange(startIso, endIso);
+    }
+    let hourlyError = null;
+    let middleRollupRows = null;
+    const rollupStartDate = startIsBoundary ? rangeStartDayUtc : addUtcDays2(rangeStartDayUtc, 1);
+    const rollupEndDate = addUtcDays2(rangeEndDayUtc, -1);
+    if (!startIsBoundary) {
+      const hourlyRes = await sumHourlyRange(startIso, rollupStartDate.toISOString());
+      if (!hourlyRes.ok) hourlyError = hourlyRes.error;
+    }
+    if (!endIsBoundary && !hourlyError) {
+      const hourlyRes = await sumHourlyRange(rangeEndDayUtc.toISOString(), endIso);
+      if (!hourlyRes.ok) hourlyError = hourlyRes.error;
+    }
+    if (!hourlyError && rollupStartDate.getTime() <= rollupEndDate.getTime()) {
+      const rollupRes = await sumRollupRange(
+        formatDateUTC2(rollupStartDate),
+        formatDateUTC2(rollupEndDate)
+      );
+      if (!rollupRes.ok) {
+        hourlyError = rollupRes.error;
+      } else {
+        middleRollupRows = rollupRes.rowsCount;
+      }
+    }
+    if (hourlyError || middleRollupRows === 0) {
+      rollupDebug.fallbackReason = hourlyError ? "rollup_query_failed" : "rollup_empty_middle";
+      resetAggregation();
+      return await sumHourlyRange(startIso, endIso);
+    }
+    return { ok: true };
+  };
+  const result = await collectWithRollup();
+  return {
+    error: result.ok ? null : result.error,
+    rowCount,
+    state: aggregateState,
+    rollupHit,
+    rollupDebug
+  };
 }
-if (!globalThis[CORE_KEY16]) {
-  Object.defineProperty(globalThis, CORE_KEY16, {
+if (!globalThis[CORE_KEY17]) {
+  Object.defineProperty(globalThis, CORE_KEY17, {
     value: {
       collectAggregateUsageRange
     },
@@ -2196,7 +2407,7 @@ if (!usageAggregateCollectorCore) {
 var collectAggregateUsageRange2 = usageAggregateCollectorCore.collectAggregateUsageRange;
 
 // insforge-src/shared/logging-core.mjs
-var CORE_KEY17 = "__vibeusageLoggingCore";
+var CORE_KEY18 = "__vibeusageLoggingCore";
 var envCore4 = globalThis.__vibeusageEnvCore;
 if (!envCore4) throw new Error("env core not initialized");
 function createRequestId() {
@@ -2294,8 +2505,8 @@ function logSlowQuery(logger, fields) {
 function getSlowQueryThresholdMs3() {
   return envCore4.getSlowQueryThresholdMs();
 }
-if (!globalThis[CORE_KEY17]) {
-  Object.defineProperty(globalThis, CORE_KEY17, {
+if (!globalThis[CORE_KEY18]) {
+  Object.defineProperty(globalThis, CORE_KEY18, {
     value: {
       createLogger,
       withRequestLogging,
@@ -2333,7 +2544,8 @@ async function startAggregateUsageRequest({
   defaultSource = "codex",
   onResolvedRequestContext,
   shouldAccumulateRow,
-  onAccumulatedRow
+  onAccumulatedRow,
+  preferRollup = false
 } = {}) {
   const requestContext = await resolveAggregateUsageRequestContext2({
     url,
@@ -2355,6 +2567,10 @@ async function startAggregateUsageRequest({
     hasModelParam: requestContext.hasModelParam,
     defaultModel
   });
+  const createState = () => createAggregateUsageState3({
+    hasModelParam: requestContext.hasModelParam,
+    defaultModel
+  });
   const queryStartMs = Date.now();
   const aggregateRes = await collectAggregateUsageRange2({
     edgeClient,
@@ -2368,9 +2584,11 @@ async function startAggregateUsageRequest({
     startIso: requestContext.startIso,
     endIso: requestContext.endIso,
     state: aggregateState,
+    createState,
     defaultSource,
     shouldAccumulateRow,
-    onAccumulatedRow
+    onAccumulatedRow,
+    preferRollup
   });
   if (aggregateRes.error) {
     return {
@@ -2380,15 +2598,17 @@ async function startAggregateUsageRequest({
       queryStartMs,
       rowCount: aggregateRes.rowCount,
       requestContext,
-      aggregateState
+      aggregateState: aggregateRes.state
     };
   }
   return {
     ok: true,
     requestContext,
-    aggregateState,
+    aggregateState: aggregateRes.state,
     queryStartMs,
-    rowCount: aggregateRes.rowCount
+    rowCount: aggregateRes.rowCount,
+    rollupHit: aggregateRes.rollupHit,
+    rollupDebug: aggregateRes.rollupDebug
   };
 }
 async function finishAggregateUsageRequest({
@@ -2430,31 +2650,31 @@ async function finishAggregateUsageRequest({
 }
 
 // insforge-src/functions-esm/shared/date.js
-var dateCore3 = globalThis.__vibeusageDateCore;
-if (!dateCore3) throw new Error("date core not initialized");
-var isDate2 = dateCore3.isDate;
-var toUtcDay2 = dateCore3.toUtcDay;
-var formatDateUTC2 = dateCore3.formatDateUTC;
-var normalizeIso2 = dateCore3.normalizeIso;
-var parseUtcDateString2 = dateCore3.parseUtcDateString;
-var addUtcDays2 = dateCore3.addUtcDays;
-var computeHeatmapWindowUtc2 = dateCore3.computeHeatmapWindowUtc;
-var parseDateParts2 = dateCore3.parseDateParts;
-var formatDateParts2 = dateCore3.formatDateParts;
-var dateFromPartsUTC2 = dateCore3.dateFromPartsUTC;
-var addDatePartsDays2 = dateCore3.addDatePartsDays;
-var addDatePartsMonths2 = dateCore3.addDatePartsMonths;
-var getUsageTimeZoneContext2 = dateCore3.getUsageTimeZoneContext;
-var isUtcTimeZone2 = dateCore3.isUtcTimeZone;
-var getTimeZoneOffsetMinutes2 = dateCore3.getTimeZoneOffsetMinutes;
-var getLocalParts2 = dateCore3.getLocalParts;
-var formatLocalDateKey3 = dateCore3.formatLocalDateKey;
-var localDatePartsToUtc2 = dateCore3.localDatePartsToUtc;
-var normalizeDateRangeLocal2 = dateCore3.normalizeDateRangeLocal;
-var listDateStrings3 = dateCore3.listDateStrings;
-var resolveUsageDateRangeLocal2 = dateCore3.resolveUsageDateRangeLocal;
-var getUsageMaxDays4 = dateCore3.getUsageMaxDays;
-var isWithinInterval2 = dateCore3.isWithinInterval;
+var dateCore4 = globalThis.__vibeusageDateCore;
+if (!dateCore4) throw new Error("date core not initialized");
+var isDate2 = dateCore4.isDate;
+var toUtcDay2 = dateCore4.toUtcDay;
+var formatDateUTC3 = dateCore4.formatDateUTC;
+var normalizeIso2 = dateCore4.normalizeIso;
+var parseUtcDateString2 = dateCore4.parseUtcDateString;
+var addUtcDays3 = dateCore4.addUtcDays;
+var computeHeatmapWindowUtc2 = dateCore4.computeHeatmapWindowUtc;
+var parseDateParts2 = dateCore4.parseDateParts;
+var formatDateParts2 = dateCore4.formatDateParts;
+var dateFromPartsUTC2 = dateCore4.dateFromPartsUTC;
+var addDatePartsDays2 = dateCore4.addDatePartsDays;
+var addDatePartsMonths2 = dateCore4.addDatePartsMonths;
+var getUsageTimeZoneContext2 = dateCore4.getUsageTimeZoneContext;
+var isUtcTimeZone2 = dateCore4.isUtcTimeZone;
+var getTimeZoneOffsetMinutes2 = dateCore4.getTimeZoneOffsetMinutes;
+var getLocalParts2 = dateCore4.getLocalParts;
+var formatLocalDateKey3 = dateCore4.formatLocalDateKey;
+var localDatePartsToUtc2 = dateCore4.localDatePartsToUtc;
+var normalizeDateRangeLocal2 = dateCore4.normalizeDateRangeLocal;
+var listDateStrings3 = dateCore4.listDateStrings;
+var resolveUsageDateRangeLocal2 = dateCore4.resolveUsageDateRangeLocal;
+var getUsageMaxDays4 = dateCore4.getUsageMaxDays;
+var isWithinInterval2 = dateCore4.isWithinInterval;
 
 // insforge-src/functions-esm/shared/numbers.js
 var runtimePrimitivesCore8 = globalThis.__vibeusageRuntimePrimitivesCore;
@@ -2464,12 +2684,12 @@ var toPositiveIntOrNull2 = runtimePrimitivesCore8.toPositiveIntOrNull;
 var toPositiveInt2 = runtimePrimitivesCore8.toPositiveInt;
 
 // insforge-src/shared/usage-daily-core.mjs
-var CORE_KEY18 = "__vibeusageUsageDailyCore";
-var dateCore4 = globalThis.__vibeusageDateCore;
-if (!dateCore4) throw new Error("date core not initialized");
+var CORE_KEY19 = "__vibeusageUsageDailyCore";
+var dateCore5 = globalThis.__vibeusageDateCore;
+if (!dateCore5) throw new Error("date core not initialized");
 var runtimePrimitivesCore9 = globalThis.__vibeusageRuntimePrimitivesCore;
 if (!runtimePrimitivesCore9) throw new Error("runtime primitives core not initialized");
-var { formatLocalDateKey: formatLocalDateKey4 } = dateCore4;
+var { formatLocalDateKey: formatLocalDateKey4 } = dateCore5;
 var { toBigInt: toBigInt3 } = runtimePrimitivesCore9;
 function initDailyBuckets(dayKeys) {
   const buckets = new Map(
@@ -2503,8 +2723,8 @@ function applyDailyBucket({ buckets, row, tzContext, billable }) {
   bucket.reasoning += toBigInt3(row?.reasoning_output_tokens);
   return true;
 }
-if (!globalThis[CORE_KEY18]) {
-  Object.defineProperty(globalThis, CORE_KEY18, {
+if (!globalThis[CORE_KEY19]) {
+  Object.defineProperty(globalThis, CORE_KEY19, {
     value: {
       initDailyBuckets,
       applyDailyBucket
@@ -2522,7 +2742,7 @@ var initDailyBuckets2 = usageDailyCore.initDailyBuckets;
 var applyDailyBucket2 = usageDailyCore.applyDailyBucket;
 
 // insforge-src/shared/auth-core.mjs
-var CORE_KEY19 = "__vibeusageAuthCore";
+var CORE_KEY20 = "__vibeusageAuthCore";
 function getBearerToken(headerValue) {
   if (!headerValue) return null;
   const prefix = "Bearer ";
@@ -2781,8 +3001,8 @@ async function getAccessContext({
     accessType: "public"
   };
 }
-if (!globalThis[CORE_KEY19]) {
-  Object.defineProperty(globalThis, CORE_KEY19, {
+if (!globalThis[CORE_KEY20]) {
+  Object.defineProperty(globalThis, CORE_KEY20, {
     value: {
       getBearerToken,
       isProjectAdminBearer,
@@ -2824,7 +3044,7 @@ async function createEdgeClient(options) {
 }
 
 // insforge-src/shared/public-sharing-core.mjs
-var CORE_KEY20 = "__vibeusagePublicSharingCore";
+var CORE_KEY21 = "__vibeusagePublicSharingCore";
 var PUBLIC_USER_TOKEN_RE = /^pv1-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 function buildPublicShareToken(userId) {
   if (typeof userId !== "string") return "";
@@ -2975,8 +3195,8 @@ async function disablePublicVisibility({ edgeClient, userId, nowIso }) {
   const { error } = await edgeClient.database.from("vibeusage_public_views").update({ revoked_at: updatedAt, updated_at: updatedAt }).eq("user_id", userId);
   if (error) throw new Error(error.message || "Failed to revoke public visibility row");
 }
-if (!globalThis[CORE_KEY20]) {
-  Object.defineProperty(globalThis, CORE_KEY20, {
+if (!globalThis[CORE_KEY21]) {
+  Object.defineProperty(globalThis, CORE_KEY21, {
     value: {
       buildPublicShareToken,
       isPublicShareToken,
@@ -3027,7 +3247,7 @@ var getAccessContext2 = ({ baseUrl, bearer, allowPublic = false }) => authCore.g
 });
 
 // insforge-src/shared/debug-core.mjs
-var CORE_KEY21 = "__vibeusageDebugCore";
+var CORE_KEY22 = "__vibeusageDebugCore";
 var envCore5 = globalThis.__vibeusageEnvCore;
 if (!envCore5) throw new Error("env core not initialized");
 function isDebugEnabled(url) {
@@ -3069,8 +3289,8 @@ function withSlowQueryDebugPayload(body, options) {
     debug: buildSlowQueryDebugPayload(options)
   };
 }
-if (!globalThis[CORE_KEY21]) {
-  Object.defineProperty(globalThis, CORE_KEY21, {
+if (!globalThis[CORE_KEY22]) {
+  Object.defineProperty(globalThis, CORE_KEY22, {
     value: {
       isDebugEnabled,
       buildSlowQueryDebugPayload,
@@ -3083,7 +3303,7 @@ if (!globalThis[CORE_KEY21]) {
 }
 
 // insforge-src/shared/http-core.mjs
-var CORE_KEY22 = "__vibeusageHttpCore";
+var CORE_KEY23 = "__vibeusageHttpCore";
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -3120,8 +3340,8 @@ async function readJson(request) {
     return { error: "Invalid JSON", status: 400, data: null };
   }
 }
-if (!globalThis[CORE_KEY22]) {
-  Object.defineProperty(globalThis, CORE_KEY22, {
+if (!globalThis[CORE_KEY23]) {
+  Object.defineProperty(globalThis, CORE_KEY23, {
     value: {
       corsHeaders,
       handleOptions,
@@ -3136,7 +3356,7 @@ if (!globalThis[CORE_KEY22]) {
 }
 
 // insforge-src/shared/usage-response-core.mjs
-var CORE_KEY23 = "__vibeusageUsageResponseCore";
+var CORE_KEY24 = "__vibeusageUsageResponseCore";
 var debugCore = globalThis.__vibeusageDebugCore;
 var httpCore = globalThis.__vibeusageHttpCore;
 if (!debugCore) throw new Error("debug core not initialized");
@@ -3154,8 +3374,8 @@ function createUsageJsonResponder({ url, logger, extraHeaders } = {}) {
     );
   };
 }
-if (!globalThis[CORE_KEY23]) {
-  Object.defineProperty(globalThis, CORE_KEY23, {
+if (!globalThis[CORE_KEY24]) {
+  Object.defineProperty(globalThis, CORE_KEY24, {
     value: {
       createUsageJsonResponder,
       resolveUsageResponseBody
@@ -3222,8 +3442,8 @@ function respondUsageRequestError(respond, result) {
 
 // insforge-src/functions-esm/vibeusage-usage-daily.js
 var DEFAULT_MODEL4 = "unknown";
-var usageMetricsCore3 = globalThis.__vibeusageUsageMetricsCore;
-if (!usageMetricsCore3) throw new Error("usage metrics core not initialized");
+var usageMetricsCore4 = globalThis.__vibeusageUsageMetricsCore;
+if (!usageMetricsCore4) throw new Error("usage metrics core not initialized");
 var vibeusage_usage_daily_default = withRequestLogging2("vibeusage-usage-daily", async function(request, logger) {
   const endpoint = prepareUsageEndpoint({ request, logger });
   if (!endpoint.ok) return endpoint.response;
@@ -3275,7 +3495,7 @@ var vibeusage_usage_daily_default = withRequestLogging2("vibeusage-usage-daily",
     const bucket = buckets.get(day);
     return {
       day,
-      ...usageMetricsCore3.buildUsageBucketPayload(bucket)
+      ...usageMetricsCore4.buildUsageBucketPayload(bucket)
     };
   });
   return respond(
