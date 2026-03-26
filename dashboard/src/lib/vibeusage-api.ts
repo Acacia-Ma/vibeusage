@@ -625,7 +625,7 @@ async function requestJson({
   };
 
   if (!requestKey) {
-    return await scheduleFunctionRequest(executeRequest, fetchOptions?.signal);
+    return await executeRequest();
   }
 
   const existing = inFlightGetRequests.get(requestKey);
@@ -633,7 +633,7 @@ async function requestJson({
     return await existing;
   }
 
-  const pending = scheduleFunctionRequest(executeRequest, fetchOptions?.signal);
+  const pending = executeRequest();
   inFlightGetRequests.set(requestKey, pending);
   try {
     return await pending;

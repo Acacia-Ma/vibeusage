@@ -71,31 +71,38 @@ export function useUsageData({
       let dailyRes = null;
       let summaryRes = null;
       if (includeDaily) {
-        const [dailyResult, summaryResult] = await Promise.allSettled([
-          getUsageDaily({
-            baseUrl,
-            accessToken: resolvedToken,
-            from,
-            to,
-            timeZone,
-            tzOffsetMinutes,
-            signal,
-          }),
-          getUsageSummary({
-            baseUrl,
-            accessToken: resolvedToken,
-            from,
-            to,
-            timeZone,
-            tzOffsetMinutes,
-            signal,
-            rolling: true,
-          }),
-        ]);
+        const dailyPromise = getUsageDaily({
+          baseUrl,
+          accessToken: resolvedToken,
+          from,
+          to,
+          timeZone,
+          tzOffsetMinutes,
+          signal,
+        });
+        const summaryPromise = getUsageSummary({
+          baseUrl,
+          accessToken: resolvedToken,
+          from,
+          to,
+          timeZone,
+          tzOffsetMinutes,
+          signal,
+          rolling: true,
+        });
+        const summaryResult = await summaryPromise.then(
+          (value) => ({ status: "fulfilled" as const, value }),
+          (reason) => ({ status: "rejected" as const, reason }),
+        );
         if (signal?.aborted) return;
-        if (dailyResult.status === "rejected") throw dailyResult.reason;
-        dailyRes = dailyResult.value;
-        summaryRes = summaryResult.status === "fulfilled" ? summaryResult.value : null;
+        if (summaryResult.status === "fulfilled") {
+          summaryRes = summaryResult.value;
+          setSummary(summaryRes?.totals || null);
+          setRolling(summaryRes?.rolling || null);
+          setSource("edge");
+        }
+        dailyRes = await dailyPromise;
+        if (signal?.aborted) return;
       } else {
         summaryRes = await getUsageSummary({
           baseUrl,
