@@ -1,4 +1,3 @@
-import { getAccessContext, getBearerToken } from "./shared/auth.js";
 import { applyCanaryFilter } from "./shared/canary.js";
 import {
   addHourlyBucketTotals,
@@ -9,16 +8,18 @@ import {
   resolveUsageHourlyRowSlot,
 } from "./shared/core/usage-hourly.js";
 import {
+  prepareUsageEndpoint,
+  requireUsageAccess,
+  respondUsageRequestError,
+} from "./shared/core/usage-endpoint.js";
+import {
   resolveUsageFilterRequestSnapshot,
 } from "./shared/core/usage-filter-request.js";
 import { collectHourlyUsageRows } from "./shared/core/usage-row-collector.js";
-import { createUsageJsonResponder } from "./shared/core/usage-response.js";
 import {
   getUsageTimeZoneContext,
   normalizeIso,
 } from "./shared/date.js";
-import { getBaseUrl } from "./shared/env.js";
-import { handleOptions } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
 import {
   applyUsageModelFilter,
@@ -28,35 +29,24 @@ import {
 const MIN_INTERVAL_MINUTES = 30;
 
 export default withRequestLogging("vibeusage-usage-hourly", async function (request, logger) {
-  const opt = handleOptions(request);
-  if (opt) return opt;
+  const endpoint = prepareUsageEndpoint({ request, logger });
+  if (!endpoint.ok) return endpoint.response;
+  const { url, respond, bearer } = endpoint;
 
-  const url = new URL(request.url);
-  const respond = createUsageJsonResponder({ url, logger });
-
-  if (request.method !== "GET") return respond({ error: "Method not allowed" }, 405, 0);
-
-  const bearer = getBearerToken(request.headers.get("Authorization"));
-  if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
-
-  const baseUrl = getBaseUrl();
-  const auth = await getAccessContext({ baseUrl, bearer, allowPublic: true });
-  if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
+  const access = await requireUsageAccess({ respond, bearer });
+  if (!access.ok) return access.response;
+  const { auth } = access;
 
   const tzContext = getUsageTimeZoneContext(url);
   const requestContext = resolveUsageHourlyRequestContext({ url, tzContext });
-  if (!requestContext.ok) {
-    return respond({ error: requestContext.error }, requestContext.status || 400, 0);
-  }
+  if (!requestContext.ok) return respondUsageRequestError(respond, requestContext);
   const { timeMode, dayKey, startUtc, endUtc, startIso, endIso } = requestContext;
   const filterSnapshot = await resolveUsageFilterRequestSnapshot({
     url,
     edgeClient: auth.edgeClient,
     effectiveDate: dayKey,
   });
-  if (!filterSnapshot.ok) {
-    return respond({ error: filterSnapshot.error }, filterSnapshot.status || 400, 0);
-  }
+  if (!filterSnapshot.ok) return respondUsageRequestError(respond, filterSnapshot);
   const { source, model, canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
     filterSnapshot;
 

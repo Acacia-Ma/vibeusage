@@ -1028,8 +1028,202 @@ var getAccessContext2 = ({ baseUrl, bearer, allowPublic = false }) => authCore.g
   resolvePublicView: resolvePublicView2
 });
 
+// insforge-src/shared/debug-core.mjs
+var CORE_KEY6 = "__vibeusageDebugCore";
+var envCore2 = globalThis.__vibeusageEnvCore;
+if (!envCore2) throw new Error("env core not initialized");
+function isDebugEnabled(url) {
+  if (!url) return false;
+  if (typeof url === "string") {
+    try {
+      const parsed = new URL(url);
+      return parsed.searchParams.get("debug") === "1";
+    } catch (_error) {
+      return false;
+    }
+  }
+  return url?.searchParams?.get("debug") === "1";
+}
+function buildSlowQueryDebugPayload({ logger, durationMs, status } = {}) {
+  const safeDuration = Number.isFinite(durationMs) ? Math.max(0, Math.round(durationMs)) : 0;
+  const thresholdMs = envCore2.getSlowQueryThresholdMs();
+  if (logger?.log) {
+    logger.log({
+      stage: "debug_payload",
+      status: typeof status === "number" ? status : null,
+      query_ms: safeDuration,
+      slow_threshold_ms: thresholdMs,
+      slow_query: safeDuration >= thresholdMs ? 1 : 0
+    });
+  }
+  return {
+    request_id: logger?.requestId || "",
+    status: typeof status === "number" ? status : null,
+    query_ms: safeDuration,
+    slow_threshold_ms: thresholdMs,
+    slow_query: safeDuration >= thresholdMs
+  };
+}
+function withSlowQueryDebugPayload(body, options) {
+  if (!body || typeof body !== "object" || body.debug) return body;
+  return {
+    ...body,
+    debug: buildSlowQueryDebugPayload(options)
+  };
+}
+if (!globalThis[CORE_KEY6]) {
+  Object.defineProperty(globalThis, CORE_KEY6, {
+    value: {
+      isDebugEnabled,
+      buildSlowQueryDebugPayload,
+      withSlowQueryDebugPayload
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/shared/http-core.mjs
+var CORE_KEY7 = "__vibeusageHttpCore";
+var corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey"
+};
+function handleOptions(request) {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+  return null;
+}
+function json(body, status = 200, extraHeaders = null) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      ...extraHeaders || {}
+    }
+  });
+}
+function requireMethod(request, method) {
+  if (request.method !== method) return json({ error: "Method not allowed" }, 405);
+  return null;
+}
+async function readJson(request) {
+  if (!request.headers.get("Content-Type")?.includes("application/json")) {
+    return { error: "Content-Type must be application/json", status: 415, data: null };
+  }
+  try {
+    const data = await request.json();
+    return { error: null, status: 200, data };
+  } catch (_error) {
+    return { error: "Invalid JSON", status: 400, data: null };
+  }
+}
+if (!globalThis[CORE_KEY7]) {
+  Object.defineProperty(globalThis, CORE_KEY7, {
+    value: {
+      corsHeaders,
+      handleOptions,
+      json,
+      requireMethod,
+      readJson
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/shared/usage-response-core.mjs
+var CORE_KEY8 = "__vibeusageUsageResponseCore";
+var debugCore = globalThis.__vibeusageDebugCore;
+var httpCore = globalThis.__vibeusageHttpCore;
+if (!debugCore) throw new Error("debug core not initialized");
+if (!httpCore) throw new Error("http core not initialized");
+function resolveUsageResponseBody(body, { url, logger, durationMs, status } = {}) {
+  if (!debugCore.isDebugEnabled(url)) return body;
+  return debugCore.withSlowQueryDebugPayload(body, { logger, durationMs, status });
+}
+function createUsageJsonResponder({ url, logger, extraHeaders } = {}) {
+  return function respond(body, status = 200, durationMs = 0) {
+    return httpCore.json(
+      resolveUsageResponseBody(body, { url, logger, durationMs, status }),
+      status,
+      extraHeaders || null
+    );
+  };
+}
+if (!globalThis[CORE_KEY8]) {
+  Object.defineProperty(globalThis, CORE_KEY8, {
+    value: {
+      createUsageJsonResponder,
+      resolveUsageResponseBody
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/core/usage-response.js
+var usageResponseCore = globalThis.__vibeusageUsageResponseCore;
+if (!usageResponseCore) throw new Error("usage response core not initialized");
+var createUsageJsonResponder2 = usageResponseCore.createUsageJsonResponder;
+var resolveUsageResponseBody2 = usageResponseCore.resolveUsageResponseBody;
+
+// insforge-src/functions-esm/shared/http.js
+var httpCore2 = globalThis.__vibeusageHttpCore;
+if (!httpCore2) throw new Error("http core not initialized");
+var corsHeaders2 = httpCore2.corsHeaders;
+var handleOptions2 = httpCore2.handleOptions;
+var json2 = httpCore2.json;
+var requireMethod2 = httpCore2.requireMethod;
+var readJson2 = httpCore2.readJson;
+
+// insforge-src/functions-esm/shared/core/usage-endpoint.js
+function prepareUsageEndpoint({ request, logger, method = "GET" }) {
+  const optionsResponse = handleOptions2(request);
+  if (optionsResponse) return { ok: false, response: optionsResponse };
+  const url = new URL(request.url);
+  const respond = createUsageJsonResponder2({ url, logger });
+  if (request.method !== method) {
+    return {
+      ok: false,
+      response: respond({ error: "Method not allowed" }, 405, 0)
+    };
+  }
+  const bearer = getBearerToken2(request.headers.get("Authorization"));
+  if (!bearer) {
+    return {
+      ok: false,
+      response: respond({ error: "Missing bearer token" }, 401, 0)
+    };
+  }
+  return { ok: true, url, respond, bearer };
+}
+async function requireUsageAccess({ respond, bearer, allowPublic = true }) {
+  const auth = await getAccessContext2({
+    baseUrl: getBaseUrl2(),
+    bearer,
+    allowPublic
+  });
+  if (!auth.ok) {
+    return {
+      ok: false,
+      response: respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0)
+    };
+  }
+  return { ok: true, auth };
+}
+function respondUsageRequestError(respond, result) {
+  return respond({ error: result?.error || "Invalid request" }, result?.status || 400, 0);
+}
+
 // insforge-src/shared/usage-filter-request-core.mjs
-var CORE_KEY6 = "__vibeusageUsageFilterRequestCore";
+var CORE_KEY9 = "__vibeusageUsageFilterRequestCore";
 var runtimePrimitivesCore2 = globalThis.__vibeusageRuntimePrimitivesCore;
 var usageModelCore2 = globalThis.__vibeusageUsageModelCore;
 if (!runtimePrimitivesCore2) throw new Error("runtime primitives core not initialized");
@@ -1091,8 +1285,8 @@ async function resolveUsageFilterRequestSnapshot({ url, edgeClient, effectiveDat
     aliasTimeline: filterContext.aliasTimeline
   };
 }
-if (!globalThis[CORE_KEY6]) {
-  Object.defineProperty(globalThis, CORE_KEY6, {
+if (!globalThis[CORE_KEY9]) {
+  Object.defineProperty(globalThis, CORE_KEY9, {
     value: {
       resolveUsageModelRequestParams,
       resolveUsageFilterRequestParams,
@@ -1116,7 +1310,7 @@ var resolveUsageFilterRequestContext2 = usageFilterRequestCore.resolveUsageFilte
 var resolveUsageFilterRequestSnapshot2 = usageFilterRequestCore.resolveUsageFilterRequestSnapshot;
 
 // insforge-src/shared/canary-core.mjs
-var CORE_KEY7 = "__vibeusageCanaryCore";
+var CORE_KEY10 = "__vibeusageCanaryCore";
 function isCanaryTag(value) {
   if (typeof value !== "string") return false;
   return value.trim().toLowerCase() === "canary";
@@ -1126,8 +1320,8 @@ function applyCanaryFilter(query, { source, model } = {}) {
   if (isCanaryTag(source) || isCanaryTag(model)) return query;
   return query.neq("source", "canary").neq("model", "canary");
 }
-if (!globalThis[CORE_KEY7]) {
-  Object.defineProperty(globalThis, CORE_KEY7, {
+if (!globalThis[CORE_KEY10]) {
+  Object.defineProperty(globalThis, CORE_KEY10, {
     value: {
       applyCanaryFilter,
       isCanaryTag
@@ -1145,7 +1339,7 @@ var isCanaryTag2 = canaryCore.isCanaryTag;
 var applyCanaryFilter2 = canaryCore.applyCanaryFilter;
 
 // insforge-src/shared/pagination-core.mjs
-var CORE_KEY8 = "__vibeusagePaginationCore";
+var CORE_KEY11 = "__vibeusagePaginationCore";
 var MAX_PAGE_SIZE = 1e3;
 function normalizePageSize(value) {
   const size = Number(value);
@@ -1179,8 +1373,8 @@ async function forEachPage({ createQuery, pageSize, onPage }) {
   }
   return { error: null };
 }
-if (!globalThis[CORE_KEY8]) {
-  Object.defineProperty(globalThis, CORE_KEY8, {
+if (!globalThis[CORE_KEY11]) {
+  Object.defineProperty(globalThis, CORE_KEY11, {
     value: {
       MAX_PAGE_SIZE,
       normalizePageSize,
@@ -1193,7 +1387,7 @@ if (!globalThis[CORE_KEY8]) {
 }
 
 // insforge-src/shared/usage-hourly-query-core.mjs
-var CORE_KEY9 = "__vibeusageUsageHourlyQueryCore";
+var CORE_KEY12 = "__vibeusageUsageHourlyQueryCore";
 var usageModelCore3 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore3) throw new Error("usage-model core not initialized");
 var canaryCore2 = globalThis.__vibeusageCanaryCore;
@@ -1263,8 +1457,8 @@ async function forEachHourlyUsagePage({
   });
   return { error, rowCount };
 }
-if (!globalThis[CORE_KEY9]) {
-  Object.defineProperty(globalThis, CORE_KEY9, {
+if (!globalThis[CORE_KEY12]) {
+  Object.defineProperty(globalThis, CORE_KEY12, {
     value: {
       buildHourlyUsageQuery,
       forEachHourlyUsagePage
@@ -1282,9 +1476,9 @@ var buildHourlyUsageQuery2 = usageHourlyQueryCore.buildHourlyUsageQuery;
 var forEachHourlyUsagePage2 = usageHourlyQueryCore.forEachHourlyUsagePage;
 
 // insforge-src/shared/date-core.mjs
-var CORE_KEY10 = "__vibeusageDateCore";
-var envCore2 = globalThis.__vibeusageEnvCore;
-if (!envCore2) throw new Error("env core not initialized");
+var CORE_KEY13 = "__vibeusageDateCore";
+var envCore3 = globalThis.__vibeusageEnvCore;
+if (!envCore3) throw new Error("env core not initialized");
 var TIMEZONE_FORMATTERS = /* @__PURE__ */ new Map();
 function isDate(value) {
   return typeof value === "string" && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value);
@@ -1573,7 +1767,7 @@ function resolveUsageDateRangeLocal({ fromRaw, toRaw, tzContext, maxDays } = {})
   };
 }
 function getUsageMaxDays3() {
-  return envCore2.getUsageMaxDays();
+  return envCore3.getUsageMaxDays();
 }
 function isWithinInterval(lastSyncAt, minutes, nowIso) {
   const lastIso = normalizeIso(lastSyncAt);
@@ -1586,8 +1780,8 @@ function isWithinInterval(lastSyncAt, minutes, nowIso) {
   if (!Number.isFinite(nowValue)) return false;
   return nowValue - lastMs < windowMs;
 }
-if (!globalThis[CORE_KEY10]) {
-  Object.defineProperty(globalThis, CORE_KEY10, {
+if (!globalThis[CORE_KEY13]) {
+  Object.defineProperty(globalThis, CORE_KEY13, {
     value: {
       isDate,
       toUtcDay,
@@ -1657,7 +1851,7 @@ var toPositiveIntOrNull2 = runtimePrimitivesCore3.toPositiveIntOrNull;
 var toPositiveInt2 = runtimePrimitivesCore3.toPositiveInt;
 
 // insforge-src/shared/usage-metrics-core.mjs
-var CORE_KEY11 = "__vibeusageUsageMetricsCore";
+var CORE_KEY14 = "__vibeusageUsageMetricsCore";
 var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
 var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
 var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
@@ -1777,8 +1971,8 @@ function buildUsageBucketPayload(bucket, extra) {
     extra
   );
 }
-if (!globalThis[CORE_KEY11]) {
-  Object.defineProperty(globalThis, CORE_KEY11, {
+if (!globalThis[CORE_KEY14]) {
+  Object.defineProperty(globalThis, CORE_KEY14, {
     value: {
       createTotals,
       addRowTotals,
@@ -1799,7 +1993,7 @@ if (!globalThis[CORE_KEY11]) {
 }
 
 // insforge-src/shared/usage-row-core.mjs
-var CORE_KEY12 = "__vibeusageUsageRowCore";
+var CORE_KEY15 = "__vibeusageUsageRowCore";
 var DEFAULT_SOURCE = "codex";
 var DEFAULT_MODEL2 = "unknown";
 var runtimePrimitivesCore5 = globalThis.__vibeusageRuntimePrimitivesCore;
@@ -1849,8 +2043,8 @@ function resolveHourlyUsageRowState({
     usageKey
   };
 }
-if (!globalThis[CORE_KEY12]) {
-  Object.defineProperty(globalThis, CORE_KEY12, {
+if (!globalThis[CORE_KEY15]) {
+  Object.defineProperty(globalThis, CORE_KEY15, {
     value: {
       resolveHourlyUsageRowState
     },
@@ -1893,7 +2087,7 @@ var buildPricingBucketKey2 = usageMetricsCore2.buildPricingBucketKey;
 var parsePricingBucketKey2 = usageMetricsCore2.parsePricingBucketKey;
 
 // insforge-src/shared/usage-filter-core.mjs
-var CORE_KEY13 = "__vibeusageUsageFilterCore";
+var CORE_KEY16 = "__vibeusageUsageFilterCore";
 var usageModelCore6 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore6) throw new Error("usage-model core not initialized");
 var { extractDateKey: extractDateKey4, matchesCanonicalModelAtDate: matchesCanonicalModelAtDate3 } = usageModelCore6;
@@ -1907,8 +2101,8 @@ function shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimel
     timeline: aliasTimeline
   });
 }
-if (!globalThis[CORE_KEY13]) {
-  Object.defineProperty(globalThis, CORE_KEY13, {
+if (!globalThis[CORE_KEY16]) {
+  Object.defineProperty(globalThis, CORE_KEY16, {
     value: {
       shouldIncludeUsageRow
     },
@@ -1924,7 +2118,7 @@ if (!usageFilterCore) throw new Error("usage filter core not initialized");
 var shouldIncludeUsageRow2 = usageFilterCore.shouldIncludeUsageRow;
 
 // insforge-src/shared/usage-monthly-core.mjs
-var CORE_KEY14 = "__vibeusageUsageMonthlyCore";
+var CORE_KEY17 = "__vibeusageUsageMonthlyCore";
 var dateCore2 = globalThis.__vibeusageDateCore;
 if (!dateCore2) throw new Error("date core not initialized");
 var runtimePrimitivesCore6 = globalThis.__vibeusageRuntimePrimitivesCore;
@@ -1984,8 +2178,8 @@ function ingestMonthlyRow({
   bucket.reasoning += toBigInt3(row?.reasoning_output_tokens);
   return true;
 }
-if (!globalThis[CORE_KEY14]) {
-  Object.defineProperty(globalThis, CORE_KEY14, {
+if (!globalThis[CORE_KEY17]) {
+  Object.defineProperty(globalThis, CORE_KEY17, {
     value: {
       initMonthlyBuckets,
       ingestMonthlyRow
@@ -2001,161 +2195,6 @@ var usageMonthlyCore = globalThis.__vibeusageUsageMonthlyCore;
 if (!usageMonthlyCore) throw new Error("usage monthly core not initialized");
 var initMonthlyBuckets2 = usageMonthlyCore.initMonthlyBuckets;
 var ingestMonthlyRow2 = usageMonthlyCore.ingestMonthlyRow;
-
-// insforge-src/shared/debug-core.mjs
-var CORE_KEY15 = "__vibeusageDebugCore";
-var envCore3 = globalThis.__vibeusageEnvCore;
-if (!envCore3) throw new Error("env core not initialized");
-function isDebugEnabled(url) {
-  if (!url) return false;
-  if (typeof url === "string") {
-    try {
-      const parsed = new URL(url);
-      return parsed.searchParams.get("debug") === "1";
-    } catch (_error) {
-      return false;
-    }
-  }
-  return url?.searchParams?.get("debug") === "1";
-}
-function buildSlowQueryDebugPayload({ logger, durationMs, status } = {}) {
-  const safeDuration = Number.isFinite(durationMs) ? Math.max(0, Math.round(durationMs)) : 0;
-  const thresholdMs = envCore3.getSlowQueryThresholdMs();
-  if (logger?.log) {
-    logger.log({
-      stage: "debug_payload",
-      status: typeof status === "number" ? status : null,
-      query_ms: safeDuration,
-      slow_threshold_ms: thresholdMs,
-      slow_query: safeDuration >= thresholdMs ? 1 : 0
-    });
-  }
-  return {
-    request_id: logger?.requestId || "",
-    status: typeof status === "number" ? status : null,
-    query_ms: safeDuration,
-    slow_threshold_ms: thresholdMs,
-    slow_query: safeDuration >= thresholdMs
-  };
-}
-function withSlowQueryDebugPayload(body, options) {
-  if (!body || typeof body !== "object" || body.debug) return body;
-  return {
-    ...body,
-    debug: buildSlowQueryDebugPayload(options)
-  };
-}
-if (!globalThis[CORE_KEY15]) {
-  Object.defineProperty(globalThis, CORE_KEY15, {
-    value: {
-      isDebugEnabled,
-      buildSlowQueryDebugPayload,
-      withSlowQueryDebugPayload
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
-  });
-}
-
-// insforge-src/shared/http-core.mjs
-var CORE_KEY16 = "__vibeusageHttpCore";
-var corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey"
-};
-function handleOptions(request) {
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders });
-  }
-  return null;
-}
-function json(body, status = 200, extraHeaders = null) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      ...corsHeaders,
-      "Content-Type": "application/json",
-      ...extraHeaders || {}
-    }
-  });
-}
-function requireMethod(request, method) {
-  if (request.method !== method) return json({ error: "Method not allowed" }, 405);
-  return null;
-}
-async function readJson(request) {
-  if (!request.headers.get("Content-Type")?.includes("application/json")) {
-    return { error: "Content-Type must be application/json", status: 415, data: null };
-  }
-  try {
-    const data = await request.json();
-    return { error: null, status: 200, data };
-  } catch (_error) {
-    return { error: "Invalid JSON", status: 400, data: null };
-  }
-}
-if (!globalThis[CORE_KEY16]) {
-  Object.defineProperty(globalThis, CORE_KEY16, {
-    value: {
-      corsHeaders,
-      handleOptions,
-      json,
-      requireMethod,
-      readJson
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
-  });
-}
-
-// insforge-src/shared/usage-response-core.mjs
-var CORE_KEY17 = "__vibeusageUsageResponseCore";
-var debugCore = globalThis.__vibeusageDebugCore;
-var httpCore = globalThis.__vibeusageHttpCore;
-if (!debugCore) throw new Error("debug core not initialized");
-if (!httpCore) throw new Error("http core not initialized");
-function resolveUsageResponseBody(body, { url, logger, durationMs, status } = {}) {
-  if (!debugCore.isDebugEnabled(url)) return body;
-  return debugCore.withSlowQueryDebugPayload(body, { logger, durationMs, status });
-}
-function createUsageJsonResponder({ url, logger, extraHeaders } = {}) {
-  return function respond(body, status = 200, durationMs = 0) {
-    return httpCore.json(
-      resolveUsageResponseBody(body, { url, logger, durationMs, status }),
-      status,
-      extraHeaders || null
-    );
-  };
-}
-if (!globalThis[CORE_KEY17]) {
-  Object.defineProperty(globalThis, CORE_KEY17, {
-    value: {
-      createUsageJsonResponder,
-      resolveUsageResponseBody
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
-  });
-}
-
-// insforge-src/functions-esm/shared/core/usage-response.js
-var usageResponseCore = globalThis.__vibeusageUsageResponseCore;
-if (!usageResponseCore) throw new Error("usage response core not initialized");
-var createUsageJsonResponder2 = usageResponseCore.createUsageJsonResponder;
-var resolveUsageResponseBody2 = usageResponseCore.resolveUsageResponseBody;
-
-// insforge-src/functions-esm/shared/http.js
-var httpCore2 = globalThis.__vibeusageHttpCore;
-if (!httpCore2) throw new Error("http core not initialized");
-var corsHeaders2 = httpCore2.corsHeaders;
-var handleOptions2 = httpCore2.handleOptions;
-var json2 = httpCore2.json;
-var requireMethod2 = httpCore2.requireMethod;
-var readJson2 = httpCore2.readJson;
 
 // insforge-src/shared/logging-core.mjs
 var CORE_KEY18 = "__vibeusageLoggingCore";
@@ -2282,15 +2321,12 @@ var MAX_MONTHS = 24;
 var usageMetricsCore4 = globalThis.__vibeusageUsageMetricsCore;
 if (!usageMetricsCore4) throw new Error("usage metrics core not initialized");
 var vibeusage_usage_monthly_default = withRequestLogging2("vibeusage-usage-monthly", async function(request, logger) {
-  const opt = handleOptions2(request);
-  if (opt) return opt;
-  const url = new URL(request.url);
-  const respond = createUsageJsonResponder2({ url, logger });
-  if (request.method !== "GET") return respond({ error: "Method not allowed" }, 405, 0);
-  const bearer = getBearerToken2(request.headers.get("Authorization"));
-  if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
-  const auth = await getAccessContext2({ baseUrl: getBaseUrl2(), bearer, allowPublic: true });
-  if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
+  const endpoint = prepareUsageEndpoint({ request, logger });
+  if (!endpoint.ok) return endpoint.response;
+  const { url, respond, bearer } = endpoint;
+  const access = await requireUsageAccess({ respond, bearer });
+  if (!access.ok) return access.response;
+  const { auth } = access;
   const tzContext = getUsageTimeZoneContext2(url);
   const monthsRaw = url.searchParams.get("months");
   const monthsParsed = toPositiveIntOrNull2(monthsRaw);
@@ -2319,9 +2355,7 @@ var vibeusage_usage_monthly_default = withRequestLogging2("vibeusage-usage-month
     edgeClient: auth.edgeClient,
     effectiveDate: to
   });
-  if (!filterSnapshot.ok) {
-    return respond({ error: filterSnapshot.error }, filterSnapshot.status || 400, 0);
-  }
+  if (!filterSnapshot.ok) return respondUsageRequestError(respond, filterSnapshot);
   const { source, canonicalModel, usageModels, hasModelFilter, aliasTimeline } = filterSnapshot;
   const { monthKeys, buckets } = initMonthlyBuckets2({ startMonthParts, months });
   const queryStartMs = Date.now();

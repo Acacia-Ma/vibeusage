@@ -1,9 +1,12 @@
-import { getAccessContext, getBearerToken } from "./shared/auth.js";
 import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
 import { collectAggregateUsageRange } from "./shared/core/usage-aggregate-collector.js";
 import { resolveAggregateUsageRequestContext } from "./shared/core/usage-aggregate-request.js";
+import {
+  prepareUsageEndpoint,
+  requireUsageAccess,
+  respondUsageRequestError,
+} from "./shared/core/usage-endpoint.js";
 import { shouldIncludeUsageRow } from "./shared/core/usage-filter.js";
-import { createUsageJsonResponder } from "./shared/core/usage-response.js";
 import {
   addDatePartsDays,
   formatDateParts,
@@ -12,8 +15,6 @@ import {
   localDatePartsToUtc,
   parseDateParts,
 } from "./shared/date.js";
-import { getBaseUrl } from "./shared/env.js";
-import { handleOptions } from "./shared/http.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
 import "../shared/usage-pricing-core.mjs";
 
@@ -30,26 +31,16 @@ const {
 } = usagePricingCore;
 
 export default withRequestLogging("vibeusage-usage-summary", async function (request, logger) {
-  const opt = handleOptions(request);
-  if (opt) return opt;
-
-  const url = new URL(request.url);
-  const respond = createUsageJsonResponder({ url, logger });
-
-  if (request.method !== "GET") return respond({ error: "Method not allowed" }, 405, 0);
-
-  const bearer = getBearerToken(request.headers.get("Authorization"));
-  if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
+  const endpoint = prepareUsageEndpoint({ request, logger });
+  if (!endpoint.ok) return endpoint.response;
+  const { url, respond, bearer } = endpoint;
 
   const tzContext = getUsageTimeZoneContext(url);
   const rollingEnabled = url.searchParams.get("rolling") === "1";
 
-  const auth = await getAccessContext({
-    baseUrl: getBaseUrl(),
-    bearer,
-    allowPublic: true,
-  });
-  if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
+  const access = await requireUsageAccess({ respond, bearer });
+  if (!access.ok) return access.response;
+  const { auth } = access;
 
   const requestContext = await resolveAggregateUsageRequestContext({
     url,
@@ -57,9 +48,7 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
     edgeClient: auth.edgeClient,
     auth,
   });
-  if (!requestContext.ok) {
-    return respond({ error: requestContext.error }, requestContext.status || 400, 0);
-  }
+  if (!requestContext.ok) return respondUsageRequestError(respond, requestContext);
   const {
     source,
     hasModelParam,

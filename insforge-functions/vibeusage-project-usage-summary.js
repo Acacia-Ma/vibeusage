@@ -1183,6 +1183,45 @@ var json2 = httpCore2.json;
 var requireMethod2 = httpCore2.requireMethod;
 var readJson2 = httpCore2.readJson;
 
+// insforge-src/functions-esm/shared/core/usage-endpoint.js
+function prepareUsageEndpoint({ request, logger, method = "GET" }) {
+  const optionsResponse = handleOptions2(request);
+  if (optionsResponse) return { ok: false, response: optionsResponse };
+  const url = new URL(request.url);
+  const respond = createUsageJsonResponder2({ url, logger });
+  if (request.method !== method) {
+    return {
+      ok: false,
+      response: respond({ error: "Method not allowed" }, 405, 0)
+    };
+  }
+  const bearer = getBearerToken2(request.headers.get("Authorization"));
+  if (!bearer) {
+    return {
+      ok: false,
+      response: respond({ error: "Missing bearer token" }, 401, 0)
+    };
+  }
+  return { ok: true, url, respond, bearer };
+}
+async function requireUsageAccess({ respond, bearer, allowPublic = true }) {
+  const auth = await getAccessContext2({
+    baseUrl: getBaseUrl2(),
+    bearer,
+    allowPublic
+  });
+  if (!auth.ok) {
+    return {
+      ok: false,
+      response: respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0)
+    };
+  }
+  return { ok: true, auth };
+}
+function respondUsageRequestError(respond, result) {
+  return respond({ error: result?.error || "Invalid request" }, result?.status || 400, 0);
+}
+
 // insforge-src/shared/logging-core.mjs
 var CORE_KEY9 = "__vibeusageLoggingCore";
 var envCore3 = globalThis.__vibeusageEnvCore;
@@ -1489,21 +1528,14 @@ var getSourceParam2 = runtimePrimitivesCore3.getSourceParam;
 var vibeusage_project_usage_summary_default = withRequestLogging2(
   "vibeusage-project-usage-summary",
   async function(request, logger) {
-    const opt = handleOptions2(request);
-    if (opt) return opt;
-    const url = new URL(request.url);
-    const respond = createUsageJsonResponder2({ url, logger });
-    if (request.method !== "GET") return respond({ error: "Method not allowed" }, 405, 0);
-    const bearer = getBearerToken2(request.headers.get("Authorization"));
-    if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
-    const auth = await getAccessContext2({
-      baseUrl: getBaseUrl2(),
-      bearer,
-      allowPublic: true
-    });
-    if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
+    const endpoint = prepareUsageEndpoint({ request, logger });
+    if (!endpoint.ok) return endpoint.response;
+    const { url, respond, bearer } = endpoint;
+    const access = await requireUsageAccess({ respond, bearer });
+    if (!access.ok) return access.response;
+    const { auth } = access;
     const sourceResult = getSourceParam2(url);
-    if (!sourceResult.ok) return respond({ error: sourceResult.error }, 400, 0);
+    if (!sourceResult.ok) return respondUsageRequestError(respond, sourceResult);
     const source = sourceResult.source;
     const from = null;
     const to = null;

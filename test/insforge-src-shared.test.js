@@ -408,6 +408,47 @@ test("usage response helper keeps non-debug responses unchanged", async () => {
   assert.deepEqual(await response.json(), { ok: true });
 });
 
+test("usage endpoint helper centralizes preflight and request error responses", async () => {
+  const usageEndpoint = await import("../insforge-src/functions-esm/shared/core/usage-endpoint.js");
+  const logger = { info() {}, warn() {}, error() {} };
+
+  const missingBearer = usageEndpoint.prepareUsageEndpoint({
+    request: new Request("https://example.com/functions/v1/vibeusage-usage-summary"),
+    logger,
+  });
+  assert.equal(missingBearer.ok, false);
+  assert.equal(missingBearer.response.status, 401);
+  assert.deepEqual(await missingBearer.response.json(), { error: "Missing bearer token" });
+
+  const wrongMethod = usageEndpoint.prepareUsageEndpoint({
+    request: new Request("https://example.com/functions/v1/vibeusage-usage-summary", {
+      method: "POST",
+      headers: { Authorization: "Bearer test-token" },
+    }),
+    logger,
+  });
+  assert.equal(wrongMethod.ok, false);
+  assert.equal(wrongMethod.response.status, 405);
+  assert.deepEqual(await wrongMethod.response.json(), { error: "Method not allowed" });
+
+  const ready = usageEndpoint.prepareUsageEndpoint({
+    request: new Request("https://example.com/functions/v1/vibeusage-usage-summary", {
+      headers: { Authorization: "Bearer test-token" },
+    }),
+    logger,
+  });
+  assert.equal(ready.ok, true);
+  assert.equal(ready.bearer, "test-token");
+  assert.equal(ready.url.pathname, "/functions/v1/vibeusage-usage-summary");
+
+  const requestErrorResponse = usageEndpoint.respondUsageRequestError(ready.respond, {
+    error: "Invalid usage range",
+    status: 422,
+  });
+  assert.equal(requestErrorResponse.status, 422);
+  assert.deepEqual(await requestErrorResponse.json(), { error: "Invalid usage range" });
+});
+
 test("pricing defaults ignore VIBESCORE env when VIBEUSAGE missing", () => {
   const prevNewModel = process.env.VIBEUSAGE_PRICING_MODEL;
   const prevNewSource = process.env.VIBEUSAGE_PRICING_SOURCE;

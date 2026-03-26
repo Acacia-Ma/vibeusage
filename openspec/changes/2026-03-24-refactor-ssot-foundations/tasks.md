@@ -64,6 +64,7 @@
 - [x] 4.2.40 Converge project-usage aggregate/fallback query construction through `project-usage-core` while keeping endpoint envelope and fallback branching explicit.
 - [x] 4.2.41 Converge hourly usage day-window and row-slot normalization through `usage-hourly-core` while keeping UTC aggregate fast-path explicit.
 - [x] 4.2.42 Converge usage filter request snapshots through `usage-filter-request-core` while keeping endpoint-specific windows and payloads explicit.
+- [x] 4.2.43 Converge usage/project endpoint preflight handling through `functions-esm/shared/core/usage-endpoint.js` while keeping auth timing and endpoint-specific request ordering explicit.
 
 ## 5. Verification
 

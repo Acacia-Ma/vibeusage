@@ -1,7 +1,8 @@
-import { getAccessContext, getBearerToken } from "./shared/auth.js";
-import { createUsageJsonResponder } from "./shared/core/usage-response.js";
-import { getBaseUrl } from "./shared/env.js";
-import { handleOptions } from "./shared/http.js";
+import {
+  prepareUsageEndpoint,
+  requireUsageAccess,
+  respondUsageRequestError,
+} from "./shared/core/usage-endpoint.js";
 import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
 import {
   aggregateProjectUsageRows,
@@ -16,26 +17,16 @@ import { getSourceParam } from "./shared/source.js";
 export default withRequestLogging(
   "vibeusage-project-usage-summary",
   async function (request, logger) {
-    const opt = handleOptions(request);
-    if (opt) return opt;
+    const endpoint = prepareUsageEndpoint({ request, logger });
+    if (!endpoint.ok) return endpoint.response;
+    const { url, respond, bearer } = endpoint;
 
-    const url = new URL(request.url);
-    const respond = createUsageJsonResponder({ url, logger });
-
-    if (request.method !== "GET") return respond({ error: "Method not allowed" }, 405, 0);
-
-    const bearer = getBearerToken(request.headers.get("Authorization"));
-    if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
-
-    const auth = await getAccessContext({
-      baseUrl: getBaseUrl(),
-      bearer,
-      allowPublic: true,
-    });
-    if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
+    const access = await requireUsageAccess({ respond, bearer });
+    if (!access.ok) return access.response;
+    const { auth } = access;
 
     const sourceResult = getSourceParam(url);
-    if (!sourceResult.ok) return respond({ error: sourceResult.error }, 400, 0);
+    if (!sourceResult.ok) return respondUsageRequestError(respond, sourceResult);
     const source = sourceResult.source;
     const from = null;
     const to = null;
