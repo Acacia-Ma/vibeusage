@@ -67,6 +67,7 @@
 - [x] 4.2.43 Converge usage/project endpoint preflight handling through `functions-esm/shared/core/usage-endpoint.js` while keeping auth timing and endpoint-specific request ordering explicit.
 - [x] 4.2.44 Converge hourly detail and aggregate select contracts through `usage-hourly-query-core` while keeping endpoint-specific collectors and envelopes explicit.
 - [x] 4.2.45 Converge `summary/daily` aggregate endpoint orchestration through a shared ESM helper while keeping rolling and daily bucket assembly explicit.
+- [x] 4.2.46 Converge monthly filtered hourly row collection through `usage-row-collector-core` while keeping monthly window resolution, bucket initialization, and response envelope explicit.
 
 ## 5. Verification
 

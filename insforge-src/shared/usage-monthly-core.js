@@ -5,15 +5,9 @@ const dateCore = globalThis.__vibeusageDateCore;
 if (!dateCore) throw new Error("date core not initialized");
 const runtimePrimitivesCore = globalThis.__vibeusageRuntimePrimitivesCore;
 if (!runtimePrimitivesCore) throw new Error("runtime primitives core not initialized");
-const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
-if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
-const usageFilterCore = globalThis.__vibeusageUsageFilterCore;
-if (!usageFilterCore) throw new Error("usage filter core not initialized");
 
 const { addDatePartsMonths, getLocalParts } = dateCore;
 const { toBigInt } = runtimePrimitivesCore;
-const { resolveBillableTotals } = usageMetricsCore;
-const { shouldIncludeUsageRow } = usageFilterCore;
 
 function initMonthlyBuckets({ startMonthParts, months } = {}) {
   const monthKeys = [];
@@ -38,28 +32,18 @@ function initMonthlyBuckets({ startMonthParts, months } = {}) {
 function ingestMonthlyRow({
   buckets,
   row,
+  usageRow,
   tzContext,
-  source,
-  canonicalModel,
-  hasModelFilter,
-  aliasTimeline,
-  to,
 } = {}) {
-  const ts = row?.hour_start;
-  if (!ts) return false;
-  const dt = new Date(ts);
-  if (!Number.isFinite(dt.getTime())) return false;
-
-  if (!shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to })) return false;
-
+  const dt = usageRow?.date;
+  if (!(dt instanceof Date) || !Number.isFinite(dt.getTime())) return false;
   const localParts = getLocalParts(dt, tzContext);
   const key = `${localParts.year}-${String(localParts.month).padStart(2, "0")}`;
   const bucket = buckets?.get?.(key) || null;
   if (!bucket) return false;
 
   bucket.total += toBigInt(row?.total_tokens);
-  const { billable } = resolveBillableTotals({ row, source: row?.source || source });
-  bucket.billable += billable;
+  bucket.billable += toBigInt(usageRow?.billable);
   bucket.input += toBigInt(row?.input_tokens);
   bucket.cached += toBigInt(row?.cached_input_tokens);
   bucket.output += toBigInt(row?.output_tokens);

@@ -6,7 +6,7 @@ import {
 import {
   resolveUsageFilterRequestSnapshot,
 } from "./shared/core/usage-filter-request.js";
-import { DETAILED_HOURLY_USAGE_SELECT, forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
+import { collectHourlyUsageRows } from "./shared/core/usage-row-collector.js";
 import { initMonthlyBuckets, ingestMonthlyRow } from "./shared/core/usage-monthly.js";
 import {
   addDatePartsDays,
@@ -74,32 +74,26 @@ export default withRequestLogging("vibeusage-usage-monthly", async function (req
 
   const { monthKeys, buckets } = initMonthlyBuckets({ startMonthParts, months });
   const queryStartMs = Date.now();
-  let rowCount = 0;
-  const { error, rowCount: scannedRows } = await forEachHourlyUsagePage({
+  const { error, rowCount } = await collectHourlyUsageRows({
     edgeClient: auth.edgeClient,
     userId: auth.userId,
     source,
     usageModels,
     canonicalModel,
+    hasModelFilter,
+    aliasTimeline,
+    effectiveDate: to,
     startIso,
     endIso,
-    select: DETAILED_HOURLY_USAGE_SELECT,
-    onPage: (rows) => {
-      for (const row of rows) {
-        ingestMonthlyRow({
-          buckets,
-          row,
-          tzContext,
-          source,
-          canonicalModel,
-          hasModelFilter,
-          aliasTimeline,
-          to,
-        });
-      }
+    onUsageRow: ({ row, usageRow }) => {
+      ingestMonthlyRow({
+        buckets,
+        row,
+        usageRow,
+        tzContext,
+      });
     },
   });
-  rowCount += scannedRows;
   const queryDurationMs = Date.now() - queryStartMs;
   logSlowQuery(logger, {
     query_label: "usage_monthly",

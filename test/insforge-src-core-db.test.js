@@ -213,39 +213,37 @@ test("ingestMonthlyRow accumulates token totals into buckets", () => {
   const ok = usageMonthlyCore.ingestMonthlyRow({
     buckets,
     row,
+    usageRow: {
+      date: new Date("2026-01-15T00:00:00.000Z"),
+      billable: 5n,
+    },
     tzContext,
-    source: "codex",
-    canonicalModel: null,
-    hasModelFilter: false,
-    aliasTimeline: null,
-    to: "2026-01-31",
   });
   assert.equal(ok, true);
   const bucket = buckets.get("2026-01");
   assert.equal(bucket.total, 5n);
+  assert.equal(bucket.billable, 5n);
   assert.equal(bucket.input, 2n);
   assert.equal(bucket.cached, 1n);
 });
 
-test("ingestMonthlyRow respects model filter mismatches", () => {
+test("ingestMonthlyRow skips rows outside initialized month buckets", () => {
   const start = { year: 2026, month: 1, day: 1 };
   const { buckets } = usageMonthlyCore.initMonthlyBuckets({ startMonthParts: start, months: 1 });
   const tzContext = { timeZone: "UTC", offsetMinutes: 0 };
   const row = {
-    hour_start: "2026-01-15T00:00:00.000Z",
+    hour_start: "2026-02-15T00:00:00.000Z",
     source: "codex",
-    model: "other",
     total_tokens: 5,
   };
   const ok = usageMonthlyCore.ingestMonthlyRow({
     buckets,
     row,
+    usageRow: {
+      date: new Date("2026-02-15T00:00:00.000Z"),
+      billable: 5n,
+    },
     tzContext,
-    source: "codex",
-    canonicalModel: "gpt-4o",
-    hasModelFilter: true,
-    aliasTimeline: new Map(),
-    to: "2026-01-31",
   });
   assert.equal(ok, false);
   assert.equal(buckets.get("2026-01").total, 0n);

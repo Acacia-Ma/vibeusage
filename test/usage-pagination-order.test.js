@@ -181,8 +181,15 @@ test("usage pagination uses deterministic ordering", () => {
   assert.ok(
     countOccurrences(
       normalize(readFile("insforge-src/functions-esm/vibeusage-usage-monthly.js")),
-      hourlyScanCall,
+      rowCollectorCall,
     ) === 1,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-monthly.js")),
+      hourlyScanCall,
+    ),
+    0,
   );
   assert.equal(
     countOccurrences(
