@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createPersistentStorage, installSessionPersistenceBridge } from "../insforge-client";
+import {
+  createInsforgeClient,
+  createPersistentStorage,
+  installSessionPersistenceBridge,
+} from "../insforge-client";
 
 const TOKEN_STORAGE_KEY = "vibeusage.insforge.session.v1.insforge-auth-token";
 
@@ -128,5 +132,31 @@ describe("installSessionPersistenceBridge", () => {
 
     expect(originalGetCurrentSession).toHaveBeenCalledTimes(1);
     expect(tokenManager.saveSession).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("createInsforgeClient", () => {
+  beforeEach(() => {
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: createMemoryStorage(),
+    });
+    Object.defineProperty(window, "sessionStorage", {
+      configurable: true,
+      value: createMemoryStorage(),
+    });
+  });
+
+  it("keeps database helpers usable after method extraction", () => {
+    const client = createInsforgeClient({
+      baseUrl: "https://example.com",
+      accessToken: "token-123",
+    });
+
+    const from = client.database.from;
+    const rpc = client.database.rpc;
+
+    expect(() => from("demo_table")).not.toThrow();
+    expect(() => rpc("demo_fn", {})).not.toThrow();
   });
 });

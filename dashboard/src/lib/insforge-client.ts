@@ -37,7 +37,22 @@ type InsforgeAuthLike = {
 
 type InsforgeClientBridgeLike = {
   auth?: InsforgeAuthLike;
+  database?: {
+    from?: (table: string) => unknown;
+    rpc?: (fn: string, args?: unknown, options?: unknown) => unknown;
+  };
 };
+
+function bindDatabaseMethods(client: InsforgeClientBridgeLike) {
+  const database = client?.database;
+  if (!database || typeof database !== "object") return;
+  if (typeof database.from === "function") {
+    database.from = database.from.bind(database);
+  }
+  if (typeof database.rpc === "function") {
+    database.rpc = database.rpc.bind(database);
+  }
+}
 
 function getTokenManager(client: unknown): InsforgeTokenManagerLike | null {
   if (!client || typeof client !== "object") return null;
@@ -317,13 +332,15 @@ export function createInsforgeClient({
   if (!baseUrl) throw new Error("Missing baseUrl");
   const anonKey = getInsforgeAnonKey();
   const timeoutFetch = createTimeoutFetch(globalThis.fetch) as unknown as typeof fetch;
-  return createClient({
+  const client = createClient({
     baseUrl,
     anonKey: anonKey || undefined,
     edgeFunctionToken: accessToken || undefined,
     storage: createPersistentStorage(),
     fetch: timeoutFetch,
   });
+  bindDatabaseMethods(client);
+  return client;
 }
 
 export function createInsforgeAuthClient() {
@@ -337,6 +354,7 @@ export function createInsforgeAuthClient() {
     // This is critical for mobile browsers where memory is frequently cleared
     storage: createPersistentStorage(),
   });
+  bindDatabaseMethods(client);
   forceStorageMode(client);
   installSessionPersistenceBridge(client);
   return client;
