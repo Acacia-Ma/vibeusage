@@ -26,6 +26,7 @@ test("usage pagination uses deterministic ordering", () => {
   const hourlyScanCall = "forEachHourlyUsagePage(";
   const rowCollectorCall = "collectHourlyUsageRows(";
   const filteredRowsCall = "collectFilteredUsageRows(";
+  const hourlyBucketScanCall = "collectHourlyUsageBuckets(";
   const aggregateCollectorCall = "collectAggregateUsageRange(";
   const aggregateRequestCall = "resolveAggregateUsageRequestContext(";
   const aggregateEndpointStartCall = "startAggregateUsageRequest(";
@@ -223,7 +224,7 @@ test("usage pagination uses deterministic ordering", () => {
       normalize(readFile("insforge-src/functions-esm/vibeusage-usage-hourly.js")),
       filteredRowsCall,
     ),
-    2,
+    0,
   );
   assert.equal(
     countOccurrences(
@@ -231,6 +232,20 @@ test("usage pagination uses deterministic ordering", () => {
       rowCollectorCall,
     ),
     0,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-hourly.js")),
+      hourlyBucketScanCall,
+    ),
+    1,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/shared/core/usage-hourly.js")),
+      filteredRowsCall,
+    ),
+    1,
   );
   assert.equal(
     countOccurrences(

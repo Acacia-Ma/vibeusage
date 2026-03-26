@@ -3,10 +3,10 @@ import { AGGREGATE_HOURLY_USAGE_SELECT } from "./shared/db/usage-hourly.js";
 import {
   addHourlyBucketTotals,
   buildHourlyResponse,
+  collectHourlyUsageBuckets,
   createHourlyBuckets,
   formatHourKeyFromValue,
   resolveUsageHourlyRequestContext,
-  resolveUsageHourlyRowSlot,
 } from "./shared/core/usage-hourly.js";
 import {
   prepareUsageEndpoint,
@@ -16,7 +16,6 @@ import {
 import {
   resolveUsageFilterRequestSnapshot,
 } from "./shared/core/usage-filter-request.js";
-import { collectFilteredUsageRows } from "./shared/core/usage-filtered-rows.js";
 import {
   getUsageTimeZoneContext,
   normalizeIso,
@@ -138,76 +137,10 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
         aggregateDurationMs,
       );
     }
-
-    const { error, queryDurationMs } = await collectFilteredUsageRows({
-      logger,
-      queryLabel: "usage_hourly_raw",
-      logMeta: {
-        range_days: 1,
-        source: source || null,
-        model: canonicalModel || null,
-        tz: tzContext?.timeZone || null,
-        tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes)
-          ? tzContext.offsetMinutes
-          : null,
-      },
-      edgeClient: auth.edgeClient,
-      userId: auth.userId,
-      source,
-      usageModels,
-      canonicalModel,
-      hasModelFilter,
-      aliasTimeline,
-      effectiveDate: dayKey,
-      startIso,
-      endIso,
-      onUsageRow: ({ row, usageRow }) => {
-        const slot = resolveUsageHourlyRowSlot({
-          usageDate: usageRow.date,
-          timeMode,
-          dayKey,
-          tzContext,
-        });
-        if (!Number.isFinite(slot)) return;
-
-        const bucket = buckets[slot];
-        addHourlyBucketTotals({
-          bucket,
-          totalTokens: row?.total_tokens,
-          billableTokens: usageRow.billable,
-          inputTokens: row?.input_tokens,
-          cachedInputTokens: row?.cached_input_tokens,
-          outputTokens: row?.output_tokens,
-          reasoningOutputTokens: row?.reasoning_output_tokens,
-        });
-      },
-    });
-
-    if (error) return respond({ error: error.message }, 500, queryDurationMs);
-
-    return respond(
-      {
-        day: dayKey,
-        data: buildHourlyResponse(hourKeys, bucketMap, syncMeta?.missingAfterSlot),
-        sync: buildSyncResponse(syncMeta),
-      },
-      200,
-      queryDurationMs,
-    );
   }
 
-  const { error, queryDurationMs } = await collectFilteredUsageRows({
+  const { error, queryDurationMs } = await collectHourlyUsageBuckets({
     logger,
-    queryLabel: "usage_hourly_raw",
-    logMeta: {
-      range_days: 1,
-      source: source || null,
-      model: canonicalModel || null,
-      tz: tzContext?.timeZone || null,
-      tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes)
-        ? tzContext.offsetMinutes
-        : null,
-    },
     edgeClient: auth.edgeClient,
     userId: auth.userId,
     source,
@@ -218,26 +151,10 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
     effectiveDate: dayKey,
     startIso,
     endIso,
-    onUsageRow: ({ row, usageRow }) => {
-      const slot = resolveUsageHourlyRowSlot({
-        usageDate: usageRow.date,
-        timeMode,
-        dayKey,
-        tzContext,
-      });
-      if (!Number.isFinite(slot)) return;
-
-      const bucket = buckets[slot];
-      addHourlyBucketTotals({
-        bucket,
-        totalTokens: row?.total_tokens,
-        billableTokens: usageRow.billable,
-        inputTokens: row?.input_tokens,
-        cachedInputTokens: row?.cached_input_tokens,
-        outputTokens: row?.output_tokens,
-        reasoningOutputTokens: row?.reasoning_output_tokens,
-      });
-    },
+    timeMode,
+    dayKey,
+    tzContext,
+    buckets,
   });
 
   if (error) return respond({ error: error.message }, 500, queryDurationMs);

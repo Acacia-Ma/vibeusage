@@ -21,7 +21,7 @@
 ## 4. Backend convergence
 
 - [x] 4.1 Add backend SSOT guardrails for duplicated shared semantics.
-- [ ] 4.2 Continue migrating ESM shared business rules behind canonical backend modules without changing public slugs.
+- [x] 4.2 Continue migrating ESM shared business rules behind canonical backend modules without changing public slugs.
 - [x] 4.2.1 Converge model normalization, identity, and alias timeline semantics through `insforge-src/shared/usage-model-core.js` with a mirrored ESM artifact.
 - [x] 4.2.2 Converge pricing and usage metric helper semantics through shared backend cores with mirrored ESM artifacts.
 - [x] 4.2.3 Converge runtime/env/source/number helper semantics through shared backend cores with mirrored ESM artifacts.
@@ -69,6 +69,7 @@
 - [x] 4.2.45 Converge `summary/daily` aggregate endpoint orchestration through a shared ESM helper while keeping rolling and daily bucket assembly explicit.
 - [x] 4.2.46 Converge monthly filtered hourly row collection through `usage-row-collector-core` while keeping monthly window resolution, bucket initialization, and response envelope explicit.
 - [x] 4.2.47 Converge filtered usage endpoint scan/log orchestration through a shared ESM helper while keeping endpoint-specific request contexts, accumulators, and envelopes explicit.
+- [x] 4.2.48 Converge `usage-hourly` raw bucket scan/orchestration through a shared ESM helper while keeping the UTC aggregate fast-path explicit.
 
 ## 5. Verification
 
