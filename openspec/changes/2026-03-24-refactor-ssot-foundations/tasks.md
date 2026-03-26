@@ -70,6 +70,9 @@
 - [x] 4.2.46 Converge monthly filtered hourly row collection through `usage-row-collector-core` while keeping monthly window resolution, bucket initialization, and response envelope explicit.
 - [x] 4.2.47 Converge filtered usage endpoint scan/log orchestration through a shared ESM helper while keeping endpoint-specific request contexts, accumulators, and envelopes explicit.
 - [x] 4.2.48 Converge `usage-hourly` raw bucket scan/orchestration through a shared ESM helper while keeping the UTC aggregate fast-path explicit.
+- [x] 4.2.49 Reconcile `origin/main` into the convergence branch and resolve SSOT contract drift for dashboard identity/auth/public-view flows.
+- [x] 4.2.50 Complete leaderboard/public identity ESM migration and remove stale CJS duplicates from the InsForge build graph while preserving function slugs.
+- [x] 4.2.51 Regenerate `insforge-functions/*` artifacts from canonical ESM/shared sources after merge reconciliation.
 
 ## 5. Verification
 
@@ -78,3 +81,7 @@
 - [x] 5.3 `npm --prefix dashboard run test`
 - [x] 5.4 `npm --prefix dashboard run typecheck`
 - [x] 5.5 `npm run validate:copy`
+- [x] 5.6 `node --test test/edge-functions.test.js test/dashboard-session-expired-banner.test.js test/public-view.test.js`
+- [x] 5.7 `npm run build:insforge`
+- [x] 5.8 `npm run build:insforge:check`
+- [x] 5.9 `npm run ci:local`
