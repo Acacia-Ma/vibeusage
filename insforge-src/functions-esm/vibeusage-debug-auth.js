@@ -1,13 +1,8 @@
-// Edge function: vibeusage-debug-auth
-// Diagnostic endpoint to confirm runtime auth prerequisites (no secrets).
+import { getBearerToken, verifyUserJwtHs256 } from "./shared/auth.js";
+import { getAnonKey } from "./shared/env.js";
+import { handleOptions, json, requireMethod } from "./shared/http.js";
 
-"use strict";
-
-const { handleOptions, json, requireMethod } = require("../shared/http");
-const { getBearerToken, verifyUserJwtHs256 } = require("../shared/auth");
-const { getAnonKey } = require("../shared/env");
-
-module.exports = async function (request) {
+export default async function (request) {
   const opt = handleOptions(request);
   if (opt) return opt;
 
@@ -44,18 +39,14 @@ module.exports = async function (request) {
   }
 
   const local = await verifyUserJwtHs256({ token: bearer });
-  const authOk = local.ok;
-  const userId = local.userId;
-  const error = local.ok ? null : local.error || "Unauthorized";
-
   return json(
     {
       hasAnonKey: true,
       hasBearer: true,
-      authOk,
-      userId,
-      error,
+      authOk: local.ok,
+      userId: local.userId,
+      error: local.ok ? null : local.error || "Unauthorized",
     },
     200,
   );
-};
+}
