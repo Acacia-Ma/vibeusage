@@ -580,11 +580,23 @@ test("backend leaderboard and user identity semantics flow through shared cores"
     read("insforge-src/shared/leaderboard-core.mjs"),
   );
   assert.match(read("insforge-src/shared/user-identity.js"), /user-identity-core/);
-  assert.match(read("insforge-src/functions/vibeusage-leaderboard-refresh.js"), /leaderboard-core/);
+  assert.match(read("insforge-src/functions-esm/shared/user-identity.js"), /resolveUserIdentity/);
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-leaderboard-refresh.js"),
+    /shared\/leaderboard-core\.mjs/,
+  );
   assert.match(read("insforge-src/functions/vibeusage-leaderboard-profile.js"), /leaderboard-core/);
   assert.match(
     read("insforge-src/functions-esm/vibeusage-leaderboard.js"),
     /shared\/leaderboard-core\.mjs/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-viewer-identity.js"),
+    /shared\/user-identity\.js/,
+  );
+  assert.match(
+    read("insforge-src/functions-esm/vibeusage-public-view-profile.js"),
+    /shared\/user-identity\.js/,
   );
 });
 

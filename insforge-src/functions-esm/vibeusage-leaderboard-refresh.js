@@ -1,18 +1,13 @@
-// Edge function: vibeusage-leaderboard-refresh
-// Rebuilds leaderboard snapshots for current UTC period window.
-// Auth: Authorization: Bearer <service_role_key>
-
-"use strict";
-
-const { handleOptions, json, requireMethod } = require("../shared/http");
-const { getBearerToken } = require("../shared/auth");
-const { getAnonKey, getBaseUrl, getServiceRoleKey } = require("../shared/env");
-require("../shared/date");
-const { forEachPage } = require("../shared/pagination");
-require("../shared/user-identity-core");
-require("../shared/leaderboard-core");
-const { toBigInt, toPositiveInt } = require("../shared/numbers");
-const { resolveUserIdentity } = require("../shared/user-identity");
+import { getBearerToken } from "./shared/auth.js";
+import "./shared/date.js";
+import { getAnonKey, getBaseUrl, getServiceRoleKey } from "./shared/env.js";
+import { handleOptions, json, requireMethod } from "./shared/http.js";
+import { createEdgeClient } from "./shared/insforge-client.js";
+import { toBigInt, toPositiveInt } from "./shared/numbers.js";
+import { forEachPage } from "./shared/pagination.js";
+import { resolveUserIdentity } from "./shared/user-identity.js";
+import "../shared/user-identity-core.mjs";
+import "../shared/leaderboard-core.mjs";
 
 const PERIODS = ["week", "month"];
 const SOURCE_PAGE_SIZE = 1000;
@@ -27,7 +22,7 @@ const {
   normalizeLeaderboardAvatarUrl,
 } = leaderboardCore;
 
-module.exports = async function (request) {
+export default async function (request) {
   const opt = handleOptions(request);
   if (opt) return opt;
 
@@ -46,7 +41,7 @@ module.exports = async function (request) {
 
   const baseUrl = getBaseUrl();
   const anonKey = getAnonKey();
-  const serviceClient = createClient({
+  const serviceClient = await createEdgeClient({
     baseUrl,
     anonKey: anonKey || serviceRoleKey,
     edgeFunctionToken: serviceRoleKey,
@@ -74,7 +69,7 @@ module.exports = async function (request) {
   }
 
   return json({ success: true, generated_at: generatedAt, results }, 200);
-};
+}
 
 async function refreshPeriod({ serviceClient, period, from, to, generatedAt }) {
   const deleteRes = await serviceClient.database
@@ -220,8 +215,6 @@ function normalizeSnapshotRow({ row, period, from, to, generatedAt, publicProfil
 
   const fallbackDisplayName = normalizeLeaderboardDisplayName(row.display_name);
   const fallbackAvatarUrl = normalizeLeaderboardAvatarUrl(row.avatar_url);
-  // Keep profile fields in snapshot independent from current visibility.
-  // Read path controls exposure using canonical public state at request time.
   const displayName = publicProfile?.displayName || fallbackDisplayName;
   const avatarUrl = publicProfile?.avatarUrl || fallbackAvatarUrl;
   const isPublic = publicProfile?.isPublic || false;

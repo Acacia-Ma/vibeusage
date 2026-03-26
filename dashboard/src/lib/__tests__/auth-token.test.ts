@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLikelyExpiredAccessToken, resolveAuthAccessToken } from "../auth-token";
+import { getAccessTokenUserId, isLikelyExpiredAccessToken, resolveAuthAccessToken } from "../auth-token";
 
 describe("resolveAuthAccessToken", () => {
   it("falls back to object.accessToken when getAccessToken returns null", async () => {
@@ -51,5 +51,25 @@ describe("isLikelyExpiredAccessToken", () => {
 
   it("returns false for non-jwt token", () => {
     expect(isLikelyExpiredAccessToken("opaque-token")).toBe(false);
+  });
+});
+
+describe("getAccessTokenUserId", () => {
+  function makeJwt(payload: Record<string, unknown>) {
+    const encode = (value: unknown) =>
+      Buffer.from(JSON.stringify(value)).toString("base64url").replace(/=/g, "");
+    return `${encode({ alg: "HS256", typ: "JWT" })}.${encode(payload)}.sig`;
+  }
+
+  it("returns jwt sub when present", () => {
+    expect(getAccessTokenUserId(makeJwt({ sub: "user-42" }))).toBe("user-42");
+  });
+
+  it("returns null when jwt sub is missing", () => {
+    expect(getAccessTokenUserId(makeJwt({ exp: 123 }))).toBeNull();
+  });
+
+  it("returns null for opaque tokens", () => {
+    expect(getAccessTokenUserId("opaque-token")).toBeNull();
   });
 });

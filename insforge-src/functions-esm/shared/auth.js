@@ -2,7 +2,7 @@ import "../../shared/auth-core.mjs";
 
 import { getAnonKey, getJwtSecret } from "./env.js";
 import { createEdgeClient } from "./insforge-client.js";
-import { isPublicShareToken, resolvePublicView } from "./public-view.js";
+import { isPublicShareToken, resolvePublicView as resolvePublicViewImpl } from "./public-view.js";
 
 const authCore = globalThis.__vibeusageAuthCore;
 if (!authCore) throw new Error("auth core not initialized");
@@ -17,6 +17,7 @@ function createUserEdgeClient({ baseUrl, bearer }) {
 
 export const getBearerToken = authCore.getBearerToken;
 export const isProjectAdminBearer = authCore.isProjectAdminBearer;
+export const resolvePublicView = resolvePublicViewImpl;
 export const verifyUserJwtHs256 = ({ token }) =>
   authCore.verifyUserJwtHs256({ token, jwtSecret: getJwtSecret() });
 export const getEdgeClientAndUserIdFast = ({ baseUrl, bearer }) =>
@@ -41,5 +42,5 @@ export const getAccessContext = ({ baseUrl, bearer, allowPublic = false }) =>
     jwtSecret: getJwtSecret(),
     createUserEdgeClient,
     isPublicShareToken,
-    resolvePublicView,
+    resolvePublicView: resolvePublicViewImpl,
   });

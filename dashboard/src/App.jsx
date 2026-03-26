@@ -22,7 +22,7 @@ import {
   subscribeSessionExpired,
   subscribeSessionSoftExpired,
 } from "./lib/auth-storage";
-import { isLikelyExpiredAccessToken } from "./lib/auth-token";
+import { getAccessTokenUserId, isLikelyExpiredAccessToken } from "./lib/auth-token";
 import { getInsforgeBaseUrl } from "./lib/config";
 import { resolveCurrentIdentity } from "./lib/current-identity";
 import { getCurrentInsforgeSession } from "./lib/insforge-auth-client";
@@ -269,10 +269,11 @@ export default function App() {
     const sessionToken = insforgeSession?.accessToken ?? null;
     if (!sessionToken || isLikelyExpiredAccessToken(sessionToken)) return null;
     const user = insforgeSession.user;
+    const userId = user?.id ?? getAccessTokenUserId(sessionToken);
     return {
       accessToken: sessionToken,
       getAccessToken: getInsforgeAccessToken,
-      userId: user?.id ?? null,
+      userId,
       email: user?.email ?? null,
       savedAt: new Date().toISOString(),
     };
@@ -288,10 +289,11 @@ export default function App() {
     const target = resolveRedirectTarget(window.location.search);
     if (target) {
       const user = insforgeSession.user;
+      const userId = user?.id ?? getAccessTokenUserId(sessionToken);
       redirectOnceRef.current = true;
       const redirectUrl = buildRedirectUrl(target, {
         accessToken: sessionToken,
-        userId: user?.id ?? null,
+        userId,
         email: user?.email ?? null,
       });
       window.location.assign(redirectUrl);

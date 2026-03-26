@@ -69,8 +69,9 @@ async function cmdSync(argv) {
     const opencodeHome = process.env.OPENCODE_HOME || path.join(xdgDataHome, "opencode");
     const opencodeStorageDir = path.join(opencodeHome, "storage");
 
-    // OpenClaw hook integration: allow a hook to request incremental parsing for a single session jsonl.
-    // We still parse all regular sources so model/source attribution stays complete (e.g. Kimi sessions).
+    // OpenClaw session-plugin integration: allow a plugin-triggered sync to request incremental parsing
+    // for a single session jsonl. We still parse all regular sources so model/source attribution stays
+    // complete (e.g. Kimi sessions).
     const openclawSignal = opts.fromOpenclaw
       ? resolveOpenclawSignal({ home, env: process.env })
       : null;
@@ -119,7 +120,7 @@ async function cmdSync(argv) {
 
     let openclawResult = { filesProcessed: 0, eventsAggregated: 0, bucketsQueued: 0 };
     if (openclawFiles.length > 0) {
-      // Only runs when explicitly triggered by OpenClaw hooks.
+      // Only runs when explicitly triggered by OpenClaw session-plugin events.
       openclawResult = await parseOpenclawIncremental({
         sessionFiles: openclawFiles,
         cursors,

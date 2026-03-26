@@ -85,9 +85,11 @@ test("App provides InsForge access token resolver", () => {
   assert.match(src, /getAccessToken/);
 });
 
-test("App resolves identity through viewer identity helper", () => {
+test("App resolves current identity from backend profile", () => {
   const src = read("dashboard/src/App.jsx");
   assert.match(src, /resolveCurrentIdentity/);
+  assert.match(src, /currentIdentity/);
+  assert.doesNotMatch(src, /name:\s*displayName/);
   assert.doesNotMatch(src, /profile\?\.name/);
   assert.doesNotMatch(src, /user\?\.name/);
 });

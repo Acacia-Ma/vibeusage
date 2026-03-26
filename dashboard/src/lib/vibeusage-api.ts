@@ -467,7 +467,6 @@ function buildSignalFetchOptions(signal: AnyRecord) {
   if (!signal) return undefined;
   return { signal };
 }
-
 function buildTimeZoneParams({ timeZone, tzOffsetMinutes }: AnyRecord = {}) {
   const params: AnyRecord = {};
   const tz = typeof timeZone === "string" ? timeZone.trim() : "";
@@ -577,7 +576,7 @@ async function requestJson({
             } catch (retryErr) {
               const retryStatus = (retryErr as any)?.statusCode ?? (retryErr as any)?.status;
               if (
-                shouldMarkSessionSoftExpired({
+                shouldMarkSessionSoftExpiredAfterRefreshFailure({
                   status: retryStatus,
                   message: (retryErr as any)?.message,
                   error: (retryErr as any)?.error,
@@ -726,7 +725,7 @@ async function requestPostJson({
             } catch (retryErr) {
               const retryStatus = (retryErr as any)?.statusCode ?? (retryErr as any)?.status;
               if (
-                shouldMarkSessionSoftExpired({
+                shouldMarkSessionSoftExpiredAfterRefreshFailure({
                   status: retryStatus,
                   message: (retryErr as any)?.message,
                   error: (retryErr as any)?.error,
@@ -982,6 +981,18 @@ function canSetSessionSoftExpired({
 }
 
 function shouldMarkSessionSoftExpired({
+  status,
+  message,
+  error,
+  hadAccessToken,
+  accessToken,
+  skipSessionExpiry,
+}: AnyRecord = {}) {
+  if (!isSessionAuthFailure({ status, message, error })) return false;
+  return canSetSessionSoftExpired({ hadAccessToken, accessToken, skipSessionExpiry });
+}
+
+function shouldMarkSessionSoftExpiredAfterRefreshFailure({
   status,
   message,
   error,

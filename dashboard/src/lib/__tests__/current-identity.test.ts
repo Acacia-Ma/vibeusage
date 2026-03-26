@@ -9,6 +9,11 @@ vi.mock("../vibeusage-api", () => ({
 }));
 
 describe("resolveCurrentIdentity", () => {
+  function makeJwt(payload: Record<string, unknown>) {
+    const encode = (value: unknown) =>
+      Buffer.from(JSON.stringify(value)).toString("base64url").replace(/=/g, "");
+    return `${encode({ alg: "HS256", typ: "JWT" })}.${encode(payload)}.sig`;
+  }
   beforeEach(() => {
     vi.resetModules();
     api.getViewerIdentity.mockReset();
@@ -64,13 +69,7 @@ describe("resolveCurrentIdentity", () => {
     });
   });
 
-  it("resolves user id from viewer identity when session payload is sparse", async () => {
-    api.getViewerIdentity.mockResolvedValueOnce({
-      user_id: "u3",
-      display_name: "Viewer Neo",
-      avatar_url: null,
-    });
-
+  it("returns null when session cannot identify the user", async () => {
     const mod = await import("../current-identity");
 
     await expect(
@@ -78,11 +77,32 @@ describe("resolveCurrentIdentity", () => {
         accessToken: "token-3",
         user: null,
       }),
+    ).resolves.toBeNull();
+
+    expect(api.getViewerIdentity).not.toHaveBeenCalled();
+  });
+
+  it("derives user id from jwt sub when session user is missing", async () => {
+    api.getViewerIdentity.mockResolvedValueOnce({
+      user_id: "u4",
+      display_name: "Token Neo",
+      avatar_url: null,
+    });
+
+    const mod = await import("../current-identity");
+
+    await expect(
+      mod.resolveCurrentIdentity({
+        accessToken: makeJwt({ sub: "u4", exp: Math.floor(Date.now() / 1000) + 3600 }),
+        user: null,
+      }),
     ).resolves.toEqual({
-      userId: "u3",
-      displayName: "Viewer Neo",
+      userId: "u4",
+      displayName: "Token Neo",
       avatarUrl: null,
     });
+
+    expect(api.getViewerIdentity).toHaveBeenCalledTimes(1);
   });
 
   it("uses viewer identity even when only metadata full_name exists upstream", async () => {
@@ -110,8 +130,7 @@ describe("resolveCurrentIdentity", () => {
       avatarUrl: null,
     });
   });
-
-  it("returns null when viewer identity cannot be resolved", async () => {
+  it("returns placeholder identity when viewer identity cannot be resolved", async () => {
     api.getViewerIdentity.mockRejectedValueOnce(new Error("boom"));
 
     const mod = await import("../current-identity");
@@ -123,6 +142,10 @@ describe("resolveCurrentIdentity", () => {
           id: "u4",
         },
       }),
-    ).resolves.toBeNull();
+    ).resolves.toEqual({
+      userId: "u4",
+      displayName: null,
+      avatarUrl: null,
+    });
   });
 });
