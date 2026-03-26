@@ -2008,6 +2008,9 @@ if (!paginationCore) throw new Error("pagination core not initialized");
 var { applyUsageModelFilter: applyUsageModelFilter2 } = usageModelCore4;
 var { applyCanaryFilter: applyCanaryFilter2 } = canaryCore;
 var { forEachPage: forEachPage2 } = paginationCore;
+var DEFAULT_HOURLY_USAGE_SELECT = "hour_start,source,model,total_tokens";
+var DETAILED_HOURLY_USAGE_SELECT = "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens";
+var AGGREGATE_HOURLY_USAGE_SELECT = "source,hour:hour_start,sum_total_tokens:sum(total_tokens),sum_input_tokens:sum(input_tokens),sum_cached_input_tokens:sum(cached_input_tokens),sum_output_tokens:sum(output_tokens),sum_reasoning_output_tokens:sum(reasoning_output_tokens),sum_billable_total_tokens:sum(billable_total_tokens),count_rows:count(),count_billable_total_tokens:count(billable_total_tokens)";
 function buildHourlyUsageQuery({
   edgeClient,
   userId,
@@ -2021,7 +2024,7 @@ function buildHourlyUsageQuery({
   if (!edgeClient?.database?.from) {
     throw new Error("edgeClient is required");
   }
-  let query = edgeClient.database.from("vibeusage_tracker_hourly").select(select || "hour_start,source,model,total_tokens");
+  let query = edgeClient.database.from("vibeusage_tracker_hourly").select(select || DEFAULT_HOURLY_USAGE_SELECT);
   query = query.eq("user_id", userId);
   if (source) query = query.eq("source", source);
   if (Array.isArray(usageModels) && usageModels.length > 0) {
@@ -2071,6 +2074,9 @@ async function forEachHourlyUsagePage({
 if (!globalThis[CORE_KEY15]) {
   Object.defineProperty(globalThis, CORE_KEY15, {
     value: {
+      DEFAULT_HOURLY_USAGE_SELECT,
+      DETAILED_HOURLY_USAGE_SELECT,
+      AGGREGATE_HOURLY_USAGE_SELECT,
       buildHourlyUsageQuery,
       forEachHourlyUsagePage
     },
@@ -2319,7 +2325,7 @@ async function collectHourlyUsageRows({
     canonicalModel,
     startIso,
     endIso,
-    select,
+    select: select || usageHourlyQueryCore.DETAILED_HOURLY_USAGE_SELECT,
     pageSize,
     onPage: async (rows) => {
       for (const row of rows) {
@@ -2514,7 +2520,6 @@ var vibeusage_usage_heatmap_default = withRequestLogging2("vibeusage-usage-heatm
     effectiveDate: to,
     startIso,
     endIso,
-    select: "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
     onUsageRow: ({ usageRow }) => {
       accumulateHeatmapDayValue2({
         valuesByDay,

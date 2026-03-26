@@ -33,8 +33,462 @@ if (!canaryCore) throw new Error("canary core not initialized");
 var isCanaryTag2 = canaryCore.isCanaryTag;
 var applyCanaryFilter2 = canaryCore.applyCanaryFilter;
 
+// insforge-src/shared/usage-model-core.mjs
+var CORE_KEY2 = "__vibeusageUsageModelCore";
+var DEFAULT_MODEL = "unknown";
+function normalizeModel(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+function normalizeUsageModel(value) {
+  const normalized = normalizeModel(value);
+  return normalized ? normalized.toLowerCase() : null;
+}
+function escapeLike(value) {
+  return String(value).replace(/[\\%_]/g, "\\$&");
+}
+function applyUsageModelFilter(query, usageModels) {
+  if (!query || typeof query.or !== "function") return query;
+  const models = Array.isArray(usageModels) ? usageModels : [];
+  const terms = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const model of models) {
+    const normalized = normalizeUsageModel(model);
+    if (!normalized) continue;
+    const exact = `model.ilike.${escapeLike(normalized)}`;
+    if (seen.has(exact)) continue;
+    seen.add(exact);
+    terms.push(exact);
+  }
+  if (terms.length === 0) return query;
+  return query.or(terms.join(","));
+}
+function getModelParam(url) {
+  if (!url || typeof url.searchParams?.get !== "function") {
+    return { ok: false, error: "Invalid request URL" };
+  }
+  const raw = url.searchParams.get("model");
+  if (raw == null || raw.trim() === "") return { ok: true, model: null };
+  const normalized = normalizeUsageModel(raw);
+  if (!normalized) return { ok: false, error: "Invalid model" };
+  return { ok: true, model: normalized };
+}
+function normalizeDateKey(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.length >= 10 ? trimmed.slice(0, 10) : trimmed;
+}
+function extractDateKey(value) {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === "string" && value.length >= 10) return value.slice(0, 10);
+  return null;
+}
+function nextDateKey(dateKey) {
+  if (!dateKey) return null;
+  const date = /* @__PURE__ */ new Date(`${dateKey}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+function normalizeUsageModelKey(value) {
+  return normalizeUsageModel(value);
+}
+function normalizeDisplayNameValue(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+function buildIdentityMap({ usageModels, aliasRows } = {}) {
+  const normalized = /* @__PURE__ */ new Set();
+  for (const model of Array.isArray(usageModels) ? usageModels : []) {
+    const key = normalizeUsageModelKey(model);
+    if (key) normalized.add(key);
+  }
+  const map = /* @__PURE__ */ new Map();
+  for (const row of Array.isArray(aliasRows) ? aliasRows : []) {
+    const usageKey = normalizeUsageModelKey(row?.usage_model);
+    const canonical = normalizeUsageModelKey(row?.canonical_model);
+    if (!usageKey || !canonical) continue;
+    if (normalized.size > 0 && !normalized.has(usageKey)) continue;
+    const display = normalizeDisplayNameValue(row?.display_name) || canonical;
+    const effective = String(row?.effective_from || "");
+    const existing = map.get(usageKey);
+    if (!existing || effective > existing.effective_from) {
+      map.set(usageKey, { model_id: canonical, model: display, effective_from: effective });
+    }
+  }
+  for (const key of normalized) {
+    if (!map.has(key)) {
+      map.set(key, { model_id: key, model: key, effective_from: "" });
+    }
+  }
+  const result = /* @__PURE__ */ new Map();
+  for (const [key, value] of map.entries()) {
+    result.set(key, { model_id: value.model_id, model: value.model });
+  }
+  return result;
+}
+function applyModelIdentity({ rawModel, identityMap } = {}) {
+  const normalized = normalizeUsageModelKey(rawModel) || DEFAULT_MODEL;
+  const entry = identityMap && typeof identityMap.get === "function" ? identityMap.get(normalized) : null;
+  if (entry) return { model_id: entry.model_id, model: entry.model };
+  const display = normalizeDisplayNameValue(rawModel) || DEFAULT_MODEL;
+  return { model_id: normalized, model: display };
+}
+function readQueryOutcome(result, query) {
+  const data = Array.isArray(result?.data) ? result.data : Array.isArray(query?.data) ? query.data : null;
+  const error = result?.error || query?.error || null;
+  return { data, error };
+}
+async function resolveModelIdentity({ edgeClient, usageModels, effectiveDate } = {}) {
+  const models = Array.isArray(usageModels) ? usageModels.map(normalizeUsageModelKey).filter(Boolean) : [];
+  if (!models.length) return /* @__PURE__ */ new Map();
+  const database = edgeClient?.database;
+  if (!database || typeof database.from !== "function") {
+    return buildIdentityMap({ usageModels: models, aliasRows: [] });
+  }
+  const dateKey = normalizeDateKey(effectiveDate) || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const dateKeyNext = nextDateKey(dateKey) || dateKey;
+  const query = database.from("vibeusage_model_aliases").select("usage_model,canonical_model,display_name,effective_from");
+  if (!query || typeof query.eq !== "function" || typeof query.in !== "function" || typeof query.lt !== "function" || typeof query.order !== "function") {
+    return buildIdentityMap({ usageModels: models, aliasRows: [] });
+  }
+  const result = await query.eq("active", true).in("usage_model", models).lt("effective_from", dateKeyNext).order("effective_from", { ascending: false });
+  const { data, error } = readQueryOutcome(result, query);
+  if (error || !Array.isArray(data)) {
+    return buildIdentityMap({ usageModels: models, aliasRows: [] });
+  }
+  return buildIdentityMap({ usageModels: models, aliasRows: data });
+}
+async function resolveUsageModelsForCanonical({ edgeClient, canonicalModel, effectiveDate } = {}) {
+  const canonical = normalizeUsageModelKey(canonicalModel);
+  if (!canonical) return { canonical: null, usageModels: [] };
+  const database = edgeClient?.database;
+  if (!database || typeof database.from !== "function") {
+    return { canonical, usageModels: [canonical] };
+  }
+  const dateKey = normalizeDateKey(effectiveDate) || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const dateKeyNext = nextDateKey(dateKey) || dateKey;
+  const query = database.from("vibeusage_model_aliases").select("usage_model,canonical_model,effective_from");
+  if (!query || typeof query.eq !== "function" || typeof query.lt !== "function" || typeof query.order !== "function") {
+    return { canonical, usageModels: [canonical] };
+  }
+  const result = await query.eq("active", true).eq("canonical_model", canonical).lt("effective_from", dateKeyNext).order("effective_from", { ascending: false });
+  const { data, error } = readQueryOutcome(result, query);
+  if (error || !Array.isArray(data)) {
+    return { canonical, usageModels: [canonical] };
+  }
+  const usageMap = /* @__PURE__ */ new Map();
+  for (const row of data) {
+    const usageKey = normalizeUsageModelKey(row?.usage_model);
+    if (!usageKey) continue;
+    const effective = String(row?.effective_from || "");
+    const existing = usageMap.get(usageKey);
+    if (!existing || effective > existing) usageMap.set(usageKey, effective);
+  }
+  const usageModelsSet = /* @__PURE__ */ new Set([canonical]);
+  for (const usageKey of usageMap.keys()) {
+    usageModelsSet.add(usageKey);
+  }
+  return { canonical, usageModels: Array.from(usageModelsSet.values()) };
+}
+async function resolveUsageFilterContext({ edgeClient, canonicalModel, effectiveDate } = {}) {
+  const modelFilter = await resolveUsageModelsForCanonical({
+    edgeClient,
+    canonicalModel,
+    effectiveDate
+  });
+  const resolvedCanonicalModel = modelFilter.canonical;
+  const timelineContext = await resolveUsageTimelineContext({
+    edgeClient,
+    usageModels: modelFilter.usageModels,
+    effectiveDate
+  });
+  const usageModels = timelineContext.usageModels;
+  const hasModelFilter = usageModels.length > 0;
+  if (!hasModelFilter) {
+    return {
+      canonicalModel: resolvedCanonicalModel,
+      usageModels,
+      hasModelFilter,
+      aliasTimeline: null
+    };
+  }
+  return {
+    canonicalModel: resolvedCanonicalModel,
+    usageModels,
+    hasModelFilter,
+    aliasTimeline: timelineContext.aliasTimeline
+  };
+}
+async function resolveUsageTimelineContext({ edgeClient, usageModels, effectiveDate } = {}) {
+  const normalizedUsageModels = Array.isArray(usageModels) ? usageModels.map((model) => normalizeUsageModelKey(model)).filter(Boolean) : [];
+  if (!normalizedUsageModels.length) {
+    return {
+      usageModels: [],
+      aliasTimeline: null
+    };
+  }
+  const aliasRows = await fetchAliasRows({
+    edgeClient,
+    usageModels: normalizedUsageModels,
+    effectiveDate
+  });
+  return {
+    usageModels: normalizedUsageModels,
+    aliasTimeline: buildAliasTimeline({
+      usageModels: normalizedUsageModels,
+      aliasRows
+    })
+  };
+}
+function resolveIdentityAtDate({ rawModel, usageKey, dateKey, timeline } = {}) {
+  const normalizedKey = usageKey || normalizeUsageModelKey(rawModel) || DEFAULT_MODEL;
+  const normalizedDateKey = extractDateKey(dateKey) || dateKey || null;
+  const entries = timeline && typeof timeline.get === "function" ? timeline.get(normalizedKey) : null;
+  if (Array.isArray(entries)) {
+    let match = null;
+    for (const entry of entries) {
+      if (entry.effective_from && normalizedDateKey && entry.effective_from <= normalizedDateKey) {
+        match = entry;
+      } else if (entry.effective_from && normalizedDateKey && entry.effective_from > normalizedDateKey) {
+        break;
+      }
+    }
+    if (match) return { model_id: match.model_id, model: match.model };
+  }
+  const display = normalizeModel(rawModel) || DEFAULT_MODEL;
+  return { model_id: normalizedKey, model: display };
+}
+function matchesCanonicalModelAtDate({ rawModel, canonicalModel, dateKey, timeline } = {}) {
+  if (!canonicalModel) return true;
+  const identity = resolveIdentityAtDate({ rawModel, dateKey, timeline });
+  const filterIdentity = resolveIdentityAtDate({
+    rawModel: canonicalModel,
+    usageKey: canonicalModel,
+    dateKey,
+    timeline
+  });
+  return identity.model_id === filterIdentity.model_id;
+}
+function buildAliasTimeline({ usageModels, aliasRows } = {}) {
+  const normalized = new Set(
+    Array.isArray(usageModels) ? usageModels.map((model) => normalizeUsageModelKey(model)).filter(Boolean) : []
+  );
+  const timeline = /* @__PURE__ */ new Map();
+  for (const row of Array.isArray(aliasRows) ? aliasRows : []) {
+    const usageKey = normalizeUsageModelKey(row?.usage_model);
+    const canonical = normalizeUsageModelKey(row?.canonical_model);
+    if (!usageKey || !canonical) continue;
+    if (normalized.size > 0 && !normalized.has(usageKey)) continue;
+    const display = normalizeModel(row?.display_name) || canonical;
+    const effective = extractDateKey(row?.effective_from || "");
+    if (!effective) continue;
+    const entry = { model_id: canonical, model: display, effective_from: effective };
+    const list = timeline.get(usageKey);
+    if (list) {
+      list.push(entry);
+    } else {
+      timeline.set(usageKey, [entry]);
+    }
+  }
+  for (const list of timeline.values()) {
+    list.sort((a, b) => String(a.effective_from).localeCompare(String(b.effective_from)));
+  }
+  return timeline;
+}
+async function fetchAliasRows({ edgeClient, usageModels, effectiveDate } = {}) {
+  const models = Array.isArray(usageModels) ? usageModels.map((model) => normalizeUsageModelKey(model)).filter(Boolean) : [];
+  const database = edgeClient?.database;
+  if (!models.length || !database || typeof database.from !== "function") return [];
+  const dateKey = extractDateKey(effectiveDate) || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const dateKeyNext = nextDateKey(dateKey) || dateKey;
+  const query = database.from("vibeusage_model_aliases").select("usage_model,canonical_model,display_name,effective_from");
+  if (!query || typeof query.eq !== "function" || typeof query.in !== "function" || typeof query.lt !== "function" || typeof query.order !== "function") {
+    return [];
+  }
+  const result = await query.eq("active", true).in("usage_model", models).lt("effective_from", dateKeyNext).order("effective_from", { ascending: true });
+  const { data, error } = readQueryOutcome(result, query);
+  if (error || !Array.isArray(data)) return [];
+  return data;
+}
+if (!globalThis[CORE_KEY2]) {
+  Object.defineProperty(globalThis, CORE_KEY2, {
+    value: {
+      normalizeModel,
+      normalizeUsageModel,
+      applyUsageModelFilter,
+      getModelParam,
+      normalizeDateKey,
+      extractDateKey,
+      normalizeUsageModelKey,
+      buildIdentityMap,
+      applyModelIdentity,
+      resolveModelIdentity,
+      resolveUsageModelsForCanonical,
+      resolveUsageFilterContext,
+      resolveUsageTimelineContext,
+      resolveIdentityAtDate,
+      matchesCanonicalModelAtDate,
+      buildAliasTimeline,
+      fetchAliasRows
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/shared/pagination-core.mjs
+var CORE_KEY3 = "__vibeusagePaginationCore";
+var MAX_PAGE_SIZE = 1e3;
+function normalizePageSize(value) {
+  const size = Number(value);
+  if (!Number.isFinite(size) || size <= 0) return MAX_PAGE_SIZE;
+  return Math.min(MAX_PAGE_SIZE, Math.floor(size));
+}
+async function forEachPage({ createQuery, pageSize, onPage }) {
+  if (typeof createQuery !== "function") {
+    throw new Error("createQuery must be a function");
+  }
+  if (typeof onPage !== "function") {
+    throw new Error("onPage must be a function");
+  }
+  const size = normalizePageSize(pageSize);
+  let offset = 0;
+  while (true) {
+    const query = createQuery();
+    if (!query || typeof query.range !== "function") {
+      const { data: data2, error: error2 } = await query;
+      if (error2) return { error: error2 };
+      const rows2 = Array.isArray(data2) ? data2 : [];
+      if (rows2.length) await onPage(rows2);
+      return { error: null };
+    }
+    const { data, error } = await query.range(offset, offset + size - 1);
+    if (error) return { error };
+    const rows = Array.isArray(data) ? data : [];
+    if (rows.length) await onPage(rows);
+    if (rows.length < size) break;
+    offset += size;
+  }
+  return { error: null };
+}
+if (!globalThis[CORE_KEY3]) {
+  Object.defineProperty(globalThis, CORE_KEY3, {
+    value: {
+      MAX_PAGE_SIZE,
+      normalizePageSize,
+      forEachPage
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/shared/usage-hourly-query-core.mjs
+var CORE_KEY4 = "__vibeusageUsageHourlyQueryCore";
+var usageModelCore = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore) throw new Error("usage-model core not initialized");
+var canaryCore2 = globalThis.__vibeusageCanaryCore;
+if (!canaryCore2) throw new Error("canary core not initialized");
+var paginationCore = globalThis.__vibeusagePaginationCore;
+if (!paginationCore) throw new Error("pagination core not initialized");
+var { applyUsageModelFilter: applyUsageModelFilter2 } = usageModelCore;
+var { applyCanaryFilter: applyCanaryFilter3 } = canaryCore2;
+var { forEachPage: forEachPage2 } = paginationCore;
+var DEFAULT_HOURLY_USAGE_SELECT = "hour_start,source,model,total_tokens";
+var DETAILED_HOURLY_USAGE_SELECT = "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens";
+var AGGREGATE_HOURLY_USAGE_SELECT = "source,hour:hour_start,sum_total_tokens:sum(total_tokens),sum_input_tokens:sum(input_tokens),sum_cached_input_tokens:sum(cached_input_tokens),sum_output_tokens:sum(output_tokens),sum_reasoning_output_tokens:sum(reasoning_output_tokens),sum_billable_total_tokens:sum(billable_total_tokens),count_rows:count(),count_billable_total_tokens:count(billable_total_tokens)";
+function buildHourlyUsageQuery({
+  edgeClient,
+  userId,
+  source,
+  usageModels,
+  canonicalModel,
+  startIso,
+  endIso,
+  select
+} = {}) {
+  if (!edgeClient?.database?.from) {
+    throw new Error("edgeClient is required");
+  }
+  let query = edgeClient.database.from("vibeusage_tracker_hourly").select(select || DEFAULT_HOURLY_USAGE_SELECT);
+  query = query.eq("user_id", userId);
+  if (source) query = query.eq("source", source);
+  if (Array.isArray(usageModels) && usageModels.length > 0) {
+    query = applyUsageModelFilter2(query, usageModels);
+  }
+  query = applyCanaryFilter3(query, { source, model: canonicalModel });
+  if (startIso) query = query.gte("hour_start", startIso);
+  if (endIso) query = query.lt("hour_start", endIso);
+  return query.order("hour_start", { ascending: true }).order("device_id", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
+}
+async function forEachHourlyUsagePage({
+  edgeClient,
+  userId,
+  source,
+  usageModels,
+  canonicalModel,
+  startIso,
+  endIso,
+  select,
+  pageSize,
+  onPage
+} = {}) {
+  if (typeof onPage !== "function") {
+    throw new Error("onPage must be a function");
+  }
+  let rowCount = 0;
+  const { error } = await forEachPage2({
+    pageSize,
+    createQuery: () => buildHourlyUsageQuery({
+      edgeClient,
+      userId,
+      source,
+      usageModels,
+      canonicalModel,
+      startIso,
+      endIso,
+      select
+    }),
+    onPage: async (rows) => {
+      const pageRows = Array.isArray(rows) ? rows : [];
+      rowCount += pageRows.length;
+      await onPage(pageRows);
+    }
+  });
+  return { error, rowCount };
+}
+if (!globalThis[CORE_KEY4]) {
+  Object.defineProperty(globalThis, CORE_KEY4, {
+    value: {
+      DEFAULT_HOURLY_USAGE_SELECT,
+      DETAILED_HOURLY_USAGE_SELECT,
+      AGGREGATE_HOURLY_USAGE_SELECT,
+      buildHourlyUsageQuery,
+      forEachHourlyUsagePage
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/db/usage-hourly.js
+var usageHourlyQueryCore = globalThis.__vibeusageUsageHourlyQueryCore;
+if (!usageHourlyQueryCore) throw new Error("usage hourly query core not initialized");
+var buildHourlyUsageQuery2 = usageHourlyQueryCore.buildHourlyUsageQuery;
+var forEachHourlyUsagePage2 = usageHourlyQueryCore.forEachHourlyUsagePage;
+var DEFAULT_HOURLY_USAGE_SELECT2 = usageHourlyQueryCore.DEFAULT_HOURLY_USAGE_SELECT;
+var DETAILED_HOURLY_USAGE_SELECT2 = usageHourlyQueryCore.DETAILED_HOURLY_USAGE_SELECT;
+var AGGREGATE_HOURLY_USAGE_SELECT2 = usageHourlyQueryCore.AGGREGATE_HOURLY_USAGE_SELECT;
+
 // insforge-src/shared/runtime-primitives-core.mjs
-var CORE_KEY2 = "__vibeusageRuntimePrimitivesCore";
+var CORE_KEY5 = "__vibeusageRuntimePrimitivesCore";
 var MAX_SOURCE_LENGTH = 64;
 function toBigInt(value) {
   if (typeof value === "bigint") return value >= 0n ? value : 0n;
@@ -90,8 +544,8 @@ function getSourceParam(url) {
   if (!normalized) return { ok: false, error: "Invalid source" };
   return { ok: true, source: normalized };
 }
-if (!globalThis[CORE_KEY2]) {
-  Object.defineProperty(globalThis, CORE_KEY2, {
+if (!globalThis[CORE_KEY5]) {
+  Object.defineProperty(globalThis, CORE_KEY5, {
     value: {
       MAX_SOURCE_LENGTH,
       toBigInt,
@@ -114,7 +568,7 @@ var toPositiveIntOrNull2 = runtimePrimitivesCore.toPositiveIntOrNull;
 var toPositiveInt2 = runtimePrimitivesCore.toPositiveInt;
 
 // insforge-src/shared/date-core.mjs
-var CORE_KEY3 = "__vibeusageDateCore";
+var CORE_KEY6 = "__vibeusageDateCore";
 var envCore = globalThis.__vibeusageEnvCore;
 if (!envCore) throw new Error("env core not initialized");
 var TIMEZONE_FORMATTERS = /* @__PURE__ */ new Map();
@@ -418,8 +872,8 @@ function isWithinInterval(lastSyncAt, minutes, nowIso) {
   if (!Number.isFinite(nowValue)) return false;
   return nowValue - lastMs < windowMs;
 }
-if (!globalThis[CORE_KEY3]) {
-  Object.defineProperty(globalThis, CORE_KEY3, {
+if (!globalThis[CORE_KEY6]) {
+  Object.defineProperty(globalThis, CORE_KEY6, {
     value: {
       isDate,
       toUtcDay,
@@ -455,7 +909,7 @@ if (!globalThis[CORE_KEY3]) {
 }
 
 // insforge-src/shared/usage-metrics-core.mjs
-var CORE_KEY4 = "__vibeusageUsageMetricsCore";
+var CORE_KEY7 = "__vibeusageUsageMetricsCore";
 var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
 var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
 var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
@@ -575,8 +1029,8 @@ function buildUsageBucketPayload(bucket, extra) {
     extra
   );
 }
-if (!globalThis[CORE_KEY4]) {
-  Object.defineProperty(globalThis, CORE_KEY4, {
+if (!globalThis[CORE_KEY7]) {
+  Object.defineProperty(globalThis, CORE_KEY7, {
     value: {
       createTotals,
       addRowTotals,
@@ -597,7 +1051,7 @@ if (!globalThis[CORE_KEY4]) {
 }
 
 // insforge-src/shared/usage-hourly-core.mjs
-var CORE_KEY5 = "__vibeusageUsageHourlyCore";
+var CORE_KEY8 = "__vibeusageUsageHourlyCore";
 var runtimePrimitivesCore3 = globalThis.__vibeusageRuntimePrimitivesCore;
 if (!runtimePrimitivesCore3) throw new Error("runtime primitives core not initialized");
 var dateCore = globalThis.__vibeusageDateCore;
@@ -755,8 +1209,8 @@ function resolveUsageHourlyRowSlot({ usageDate, timeMode, dayKey, tzContext } = 
   if (localDay !== dayKey) return null;
   return resolveHalfHourSlot({ hour: localParts.hour, minute: localParts.minute });
 }
-if (!globalThis[CORE_KEY5]) {
-  Object.defineProperty(globalThis, CORE_KEY5, {
+if (!globalThis[CORE_KEY8]) {
+  Object.defineProperty(globalThis, CORE_KEY8, {
     value: {
       createHourlyBucket,
       resolveHalfHourSlot,
@@ -786,7 +1240,7 @@ var resolveUsageHourlyRequestContext2 = usageHourlyCore.resolveUsageHourlyReques
 var resolveUsageHourlyRowSlot2 = usageHourlyCore.resolveUsageHourlyRowSlot;
 
 // insforge-src/shared/auth-core.mjs
-var CORE_KEY6 = "__vibeusageAuthCore";
+var CORE_KEY9 = "__vibeusageAuthCore";
 function getBearerToken(headerValue) {
   if (!headerValue) return null;
   const prefix = "Bearer ";
@@ -1045,8 +1499,8 @@ async function getAccessContext({
     accessType: "public"
   };
 }
-if (!globalThis[CORE_KEY6]) {
-  Object.defineProperty(globalThis, CORE_KEY6, {
+if (!globalThis[CORE_KEY9]) {
+  Object.defineProperty(globalThis, CORE_KEY9, {
     value: {
       getBearerToken,
       isProjectAdminBearer,
@@ -1061,316 +1515,8 @@ if (!globalThis[CORE_KEY6]) {
   });
 }
 
-// insforge-src/shared/usage-model-core.mjs
-var CORE_KEY7 = "__vibeusageUsageModelCore";
-var DEFAULT_MODEL = "unknown";
-function normalizeModel(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-function normalizeUsageModel(value) {
-  const normalized = normalizeModel(value);
-  return normalized ? normalized.toLowerCase() : null;
-}
-function escapeLike(value) {
-  return String(value).replace(/[\\%_]/g, "\\$&");
-}
-function applyUsageModelFilter(query, usageModels) {
-  if (!query || typeof query.or !== "function") return query;
-  const models = Array.isArray(usageModels) ? usageModels : [];
-  const terms = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const model of models) {
-    const normalized = normalizeUsageModel(model);
-    if (!normalized) continue;
-    const exact = `model.ilike.${escapeLike(normalized)}`;
-    if (seen.has(exact)) continue;
-    seen.add(exact);
-    terms.push(exact);
-  }
-  if (terms.length === 0) return query;
-  return query.or(terms.join(","));
-}
-function getModelParam(url) {
-  if (!url || typeof url.searchParams?.get !== "function") {
-    return { ok: false, error: "Invalid request URL" };
-  }
-  const raw = url.searchParams.get("model");
-  if (raw == null || raw.trim() === "") return { ok: true, model: null };
-  const normalized = normalizeUsageModel(raw);
-  if (!normalized) return { ok: false, error: "Invalid model" };
-  return { ok: true, model: normalized };
-}
-function normalizeDateKey(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  return trimmed.length >= 10 ? trimmed.slice(0, 10) : trimmed;
-}
-function extractDateKey(value) {
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  if (typeof value === "string" && value.length >= 10) return value.slice(0, 10);
-  return null;
-}
-function nextDateKey(dateKey) {
-  if (!dateKey) return null;
-  const date = /* @__PURE__ */ new Date(`${dateKey}T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) return null;
-  date.setUTCDate(date.getUTCDate() + 1);
-  return date.toISOString().slice(0, 10);
-}
-function normalizeUsageModelKey(value) {
-  return normalizeUsageModel(value);
-}
-function normalizeDisplayNameValue(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed || null;
-}
-function buildIdentityMap({ usageModels, aliasRows } = {}) {
-  const normalized = /* @__PURE__ */ new Set();
-  for (const model of Array.isArray(usageModels) ? usageModels : []) {
-    const key = normalizeUsageModelKey(model);
-    if (key) normalized.add(key);
-  }
-  const map = /* @__PURE__ */ new Map();
-  for (const row of Array.isArray(aliasRows) ? aliasRows : []) {
-    const usageKey = normalizeUsageModelKey(row?.usage_model);
-    const canonical = normalizeUsageModelKey(row?.canonical_model);
-    if (!usageKey || !canonical) continue;
-    if (normalized.size > 0 && !normalized.has(usageKey)) continue;
-    const display = normalizeDisplayNameValue(row?.display_name) || canonical;
-    const effective = String(row?.effective_from || "");
-    const existing = map.get(usageKey);
-    if (!existing || effective > existing.effective_from) {
-      map.set(usageKey, { model_id: canonical, model: display, effective_from: effective });
-    }
-  }
-  for (const key of normalized) {
-    if (!map.has(key)) {
-      map.set(key, { model_id: key, model: key, effective_from: "" });
-    }
-  }
-  const result = /* @__PURE__ */ new Map();
-  for (const [key, value] of map.entries()) {
-    result.set(key, { model_id: value.model_id, model: value.model });
-  }
-  return result;
-}
-function applyModelIdentity({ rawModel, identityMap } = {}) {
-  const normalized = normalizeUsageModelKey(rawModel) || DEFAULT_MODEL;
-  const entry = identityMap && typeof identityMap.get === "function" ? identityMap.get(normalized) : null;
-  if (entry) return { model_id: entry.model_id, model: entry.model };
-  const display = normalizeDisplayNameValue(rawModel) || DEFAULT_MODEL;
-  return { model_id: normalized, model: display };
-}
-function readQueryOutcome(result, query) {
-  const data = Array.isArray(result?.data) ? result.data : Array.isArray(query?.data) ? query.data : null;
-  const error = result?.error || query?.error || null;
-  return { data, error };
-}
-async function resolveModelIdentity({ edgeClient, usageModels, effectiveDate } = {}) {
-  const models = Array.isArray(usageModels) ? usageModels.map(normalizeUsageModelKey).filter(Boolean) : [];
-  if (!models.length) return /* @__PURE__ */ new Map();
-  const database = edgeClient?.database;
-  if (!database || typeof database.from !== "function") {
-    return buildIdentityMap({ usageModels: models, aliasRows: [] });
-  }
-  const dateKey = normalizeDateKey(effectiveDate) || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const dateKeyNext = nextDateKey(dateKey) || dateKey;
-  const query = database.from("vibeusage_model_aliases").select("usage_model,canonical_model,display_name,effective_from");
-  if (!query || typeof query.eq !== "function" || typeof query.in !== "function" || typeof query.lt !== "function" || typeof query.order !== "function") {
-    return buildIdentityMap({ usageModels: models, aliasRows: [] });
-  }
-  const result = await query.eq("active", true).in("usage_model", models).lt("effective_from", dateKeyNext).order("effective_from", { ascending: false });
-  const { data, error } = readQueryOutcome(result, query);
-  if (error || !Array.isArray(data)) {
-    return buildIdentityMap({ usageModels: models, aliasRows: [] });
-  }
-  return buildIdentityMap({ usageModels: models, aliasRows: data });
-}
-async function resolveUsageModelsForCanonical({ edgeClient, canonicalModel, effectiveDate } = {}) {
-  const canonical = normalizeUsageModelKey(canonicalModel);
-  if (!canonical) return { canonical: null, usageModels: [] };
-  const database = edgeClient?.database;
-  if (!database || typeof database.from !== "function") {
-    return { canonical, usageModels: [canonical] };
-  }
-  const dateKey = normalizeDateKey(effectiveDate) || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const dateKeyNext = nextDateKey(dateKey) || dateKey;
-  const query = database.from("vibeusage_model_aliases").select("usage_model,canonical_model,effective_from");
-  if (!query || typeof query.eq !== "function" || typeof query.lt !== "function" || typeof query.order !== "function") {
-    return { canonical, usageModels: [canonical] };
-  }
-  const result = await query.eq("active", true).eq("canonical_model", canonical).lt("effective_from", dateKeyNext).order("effective_from", { ascending: false });
-  const { data, error } = readQueryOutcome(result, query);
-  if (error || !Array.isArray(data)) {
-    return { canonical, usageModels: [canonical] };
-  }
-  const usageMap = /* @__PURE__ */ new Map();
-  for (const row of data) {
-    const usageKey = normalizeUsageModelKey(row?.usage_model);
-    if (!usageKey) continue;
-    const effective = String(row?.effective_from || "");
-    const existing = usageMap.get(usageKey);
-    if (!existing || effective > existing) usageMap.set(usageKey, effective);
-  }
-  const usageModelsSet = /* @__PURE__ */ new Set([canonical]);
-  for (const usageKey of usageMap.keys()) {
-    usageModelsSet.add(usageKey);
-  }
-  return { canonical, usageModels: Array.from(usageModelsSet.values()) };
-}
-async function resolveUsageFilterContext({ edgeClient, canonicalModel, effectiveDate } = {}) {
-  const modelFilter = await resolveUsageModelsForCanonical({
-    edgeClient,
-    canonicalModel,
-    effectiveDate
-  });
-  const resolvedCanonicalModel = modelFilter.canonical;
-  const timelineContext = await resolveUsageTimelineContext({
-    edgeClient,
-    usageModels: modelFilter.usageModels,
-    effectiveDate
-  });
-  const usageModels = timelineContext.usageModels;
-  const hasModelFilter = usageModels.length > 0;
-  if (!hasModelFilter) {
-    return {
-      canonicalModel: resolvedCanonicalModel,
-      usageModels,
-      hasModelFilter,
-      aliasTimeline: null
-    };
-  }
-  return {
-    canonicalModel: resolvedCanonicalModel,
-    usageModels,
-    hasModelFilter,
-    aliasTimeline: timelineContext.aliasTimeline
-  };
-}
-async function resolveUsageTimelineContext({ edgeClient, usageModels, effectiveDate } = {}) {
-  const normalizedUsageModels = Array.isArray(usageModels) ? usageModels.map((model) => normalizeUsageModelKey(model)).filter(Boolean) : [];
-  if (!normalizedUsageModels.length) {
-    return {
-      usageModels: [],
-      aliasTimeline: null
-    };
-  }
-  const aliasRows = await fetchAliasRows({
-    edgeClient,
-    usageModels: normalizedUsageModels,
-    effectiveDate
-  });
-  return {
-    usageModels: normalizedUsageModels,
-    aliasTimeline: buildAliasTimeline({
-      usageModels: normalizedUsageModels,
-      aliasRows
-    })
-  };
-}
-function resolveIdentityAtDate({ rawModel, usageKey, dateKey, timeline } = {}) {
-  const normalizedKey = usageKey || normalizeUsageModelKey(rawModel) || DEFAULT_MODEL;
-  const normalizedDateKey = extractDateKey(dateKey) || dateKey || null;
-  const entries = timeline && typeof timeline.get === "function" ? timeline.get(normalizedKey) : null;
-  if (Array.isArray(entries)) {
-    let match = null;
-    for (const entry of entries) {
-      if (entry.effective_from && normalizedDateKey && entry.effective_from <= normalizedDateKey) {
-        match = entry;
-      } else if (entry.effective_from && normalizedDateKey && entry.effective_from > normalizedDateKey) {
-        break;
-      }
-    }
-    if (match) return { model_id: match.model_id, model: match.model };
-  }
-  const display = normalizeModel(rawModel) || DEFAULT_MODEL;
-  return { model_id: normalizedKey, model: display };
-}
-function matchesCanonicalModelAtDate({ rawModel, canonicalModel, dateKey, timeline } = {}) {
-  if (!canonicalModel) return true;
-  const identity = resolveIdentityAtDate({ rawModel, dateKey, timeline });
-  const filterIdentity = resolveIdentityAtDate({
-    rawModel: canonicalModel,
-    usageKey: canonicalModel,
-    dateKey,
-    timeline
-  });
-  return identity.model_id === filterIdentity.model_id;
-}
-function buildAliasTimeline({ usageModels, aliasRows } = {}) {
-  const normalized = new Set(
-    Array.isArray(usageModels) ? usageModels.map((model) => normalizeUsageModelKey(model)).filter(Boolean) : []
-  );
-  const timeline = /* @__PURE__ */ new Map();
-  for (const row of Array.isArray(aliasRows) ? aliasRows : []) {
-    const usageKey = normalizeUsageModelKey(row?.usage_model);
-    const canonical = normalizeUsageModelKey(row?.canonical_model);
-    if (!usageKey || !canonical) continue;
-    if (normalized.size > 0 && !normalized.has(usageKey)) continue;
-    const display = normalizeModel(row?.display_name) || canonical;
-    const effective = extractDateKey(row?.effective_from || "");
-    if (!effective) continue;
-    const entry = { model_id: canonical, model: display, effective_from: effective };
-    const list = timeline.get(usageKey);
-    if (list) {
-      list.push(entry);
-    } else {
-      timeline.set(usageKey, [entry]);
-    }
-  }
-  for (const list of timeline.values()) {
-    list.sort((a, b) => String(a.effective_from).localeCompare(String(b.effective_from)));
-  }
-  return timeline;
-}
-async function fetchAliasRows({ edgeClient, usageModels, effectiveDate } = {}) {
-  const models = Array.isArray(usageModels) ? usageModels.map((model) => normalizeUsageModelKey(model)).filter(Boolean) : [];
-  const database = edgeClient?.database;
-  if (!models.length || !database || typeof database.from !== "function") return [];
-  const dateKey = extractDateKey(effectiveDate) || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const dateKeyNext = nextDateKey(dateKey) || dateKey;
-  const query = database.from("vibeusage_model_aliases").select("usage_model,canonical_model,display_name,effective_from");
-  if (!query || typeof query.eq !== "function" || typeof query.in !== "function" || typeof query.lt !== "function" || typeof query.order !== "function") {
-    return [];
-  }
-  const result = await query.eq("active", true).in("usage_model", models).lt("effective_from", dateKeyNext).order("effective_from", { ascending: true });
-  const { data, error } = readQueryOutcome(result, query);
-  if (error || !Array.isArray(data)) return [];
-  return data;
-}
-if (!globalThis[CORE_KEY7]) {
-  Object.defineProperty(globalThis, CORE_KEY7, {
-    value: {
-      normalizeModel,
-      normalizeUsageModel,
-      applyUsageModelFilter,
-      getModelParam,
-      normalizeDateKey,
-      extractDateKey,
-      normalizeUsageModelKey,
-      buildIdentityMap,
-      applyModelIdentity,
-      resolveModelIdentity,
-      resolveUsageModelsForCanonical,
-      resolveUsageFilterContext,
-      resolveUsageTimelineContext,
-      resolveIdentityAtDate,
-      matchesCanonicalModelAtDate,
-      buildAliasTimeline,
-      fetchAliasRows
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
-  });
-}
-
 // insforge-src/shared/env-core.mjs
-var CORE_KEY8 = "__vibeusageEnvCore";
+var CORE_KEY10 = "__vibeusageEnvCore";
 var DEFAULT_BASE_URL = "http://insforge:7130";
 var DEFAULT_USAGE_MAX_DAYS = 800;
 var DEFAULT_SLOW_QUERY_THRESHOLD_MS = 2e3;
@@ -1378,8 +1524,8 @@ var DEFAULT_PRICING_MODEL = "gpt-5.2-codex";
 var DEFAULT_PRICING_SOURCE = "openrouter";
 var runtimePrimitivesCore4 = globalThis.__vibeusageRuntimePrimitivesCore;
 if (!runtimePrimitivesCore4) throw new Error("runtime primitives core not initialized");
-var usageModelCore = globalThis.__vibeusageUsageModelCore;
-if (!usageModelCore) throw new Error("usage-model core not initialized");
+var usageModelCore2 = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore2) throw new Error("usage-model core not initialized");
 function readDenoEnvValue(key) {
   try {
     if (typeof Deno !== "undefined" && Deno?.env?.get) {
@@ -1461,7 +1607,7 @@ function getSlowQueryThresholdMs() {
   return clampInt(n, 1, 6e4);
 }
 function normalizePricingModel(value) {
-  const normalized = usageModelCore.normalizeModel?.(value) || null;
+  const normalized = usageModelCore2.normalizeModel?.(value) || null;
   if (!normalized || normalized.toLowerCase() === "unknown") return null;
   return normalized;
 }
@@ -1475,8 +1621,8 @@ function getPricingDefaults() {
     source: primarySource || DEFAULT_PRICING_SOURCE
   };
 }
-if (!globalThis[CORE_KEY8]) {
-  Object.defineProperty(globalThis, CORE_KEY8, {
+if (!globalThis[CORE_KEY10]) {
+  Object.defineProperty(globalThis, CORE_KEY10, {
     value: {
       readEnvValue,
       clampInt,
@@ -1534,7 +1680,7 @@ async function createEdgeClient(options) {
 }
 
 // insforge-src/shared/public-sharing-core.mjs
-var CORE_KEY9 = "__vibeusagePublicSharingCore";
+var CORE_KEY11 = "__vibeusagePublicSharingCore";
 var PUBLIC_USER_TOKEN_RE = /^pv1-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 function buildPublicShareToken(userId) {
   if (typeof userId !== "string") return "";
@@ -1685,8 +1831,8 @@ async function disablePublicVisibility({ edgeClient, userId, nowIso }) {
   const { error } = await edgeClient.database.from("vibeusage_public_views").update({ revoked_at: updatedAt, updated_at: updatedAt }).eq("user_id", userId);
   if (error) throw new Error(error.message || "Failed to revoke public visibility row");
 }
-if (!globalThis[CORE_KEY9]) {
-  Object.defineProperty(globalThis, CORE_KEY9, {
+if (!globalThis[CORE_KEY11]) {
+  Object.defineProperty(globalThis, CORE_KEY11, {
     value: {
       buildPublicShareToken,
       isPublicShareToken,
@@ -1737,7 +1883,7 @@ var getAccessContext2 = ({ baseUrl, bearer, allowPublic = false }) => authCore.g
 });
 
 // insforge-src/shared/debug-core.mjs
-var CORE_KEY10 = "__vibeusageDebugCore";
+var CORE_KEY12 = "__vibeusageDebugCore";
 var envCore3 = globalThis.__vibeusageEnvCore;
 if (!envCore3) throw new Error("env core not initialized");
 function isDebugEnabled(url) {
@@ -1779,8 +1925,8 @@ function withSlowQueryDebugPayload(body, options) {
     debug: buildSlowQueryDebugPayload(options)
   };
 }
-if (!globalThis[CORE_KEY10]) {
-  Object.defineProperty(globalThis, CORE_KEY10, {
+if (!globalThis[CORE_KEY12]) {
+  Object.defineProperty(globalThis, CORE_KEY12, {
     value: {
       isDebugEnabled,
       buildSlowQueryDebugPayload,
@@ -1793,7 +1939,7 @@ if (!globalThis[CORE_KEY10]) {
 }
 
 // insforge-src/shared/http-core.mjs
-var CORE_KEY11 = "__vibeusageHttpCore";
+var CORE_KEY13 = "__vibeusageHttpCore";
 var corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -1830,8 +1976,8 @@ async function readJson(request) {
     return { error: "Invalid JSON", status: 400, data: null };
   }
 }
-if (!globalThis[CORE_KEY11]) {
-  Object.defineProperty(globalThis, CORE_KEY11, {
+if (!globalThis[CORE_KEY13]) {
+  Object.defineProperty(globalThis, CORE_KEY13, {
     value: {
       corsHeaders,
       handleOptions,
@@ -1846,7 +1992,7 @@ if (!globalThis[CORE_KEY11]) {
 }
 
 // insforge-src/shared/usage-response-core.mjs
-var CORE_KEY12 = "__vibeusageUsageResponseCore";
+var CORE_KEY14 = "__vibeusageUsageResponseCore";
 var debugCore = globalThis.__vibeusageDebugCore;
 var httpCore = globalThis.__vibeusageHttpCore;
 if (!debugCore) throw new Error("debug core not initialized");
@@ -1864,8 +2010,8 @@ function createUsageJsonResponder({ url, logger, extraHeaders } = {}) {
     );
   };
 }
-if (!globalThis[CORE_KEY12]) {
-  Object.defineProperty(globalThis, CORE_KEY12, {
+if (!globalThis[CORE_KEY14]) {
+  Object.defineProperty(globalThis, CORE_KEY14, {
     value: {
       createUsageJsonResponder,
       resolveUsageResponseBody
@@ -1931,13 +2077,13 @@ function respondUsageRequestError(respond, result) {
 }
 
 // insforge-src/shared/usage-filter-request-core.mjs
-var CORE_KEY13 = "__vibeusageUsageFilterRequestCore";
+var CORE_KEY15 = "__vibeusageUsageFilterRequestCore";
 var runtimePrimitivesCore5 = globalThis.__vibeusageRuntimePrimitivesCore;
-var usageModelCore2 = globalThis.__vibeusageUsageModelCore;
+var usageModelCore3 = globalThis.__vibeusageUsageModelCore;
 if (!runtimePrimitivesCore5) throw new Error("runtime primitives core not initialized");
-if (!usageModelCore2) throw new Error("usage-model core not initialized");
+if (!usageModelCore3) throw new Error("usage-model core not initialized");
 function resolveUsageModelRequestParams({ url } = {}) {
-  const modelResult = usageModelCore2.getModelParam(url);
+  const modelResult = usageModelCore3.getModelParam(url);
   if (!modelResult?.ok) {
     return { ok: false, status: 400, error: modelResult?.error || "Invalid model" };
   }
@@ -1962,7 +2108,7 @@ function resolveUsageFilterRequestParams({ url } = {}) {
   };
 }
 async function resolveUsageFilterRequestContext({ edgeClient, model, effectiveDate } = {}) {
-  const filterContext = await usageModelCore2.resolveUsageFilterContext({
+  const filterContext = await usageModelCore3.resolveUsageFilterContext({
     edgeClient,
     canonicalModel: model,
     effectiveDate
@@ -1993,8 +2139,8 @@ async function resolveUsageFilterRequestSnapshot({ url, edgeClient, effectiveDat
     aliasTimeline: filterContext.aliasTimeline
   };
 }
-if (!globalThis[CORE_KEY13]) {
-  Object.defineProperty(globalThis, CORE_KEY13, {
+if (!globalThis[CORE_KEY15]) {
+  Object.defineProperty(globalThis, CORE_KEY15, {
     value: {
       resolveUsageModelRequestParams,
       resolveUsageFilterRequestParams,
@@ -2017,59 +2163,11 @@ var resolveUsageModelRequestParams2 = usageFilterRequestCore.resolveUsageModelRe
 var resolveUsageFilterRequestContext2 = usageFilterRequestCore.resolveUsageFilterRequestContext;
 var resolveUsageFilterRequestSnapshot2 = usageFilterRequestCore.resolveUsageFilterRequestSnapshot;
 
-// insforge-src/shared/pagination-core.mjs
-var CORE_KEY14 = "__vibeusagePaginationCore";
-var MAX_PAGE_SIZE = 1e3;
-function normalizePageSize(value) {
-  const size = Number(value);
-  if (!Number.isFinite(size) || size <= 0) return MAX_PAGE_SIZE;
-  return Math.min(MAX_PAGE_SIZE, Math.floor(size));
-}
-async function forEachPage({ createQuery, pageSize, onPage }) {
-  if (typeof createQuery !== "function") {
-    throw new Error("createQuery must be a function");
-  }
-  if (typeof onPage !== "function") {
-    throw new Error("onPage must be a function");
-  }
-  const size = normalizePageSize(pageSize);
-  let offset = 0;
-  while (true) {
-    const query = createQuery();
-    if (!query || typeof query.range !== "function") {
-      const { data: data2, error: error2 } = await query;
-      if (error2) return { error: error2 };
-      const rows2 = Array.isArray(data2) ? data2 : [];
-      if (rows2.length) await onPage(rows2);
-      return { error: null };
-    }
-    const { data, error } = await query.range(offset, offset + size - 1);
-    if (error) return { error };
-    const rows = Array.isArray(data) ? data : [];
-    if (rows.length) await onPage(rows);
-    if (rows.length < size) break;
-    offset += size;
-  }
-  return { error: null };
-}
-if (!globalThis[CORE_KEY14]) {
-  Object.defineProperty(globalThis, CORE_KEY14, {
-    value: {
-      MAX_PAGE_SIZE,
-      normalizePageSize,
-      forEachPage
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
-  });
-}
-
 // insforge-src/shared/usage-filter-core.mjs
-var CORE_KEY15 = "__vibeusageUsageFilterCore";
-var usageModelCore3 = globalThis.__vibeusageUsageModelCore;
-if (!usageModelCore3) throw new Error("usage-model core not initialized");
-var { extractDateKey: extractDateKey2, matchesCanonicalModelAtDate: matchesCanonicalModelAtDate2 } = usageModelCore3;
+var CORE_KEY16 = "__vibeusageUsageFilterCore";
+var usageModelCore4 = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore4) throw new Error("usage-model core not initialized");
+var { extractDateKey: extractDateKey2, matchesCanonicalModelAtDate: matchesCanonicalModelAtDate2 } = usageModelCore4;
 function shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to }) {
   if (!hasModelFilter) return true;
   const dateKey = extractDateKey2(row?.hour_start || row?.day) || to;
@@ -2080,93 +2178,10 @@ function shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimel
     timeline: aliasTimeline
   });
 }
-if (!globalThis[CORE_KEY15]) {
-  Object.defineProperty(globalThis, CORE_KEY15, {
-    value: {
-      shouldIncludeUsageRow
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
-  });
-}
-
-// insforge-src/shared/usage-hourly-query-core.mjs
-var CORE_KEY16 = "__vibeusageUsageHourlyQueryCore";
-var usageModelCore4 = globalThis.__vibeusageUsageModelCore;
-if (!usageModelCore4) throw new Error("usage-model core not initialized");
-var canaryCore2 = globalThis.__vibeusageCanaryCore;
-if (!canaryCore2) throw new Error("canary core not initialized");
-var paginationCore = globalThis.__vibeusagePaginationCore;
-if (!paginationCore) throw new Error("pagination core not initialized");
-var { applyUsageModelFilter: applyUsageModelFilter2 } = usageModelCore4;
-var { applyCanaryFilter: applyCanaryFilter3 } = canaryCore2;
-var { forEachPage: forEachPage2 } = paginationCore;
-function buildHourlyUsageQuery({
-  edgeClient,
-  userId,
-  source,
-  usageModels,
-  canonicalModel,
-  startIso,
-  endIso,
-  select
-} = {}) {
-  if (!edgeClient?.database?.from) {
-    throw new Error("edgeClient is required");
-  }
-  let query = edgeClient.database.from("vibeusage_tracker_hourly").select(select || "hour_start,source,model,total_tokens");
-  query = query.eq("user_id", userId);
-  if (source) query = query.eq("source", source);
-  if (Array.isArray(usageModels) && usageModels.length > 0) {
-    query = applyUsageModelFilter2(query, usageModels);
-  }
-  query = applyCanaryFilter3(query, { source, model: canonicalModel });
-  if (startIso) query = query.gte("hour_start", startIso);
-  if (endIso) query = query.lt("hour_start", endIso);
-  return query.order("hour_start", { ascending: true }).order("device_id", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
-}
-async function forEachHourlyUsagePage({
-  edgeClient,
-  userId,
-  source,
-  usageModels,
-  canonicalModel,
-  startIso,
-  endIso,
-  select,
-  pageSize,
-  onPage
-} = {}) {
-  if (typeof onPage !== "function") {
-    throw new Error("onPage must be a function");
-  }
-  let rowCount = 0;
-  const { error } = await forEachPage2({
-    pageSize,
-    createQuery: () => buildHourlyUsageQuery({
-      edgeClient,
-      userId,
-      source,
-      usageModels,
-      canonicalModel,
-      startIso,
-      endIso,
-      select
-    }),
-    onPage: async (rows) => {
-      const pageRows = Array.isArray(rows) ? rows : [];
-      rowCount += pageRows.length;
-      await onPage(pageRows);
-    }
-  });
-  return { error, rowCount };
-}
 if (!globalThis[CORE_KEY16]) {
   Object.defineProperty(globalThis, CORE_KEY16, {
     value: {
-      buildHourlyUsageQuery,
-      forEachHourlyUsagePage
+      shouldIncludeUsageRow
     },
     configurable: true,
     enumerable: false,
@@ -2239,10 +2254,10 @@ if (!globalThis[CORE_KEY17]) {
 // insforge-src/shared/usage-row-collector-core.mjs
 var CORE_KEY18 = "__vibeusageUsageRowCollectorCore";
 var usageFilterCore = globalThis.__vibeusageUsageFilterCore;
-var usageHourlyQueryCore = globalThis.__vibeusageUsageHourlyQueryCore;
+var usageHourlyQueryCore2 = globalThis.__vibeusageUsageHourlyQueryCore;
 var usageRowCore = globalThis.__vibeusageUsageRowCore;
 if (!usageFilterCore) throw new Error("usage filter core not initialized");
-if (!usageHourlyQueryCore) throw new Error("usage hourly query core not initialized");
+if (!usageHourlyQueryCore2) throw new Error("usage hourly query core not initialized");
 if (!usageRowCore) throw new Error("usage row core not initialized");
 async function collectHourlyUsageRows({
   edgeClient,
@@ -2263,7 +2278,7 @@ async function collectHourlyUsageRows({
   if (typeof onUsageRow !== "function") {
     throw new Error("onUsageRow must be a function");
   }
-  const { error, rowCount } = await usageHourlyQueryCore.forEachHourlyUsagePage({
+  const { error, rowCount } = await usageHourlyQueryCore2.forEachHourlyUsagePage({
     edgeClient,
     userId,
     source,
@@ -2271,7 +2286,7 @@ async function collectHourlyUsageRows({
     canonicalModel,
     startIso,
     endIso,
-    select,
+    select: select || usageHourlyQueryCore2.DETAILED_HOURLY_USAGE_SELECT,
     pageSize,
     onPage: async (rows) => {
       for (const row of rows) {
@@ -2598,7 +2613,6 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
       effectiveDate: dayKey,
       startIso,
       endIso,
-      select: "hour_start,model,source,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
       onUsageRow: ({ row, usageRow }) => {
         const slot = resolveUsageHourlyRowSlot2({
           usageDate: usageRow.date,
@@ -2655,7 +2669,6 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
     effectiveDate: dayKey,
     startIso,
     endIso,
-    select: "hour_start,model,source,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
     onUsageRow: ({ row, usageRow }) => {
       const slot = resolveUsageHourlyRowSlot2({
         usageDate: usageRow.date,
@@ -2709,9 +2722,7 @@ async function tryAggregateHourlyTotals({
   usageModels
 }) {
   try {
-    let query = edgeClient.database.from("vibeusage_tracker_hourly").select(
-      "source,hour:hour_start,sum_total_tokens:sum(total_tokens),sum_input_tokens:sum(input_tokens),sum_cached_input_tokens:sum(cached_input_tokens),sum_output_tokens:sum(output_tokens),sum_reasoning_output_tokens:sum(reasoning_output_tokens),sum_billable_total_tokens:sum(billable_total_tokens),count_rows:count(),count_billable_total_tokens:count(billable_total_tokens)"
-    ).eq("user_id", userId);
+    let query = edgeClient.database.from("vibeusage_tracker_hourly").select(AGGREGATE_HOURLY_USAGE_SELECT2).eq("user_id", userId);
     if (source) query = query.eq("source", source);
     if (Array.isArray(usageModels) && usageModels.length > 0) {
       query = applyUsageModelFilter3(query, usageModels);

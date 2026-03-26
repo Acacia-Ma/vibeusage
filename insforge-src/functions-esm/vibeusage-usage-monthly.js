@@ -6,7 +6,7 @@ import {
 import {
   resolveUsageFilterRequestSnapshot,
 } from "./shared/core/usage-filter-request.js";
-import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
+import { DETAILED_HOURLY_USAGE_SELECT, forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
 import { initMonthlyBuckets, ingestMonthlyRow } from "./shared/core/usage-monthly.js";
 import {
   addDatePartsDays,
@@ -83,8 +83,7 @@ export default withRequestLogging("vibeusage-usage-monthly", async function (req
     canonicalModel,
     startIso,
     endIso,
-    select:
-      "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
+    select: DETAILED_HOURLY_USAGE_SELECT,
     onPage: (rows) => {
       for (const row of rows) {
         ingestMonthlyRow({

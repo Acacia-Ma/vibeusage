@@ -11,6 +11,11 @@ if (!paginationCore) throw new Error("pagination core not initialized");
 const { applyUsageModelFilter } = usageModelCore;
 const { applyCanaryFilter } = canaryCore;
 const { forEachPage } = paginationCore;
+const DEFAULT_HOURLY_USAGE_SELECT = "hour_start,source,model,total_tokens";
+const DETAILED_HOURLY_USAGE_SELECT =
+  "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens";
+const AGGREGATE_HOURLY_USAGE_SELECT =
+  "source,hour:hour_start,sum_total_tokens:sum(total_tokens),sum_input_tokens:sum(input_tokens),sum_cached_input_tokens:sum(cached_input_tokens),sum_output_tokens:sum(output_tokens),sum_reasoning_output_tokens:sum(reasoning_output_tokens),sum_billable_total_tokens:sum(billable_total_tokens),count_rows:count(),count_billable_total_tokens:count(billable_total_tokens)";
 
 function buildHourlyUsageQuery({
   edgeClient,
@@ -27,7 +32,7 @@ function buildHourlyUsageQuery({
   }
   let query = edgeClient.database
     .from("vibeusage_tracker_hourly")
-    .select(select || "hour_start,source,model,total_tokens");
+    .select(select || DEFAULT_HOURLY_USAGE_SELECT);
 
   query = query.eq("user_id", userId);
   if (source) query = query.eq("source", source);
@@ -89,6 +94,9 @@ async function forEachHourlyUsagePage({
 if (!globalThis[CORE_KEY]) {
   Object.defineProperty(globalThis, CORE_KEY, {
     value: {
+      DEFAULT_HOURLY_USAGE_SELECT,
+      DETAILED_HOURLY_USAGE_SELECT,
+      AGGREGATE_HOURLY_USAGE_SELECT,
       buildHourlyUsageQuery,
       forEachHourlyUsagePage,
     },

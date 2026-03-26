@@ -1,4 +1,4 @@
-import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
+import { DETAILED_HOURLY_USAGE_SELECT, forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
 import { collectAggregateUsageRange } from "./shared/core/usage-aggregate-collector.js";
 import { resolveAggregateUsageRequestContext } from "./shared/core/usage-aggregate-request.js";
 import {
@@ -80,8 +80,7 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
       canonicalModel,
       startIso: rangeStartIso,
       endIso: rangeEndIso,
-      select:
-        "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
+      select: DETAILED_HOURLY_USAGE_SELECT,
       onPage: (rows) => {
         for (const row of rows) onRow(row);
       },

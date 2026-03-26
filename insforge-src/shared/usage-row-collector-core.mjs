@@ -42,7 +42,7 @@ async function collectHourlyUsageRows({
     canonicalModel,
     startIso,
     endIso,
-    select,
+    select: select || usageHourlyQueryCore.DETAILED_HOURLY_USAGE_SELECT,
     pageSize,
     onPage: async (rows) => {
       for (const row of rows) {

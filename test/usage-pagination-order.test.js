@@ -87,6 +87,11 @@ test("usage pagination uses deterministic ordering", () => {
     ),
   );
   assert.ok(
+    normalize(readFile("insforge-src/shared/db/usage-hourly.js")).includes(
+      "DETAILED_HOURLY_USAGE_SELECT:usageHourlyQueryCore.DETAILED_HOURLY_USAGE_SELECT",
+    ),
+  );
+  assert.ok(
     normalize(readFile("insforge-src/functions-esm/shared/db/usage-hourly.js")).includes(
       "import'../../../shared/usage-hourly-query-core.mjs'",
     ),
@@ -97,13 +102,18 @@ test("usage pagination uses deterministic ordering", () => {
     ),
   );
   assert.ok(
+    normalize(readFile("insforge-src/functions-esm/shared/db/usage-hourly.js")).includes(
+      "DETAILED_HOURLY_USAGE_SELECT=usageHourlyQueryCore.DETAILED_HOURLY_USAGE_SELECT",
+    ),
+  );
+  assert.ok(
     normalize(readFile("insforge-src/shared/usage-aggregate-collector-core.js")).includes(
-      "const{forEachHourlyUsagePage}=usageHourlyQueryCore",
+      "const{DETAILED_HOURLY_USAGE_SELECT,forEachHourlyUsagePage}=usageHourlyQueryCore",
     ),
   );
   assert.ok(
     normalize(readFile("insforge-src/shared/usage-row-collector-core.js")).includes(
-      "usageHourlyQueryCore.forEachHourlyUsagePage({",
+      "select:select||usageHourlyQueryCore.DETAILED_HOURLY_USAGE_SELECT",
     ),
   );
   assert.ok(

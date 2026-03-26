@@ -16,9 +16,7 @@ if (!usageHourlyQueryCore) throw new Error("usage hourly query core not initiali
 
 const { shouldIncludeUsageRow } = usageFilterCore;
 const { accumulateAggregateUsageRow, createAggregateUsageState } = usagePricingCore;
-const { forEachHourlyUsagePage } = usageHourlyQueryCore;
-const AGGREGATE_USAGE_SELECT =
-  "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens";
+const { DETAILED_HOURLY_USAGE_SELECT, forEachHourlyUsagePage } = usageHourlyQueryCore;
 
 async function collectAggregateUsageRange({
   edgeClient,
@@ -34,7 +32,7 @@ async function collectAggregateUsageRange({
   aliasTimeline,
   defaultSource = "codex",
   pageSize,
-  select = AGGREGATE_USAGE_SELECT,
+  select = DETAILED_HOURLY_USAGE_SELECT,
   onAccumulatedRow,
   shouldAccumulateRow,
 } = {}) {

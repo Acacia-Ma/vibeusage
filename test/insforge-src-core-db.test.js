@@ -296,6 +296,18 @@ test("buildHourlyUsageQuery throws when edgeClient missing", () => {
   assert.throws(() => usageHourlyDb.buildHourlyUsageQuery({}), /edgeClient/i);
 });
 
+test("hourly usage db exports shared select contracts", () => {
+  assert.equal(usageHourlyDb.DEFAULT_HOURLY_USAGE_SELECT, "hour_start,source,model,total_tokens");
+  assert.equal(
+    usageHourlyDb.DETAILED_HOURLY_USAGE_SELECT,
+    "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
+  );
+  assert.equal(
+    usageHourlyDb.AGGREGATE_HOURLY_USAGE_SELECT,
+    "source,hour:hour_start,sum_total_tokens:sum(total_tokens),sum_input_tokens:sum(input_tokens),sum_cached_input_tokens:sum(cached_input_tokens),sum_output_tokens:sum(output_tokens),sum_reasoning_output_tokens:sum(reasoning_output_tokens),sum_billable_total_tokens:sum(billable_total_tokens),count_rows:count(),count_billable_total_tokens:count(billable_total_tokens)",
+  );
+});
+
 test("forEachHourlyUsagePage paginates through hourly query rows", async () => {
   const calls = [];
   const pages = [

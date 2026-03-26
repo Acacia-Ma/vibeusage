@@ -59,8 +59,6 @@ export default withRequestLogging(
       effectiveDate: to,
       startIso,
       endIso,
-      select:
-        "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
       rowStateOptions: {
         defaultSource: DEFAULT_SOURCE,
         defaultModel: DEFAULT_MODEL,
