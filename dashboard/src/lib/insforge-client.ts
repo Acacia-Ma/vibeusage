@@ -38,8 +38,8 @@ type InsforgeAuthLike = {
 type InsforgeClientBridgeLike = {
   auth?: InsforgeAuthLike;
   database?: {
-    from?: (table: string) => unknown;
-    rpc?: (fn: string, args?: unknown, options?: unknown) => unknown;
+    from?: (...args: any[]) => unknown;
+    rpc?: (...args: any[]) => unknown;
   };
 };
 

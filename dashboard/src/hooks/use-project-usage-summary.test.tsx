@@ -3,6 +3,22 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useProjectUsageSummary } from "./use-project-usage-summary";
 
+type ProjectUsageEntry = {
+  project_key: string;
+  project_ref: string;
+  total_tokens: string;
+};
+
+type ProjectUsageSummaryResponse = {
+  entries: ProjectUsageEntry[];
+};
+
+type HookProps = {
+  baseUrl: string;
+  accessToken: string | null;
+  guestAllowed: boolean;
+};
+
 const authToken = vi.hoisted(() => ({
   isAccessTokenReady: vi.fn((token: any) => Boolean(token)),
   resolveAuthAccessToken: vi.fn(async (token: any) => token ?? null),
@@ -13,7 +29,9 @@ const mockData = vi.hoisted(() => ({
 }));
 
 const vibeusageApi = vi.hoisted(() => ({
-  getProjectUsageSummary: vi.fn(async () => ({ entries: [] })),
+  getProjectUsageSummary: vi.fn<(...args: any[]) => Promise<ProjectUsageSummaryResponse>>(
+    async () => ({ entries: [] }),
+  ),
 }));
 
 vi.mock("../lib/auth-token", () => authToken);
@@ -33,7 +51,7 @@ describe("useProjectUsageSummary", () => {
   });
 
   it("preserves loaded entries when guest mode takes over after token loss", async () => {
-    const initialEntries = [
+    const initialEntries: ProjectUsageEntry[] = [
       {
         project_key: "acme/alpha",
         project_ref: "https://github.com/acme/alpha",
@@ -43,12 +61,14 @@ describe("useProjectUsageSummary", () => {
 
     vibeusageApi.getProjectUsageSummary.mockResolvedValueOnce({ entries: initialEntries });
 
-    const { result, rerender } = renderHook((props: any) => useProjectUsageSummary(props), {
-      initialProps: {
-        baseUrl: "https://example.com",
-        accessToken: "token",
-        guestAllowed: false,
-      },
+    const initialProps: HookProps = {
+      baseUrl: "https://example.com",
+      accessToken: "token",
+      guestAllowed: false,
+    };
+
+    const { result, rerender } = renderHook((props: HookProps) => useProjectUsageSummary(props), {
+      initialProps,
     });
 
     await waitFor(() => expect(result.current.entries).toEqual(initialEntries));
