@@ -65,6 +65,10 @@ export function useProjectUsageSummary({
       setLoading(false);
       return;
     }
+    if (tokenReady || !guestAllowed || mockEnabled) {
+      setEntries([]);
+      setError(null);
+    }
     const controller = new AbortController();
     refresh({ signal: controller.signal });
     return () => {

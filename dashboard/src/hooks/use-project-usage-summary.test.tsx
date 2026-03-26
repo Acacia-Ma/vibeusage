@@ -17,6 +17,8 @@ type HookProps = {
   baseUrl: string;
   accessToken: string | null;
   guestAllowed: boolean;
+  from?: string;
+  to?: string;
 };
 
 const authToken = vi.hoisted(() => ({
@@ -83,5 +85,64 @@ describe("useProjectUsageSummary", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.entries).toEqual(initialEntries);
     expect(vibeusageApi.getProjectUsageSummary).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears stale entries immediately when the requested range changes", async () => {
+    const initialEntries: ProjectUsageEntry[] = [
+      {
+        project_key: "acme/alpha",
+        project_ref: "https://github.com/acme/alpha",
+        total_tokens: "42",
+      },
+    ];
+    const nextEntries: ProjectUsageEntry[] = [
+      {
+        project_key: "acme/beta",
+        project_ref: "https://github.com/acme/beta",
+        total_tokens: "84",
+      },
+    ];
+
+    const nextRequest = {
+      resolve: null as ((value: ProjectUsageSummaryResponse) => void) | null,
+    };
+
+    vibeusageApi.getProjectUsageSummary
+      .mockResolvedValueOnce({ entries: initialEntries })
+      .mockImplementationOnce(
+        () =>
+          new Promise<ProjectUsageSummaryResponse>((resolve) => {
+            nextRequest.resolve = resolve;
+          }),
+      );
+
+    const { result, rerender } = renderHook((props: HookProps) => useProjectUsageSummary(props), {
+      initialProps: {
+        baseUrl: "https://example.com",
+        accessToken: "token",
+        guestAllowed: false,
+        from: "2026-03-01",
+        to: "2026-03-07",
+      },
+    });
+
+    await waitFor(() => expect(result.current.entries).toEqual(initialEntries));
+
+    rerender({
+      baseUrl: "https://example.com",
+      accessToken: "token",
+      guestAllowed: false,
+      from: "2026-03-08",
+      to: "2026-03-14",
+    });
+
+    await waitFor(() => expect(result.current.entries).toEqual([]));
+    expect(result.current.error).toBeNull();
+
+    if (nextRequest.resolve) {
+      nextRequest.resolve({ entries: nextEntries });
+    }
+
+    await waitFor(() => expect(result.current.entries).toEqual(nextEntries));
   });
 });

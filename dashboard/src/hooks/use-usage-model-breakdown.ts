@@ -136,6 +136,11 @@ export function useUsageModelBreakdown({
       if (cached?.breakdown) {
         setBreakdown(cached.breakdown);
         setSource("cache");
+        setError(null);
+      } else if (tokenReady || !guestAllowed || mockEnabled) {
+        setBreakdown(null);
+        setSource("edge");
+        setError(null);
       }
     }
     const controller = new AbortController();

@@ -303,6 +303,13 @@ export function useTrendData({
         setRange({ from: cached.from || from, to: cached.to || to });
         setSource("cache");
         setFetchedAt(cached.fetchedAt || null);
+        setError(null);
+      } else if (tokenReady || !guestAllowed || mockEnabled) {
+        setRows([]);
+        setRange({ from, to });
+        setError(null);
+        setSource("edge");
+        setFetchedAt(null);
       }
     }
     const controller = new AbortController();
