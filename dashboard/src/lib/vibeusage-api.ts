@@ -3,6 +3,7 @@ import { normalizeAccessToken, resolveAuthAccessToken } from "./auth-token";
 import { formatDateLocal } from "./date-range";
 import { refreshInsforgeSession } from "./insforge-auth-client";
 import { createInsforgeClient } from "./insforge-client";
+import * as vibeusageFunctionContract from "../../../src/shared/vibeusage-function-contract.js";
 import {
   getMockUsageDaily,
   getMockUsageHourly,
@@ -15,27 +16,12 @@ import {
   isMockEnabled,
 } from "./mock-data";
 
-const BACKEND_RUNTIME_UNAVAILABLE = "Backend runtime unavailable (InsForge). Please retry later.";
-
-const PATHS = {
-  usageSummary: "vibeusage-usage-summary",
-  usageDaily: "vibeusage-usage-daily",
-  usageHourly: "vibeusage-usage-hourly",
-  usageMonthly: "vibeusage-usage-monthly",
-  usageHeatmap: "vibeusage-usage-heatmap",
-  usageModelBreakdown: "vibeusage-usage-model-breakdown",
-  projectUsageSummary: "vibeusage-project-usage-summary",
-  leaderboard: "vibeusage-leaderboard",
-  leaderboardProfile: "vibeusage-leaderboard-profile",
-  userStatus: "vibeusage-user-status",
-  viewerIdentity: "vibeusage-viewer-identity",
-  linkCodeInit: "vibeusage-link-code-init",
-  publicViewProfile: "vibeusage-public-view-profile",
-  publicVisibility: "vibeusage-public-visibility",
-};
-
-const FUNCTION_PREFIX = "/functions";
-const LEGACY_FUNCTION_PREFIX = "/api/functions";
+const {
+  BACKEND_RUNTIME_UNAVAILABLE_MESSAGE: BACKEND_RUNTIME_UNAVAILABLE,
+  FUNCTION_PREFIX,
+  FUNCTION_SLUGS: PATHS,
+  LEGACY_FUNCTION_PREFIX,
+} = vibeusageFunctionContract as any;
 const REQUEST_KIND = {
   business: "business",
   probe: "probe",
@@ -75,6 +61,7 @@ export async function getUsageSummary({
   model,
   timeZone,
   tzOffsetMinutes,
+  signal,
   rolling = false,
 }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
@@ -89,6 +76,7 @@ export async function getUsageSummary({
     accessToken: resolvedAccessToken,
     slug: PATHS.usageSummary,
     params: { from, to, ...filterParams, ...tzParams, ...rollingParams },
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
@@ -101,6 +89,7 @@ export async function getProjectUsageSummary({
   limit,
   timeZone,
   tzOffsetMinutes,
+  signal,
 }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   if (isMockEnabled()) {
@@ -117,6 +106,7 @@ export async function getProjectUsageSummary({
     accessToken: resolvedAccessToken,
     slug: PATHS.projectUsageSummary,
     params,
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
@@ -127,6 +117,7 @@ export async function getLeaderboard({
   metric,
   limit,
   offset,
+  signal,
 }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   if (isMockEnabled()) {
@@ -145,10 +136,11 @@ export async function getLeaderboard({
     accessToken: resolvedAccessToken,
     slug: PATHS.leaderboard,
     params,
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
-export async function getPublicVisibility({ baseUrl, accessToken }: AnyRecord = {}) {
+export async function getPublicVisibility({ baseUrl, accessToken, signal }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   if (isMockEnabled()) {
     return { enabled: false, updated_at: null, share_token: null };
@@ -157,10 +149,16 @@ export async function getPublicVisibility({ baseUrl, accessToken }: AnyRecord = 
     baseUrl,
     accessToken: resolvedAccessToken,
     slug: PATHS.publicVisibility,
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
-export async function setPublicVisibility({ baseUrl, accessToken, enabled }: AnyRecord = {}) {
+export async function setPublicVisibility({
+  baseUrl,
+  accessToken,
+  enabled,
+  signal,
+}: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   if (isMockEnabled()) {
     return {
@@ -174,6 +172,7 @@ export async function setPublicVisibility({ baseUrl, accessToken, enabled }: Any
     accessToken: resolvedAccessToken,
     slug: PATHS.publicVisibility,
     body: { enabled: Boolean(enabled) },
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
@@ -182,6 +181,7 @@ export async function getLeaderboardProfile({
   accessToken,
   userId,
   period,
+  signal,
 }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   if (isMockEnabled()) {
@@ -218,10 +218,11 @@ export async function getLeaderboardProfile({
     accessToken: resolvedAccessToken,
     slug: PATHS.leaderboardProfile,
     params: { user_id: String(userId || ""), period: String(period || "") },
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
-export async function getUserStatus({ baseUrl, accessToken }: AnyRecord = {}) {
+export async function getUserStatus({ baseUrl, accessToken, signal }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   if (isMockEnabled()) {
     const now = new Date().toISOString();
@@ -272,6 +273,7 @@ export async function getUserStatus({ baseUrl, accessToken }: AnyRecord = {}) {
     baseUrl,
     accessToken: resolvedAccessToken,
     slug: PATHS.userStatus,
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
@@ -283,6 +285,7 @@ export async function getUsageModelBreakdown({
   source,
   timeZone,
   tzOffsetMinutes,
+  signal,
 }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   if (isMockEnabled()) {
@@ -295,6 +298,7 @@ export async function getUsageModelBreakdown({
     accessToken: resolvedAccessToken,
     slug: PATHS.usageModelBreakdown,
     params: { from, to, ...filterParams, ...tzParams },
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
@@ -307,6 +311,7 @@ export async function getUsageDaily({
   model,
   timeZone,
   tzOffsetMinutes,
+  signal,
 }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   if (isMockEnabled()) {
@@ -319,6 +324,7 @@ export async function getUsageDaily({
     accessToken: resolvedAccessToken,
     slug: PATHS.usageDaily,
     params: { from, to, ...filterParams, ...tzParams },
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
@@ -330,6 +336,7 @@ export async function getUsageHourly({
   model,
   timeZone,
   tzOffsetMinutes,
+  signal,
 }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   if (isMockEnabled()) {
@@ -342,6 +349,7 @@ export async function getUsageHourly({
     accessToken: resolvedAccessToken,
     slug: PATHS.usageHourly,
     params: day ? { day, ...filterParams, ...tzParams } : { ...filterParams, ...tzParams },
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
@@ -354,6 +362,7 @@ export async function getUsageMonthly({
   model,
   timeZone,
   tzOffsetMinutes,
+  signal,
 }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   if (isMockEnabled()) {
@@ -371,6 +380,7 @@ export async function getUsageMonthly({
       ...filterParams,
       ...tzParams,
     },
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
@@ -384,6 +394,7 @@ export async function getUsageHeatmap({
   model,
   timeZone,
   tzOffsetMinutes,
+  signal,
 }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   if (isMockEnabled()) {
@@ -407,10 +418,15 @@ export async function getUsageHeatmap({
       ...filterParams,
       ...tzParams,
     },
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
-export async function requestInstallLinkCode({ baseUrl, accessToken }: AnyRecord = {}) {
+export async function requestInstallLinkCode({
+  baseUrl,
+  accessToken,
+  signal,
+}: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   if (isMockEnabled()) {
     return {
@@ -423,25 +439,33 @@ export async function requestInstallLinkCode({ baseUrl, accessToken }: AnyRecord
     accessToken: resolvedAccessToken,
     slug: PATHS.linkCodeInit,
     body: {},
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
-export async function getPublicViewProfile({ baseUrl, accessToken }: AnyRecord = {}) {
+export async function getPublicViewProfile({ baseUrl, accessToken, signal }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   return requestJson({
     baseUrl,
     accessToken: resolvedAccessToken,
     slug: PATHS.publicViewProfile,
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
-export async function getViewerIdentity({ baseUrl, accessToken }: AnyRecord = {}) {
+export async function getViewerIdentity({ baseUrl, accessToken, signal }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   return requestJson({
     baseUrl,
     accessToken: resolvedAccessToken,
     slug: PATHS.viewerIdentity,
+    fetchOptions: buildSignalFetchOptions(signal),
   });
+}
+
+function buildSignalFetchOptions(signal: AnyRecord) {
+  if (!signal) return undefined;
+  return { signal };
 }
 function buildTimeZoneParams({ timeZone, tzOffsetMinutes }: AnyRecord = {}) {
   const params: AnyRecord = {};
@@ -601,7 +625,7 @@ async function requestJson({
   };
 
   if (!requestKey) {
-    return await scheduleFunctionRequest(executeRequest);
+    return await scheduleFunctionRequest(executeRequest, fetchOptions?.signal);
   }
 
   const existing = inFlightGetRequests.get(requestKey);
@@ -609,7 +633,7 @@ async function requestJson({
     return await existing;
   }
 
-  const pending = scheduleFunctionRequest(executeRequest);
+  const pending = scheduleFunctionRequest(executeRequest, fetchOptions?.signal);
   inFlightGetRequests.set(requestKey, pending);
   try {
     return await pending;
@@ -747,7 +771,7 @@ async function requestPostJson({
         attempt += 1;
       }
     }
-  });
+  }, fetchOptions?.signal);
 }
 
 function buildFunctionPaths(slug: any) {
@@ -796,18 +820,48 @@ function normalizeFunctionSlug(slug: any) {
   return raw.replace(/^\/+/, "");
 }
 
-function scheduleFunctionRequest<T>(task: () => Promise<T>) {
+function scheduleFunctionRequest<T>(task: () => Promise<T>, signal?: AbortSignal) {
   return new Promise<T>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(createAbortError());
+      return;
+    }
+
+    let settled = false;
+    const finalize = (settle: (value: any) => void, value: any) => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener("abort", onAbort);
+      settle(value);
+    };
+
+    const onAbort = () => {
+      const queueIndex = queuedFunctionRequests.indexOf(run);
+      if (queueIndex >= 0) {
+        queuedFunctionRequests.splice(queueIndex, 1);
+        finalize(reject, createAbortError());
+      }
+    };
+
     const run = () => {
+      if (signal?.aborted) {
+        finalize(reject, createAbortError());
+        flushQueuedFunctionRequests();
+        return;
+      }
       activeFunctionRequests += 1;
       Promise.resolve()
         .then(task)
-        .then(resolve, reject)
+        .then(
+          (value) => finalize(resolve, value),
+          (error) => finalize(reject, error),
+        )
         .finally(() => {
           activeFunctionRequests = Math.max(0, activeFunctionRequests - 1);
           flushQueuedFunctionRequests();
         });
     };
+    signal?.addEventListener("abort", onAbort, { once: true });
     queuedFunctionRequests.push(run);
     flushQueuedFunctionRequests();
   });
@@ -934,7 +988,7 @@ function shouldMarkSessionSoftExpired({
   accessToken,
   skipSessionExpiry,
 }: AnyRecord = {}) {
-  if (status !== 401) return false;
+  if (!isSessionAuthFailure({ status, message, error })) return false;
   return canSetSessionSoftExpired({ hadAccessToken, accessToken, skipSessionExpiry });
 }
 
@@ -1069,4 +1123,10 @@ function clampInt(value: any, min: number, max: number) {
 function sleep(ms: number) {
   if (!ms || ms <= 0) return Promise.resolve();
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function createAbortError() {
+  const error = new Error("Request aborted");
+  error.name = "AbortError";
+  return error;
 }

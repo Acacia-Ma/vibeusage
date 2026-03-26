@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
+import * as copyRegistryModule from "../src/shared/copy-registry.js";
 
 const COPY_REQUIRED_KEYS = [
   "landing.meta.title",
@@ -24,6 +25,7 @@ const COPY_REQUIRED_KEYS = [
 const ROOT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const COPY_PATH = path.join(ROOT_DIR, "src", "content", "copy.csv");
 const PACKAGE_JSON_PATH = path.resolve(ROOT_DIR, "..", "package.json");
+const { buildCopyRegistry } = copyRegistryModule;
 
 function loadAppVersion() {
   try {
@@ -36,66 +38,6 @@ function loadAppVersion() {
   }
 }
 
-function parseCsv(raw) {
-  const rows = [];
-  let row = [];
-  let field = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < raw.length; i += 1) {
-    const ch = raw[i];
-
-    if (inQuotes) {
-      if (ch === '"') {
-        const next = raw[i + 1];
-        if (next === '"') {
-          field += '"';
-          i += 1;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += ch;
-      }
-      continue;
-    }
-
-    if (ch === '"') {
-      inQuotes = true;
-      continue;
-    }
-
-    if (ch === ",") {
-      row.push(field);
-      field = "";
-      continue;
-    }
-
-    if (ch === "\n") {
-      row.push(field);
-      field = "";
-      if (!row.every((cell) => cell.trim() === "")) {
-        rows.push(row);
-      }
-      row = [];
-      continue;
-    }
-
-    if (ch === "\r") {
-      continue;
-    }
-
-    field += ch;
-  }
-
-  row.push(field);
-  if (!row.every((cell) => cell.trim() === "")) {
-    rows.push(row);
-  }
-
-  return rows;
-}
-
 function loadCopyRegistry() {
   let raw = "";
   try {
@@ -105,23 +47,16 @@ function loadCopyRegistry() {
     return new Map();
   }
 
-  const rows = parseCsv(raw);
-  if (!rows.length) return new Map();
-
-  const header = rows[0].map((cell) => cell.trim());
-  const keyIndex = header.indexOf("key");
-  const textIndex = header.indexOf("text");
-  if (keyIndex === -1 || textIndex === -1) {
-    console.warn("[vibeusage] Copy registry missing key/text columns.");
+  const registry = buildCopyRegistry(raw);
+  if (!registry.header.length) return new Map();
+  if (registry.missingColumns.length) {
+    console.warn("[vibeusage] Copy registry missing columns:", registry.missingColumns.join(", "));
     return new Map();
   }
 
   const map = new Map();
-  rows.slice(1).forEach((cells) => {
-    const key = String(cells[keyIndex] || "").trim();
-    if (!key) return;
-    const text = String(cells[textIndex] ?? "").trim();
-    map.set(key, text);
+  registry.rows.forEach((record) => {
+    map.set(record.key, record.text);
   });
 
   return map;

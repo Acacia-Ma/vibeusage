@@ -64,7 +64,7 @@ test("buildFleetData returns model ids for stable keys", async () => {
   assert.equal(fleetData[0].models[0].id, "gpt-4o");
 });
 
-test("buildTopModels aggregates by model name across sources", async () => {
+test("buildTopModels aggregates by canonical model_id across sources", async () => {
   const mod = await loadDashboardModule("dashboard/src/lib/model-breakdown.ts");
   const buildTopModels = mod.buildTopModels;
 
@@ -72,13 +72,13 @@ test("buildTopModels aggregates by model name across sources", async () => {
     sources: [
       {
         source: "cli",
-        models: [{ model: "GPT-4o", totals: { billable_total_tokens: 70 } }],
+        models: [{ model: "GPT-4o", model_id: "gpt-4o", totals: { billable_total_tokens: 70 } }],
       },
       {
         source: "api",
         models: [
-          { model: "gpt-4o", totals: { billable_total_tokens: 50 } },
-          { model: "GPT-4o-mini", totals: { billable_total_tokens: 30 } },
+          { model: "GPT-4o Omni", model_id: "gpt-4o", totals: { billable_total_tokens: 50 } },
+          { model: "GPT-4o-mini", model_id: "gpt-4o-mini", totals: { billable_total_tokens: 30 } },
         ],
       },
     ],
@@ -105,12 +105,22 @@ test("buildTopModels computes percent using billable tokens across all models", 
       {
         source: "cli",
         models: [
-          { model: "legacy-model", totals: { billable_total_tokens: 20, total_tokens: 999 } },
+          {
+            model: "legacy-model",
+            model_id: "legacy-model",
+            totals: { billable_total_tokens: 20, total_tokens: 999 },
+          },
         ],
       },
       {
         source: "api",
-        models: [{ model: "GPT-4o", totals: { billable_total_tokens: 80, total_tokens: 999 } }],
+        models: [
+          {
+            model: "GPT-4o",
+            model_id: "gpt-4o",
+            totals: { billable_total_tokens: 80, total_tokens: 999 },
+          },
+        ],
       },
     ],
   };

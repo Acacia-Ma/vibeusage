@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 "use strict";
 
+const { DEFAULT_INSFORGE_BASE_URL } = require("../../src/shared/runtime-defaults");
+
 /**
  * Online regression check for usage cost consistency.
  *
@@ -114,7 +116,7 @@ function readConfig() {
   const baseUrl =
     args.baseUrl ||
     process.env.VIBEUSAGE_INSFORGE_BASE_URL ||
-    "https://5tmappuk.us-east.insforge.app";
+    DEFAULT_INSFORGE_BASE_URL;
   const token = args.token || process.env.VIBEUSAGE_BEARER_TOKEN || "";
   const tz = args.tz || process.env.VIBEUSAGE_TZ || "UTC";
   const tzOffsetMinutes = toNumber(

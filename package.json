@@ -34,7 +34,7 @@
     "graph:auto-index": "node scripts/graph/auto-index.cjs",
     "graph:scip": "node scripts/graph/generate-scip.cjs",
     "smoke": "node scripts/smoke/insforge-smoke.cjs",
-    "test": "node --test test/*.test.js",
+    "test": "node --test --test-concurrency=1 test/*.test.js",
     "validate:copy": "node scripts/validate-copy-registry.cjs",
     "validate:guardrails": "node scripts/validate-architecture-guardrails.cjs",
     "validate:insforge2-db": "node scripts/ops/insforge2-db-validate.cjs",

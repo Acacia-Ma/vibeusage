@@ -1,5 +1,6 @@
 "use strict";
 
+const { normalizeIso } = require("../date");
 const { normalizeSource } = require("../source");
 const { normalizeUsageModel } = require("../model");
 const { computeBillableTotalTokens } = require("../usage-billable");
@@ -46,12 +47,7 @@ function normalizeTextField(value, { lowerCase = false, maxLen = 128 } = {}) {
 }
 
 function normalizeIsoField(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const dt = new Date(trimmed);
-  if (!Number.isFinite(dt.getTime())) return null;
-  return dt.toISOString();
+  return normalizeIso(value);
 }
 
 function parseUtcHalfHourStart(value) {

@@ -3,21 +3,16 @@ import { Select } from "@base-ui/react/select";
 
 import { copy } from "../../../lib/copy";
 import { formatCompactNumber, toDisplayNumber, toFiniteNumber } from "../../../lib/format";
+import { fetchGithubRepoMeta } from "../../../lib/github-repo-meta";
 import { AsciiBox } from "../../foundation/AsciiBox.jsx";
 import { shouldFetchGithubStars } from "../util/should-fetch-github-stars.js";
 
 const LIMIT_OPTIONS = [3, 6, 10];
-const REPO_META_CACHE = new Map();
 
 function splitRepoKey(value) {
   if (typeof value !== "string") return { owner: "", repo: "" };
   const [owner, repo] = value.split("/");
   return { owner: owner || "", repo: repo || "" };
-}
-
-function normalizeStars(value) {
-  if (!Number.isFinite(value)) return null;
-  return Math.max(0, Math.round(value));
 }
 
 function resolveTokens(entry) {
@@ -32,26 +27,11 @@ function resolveTokens(entry) {
   return billable ?? total ?? null;
 }
 
-function resolveRepoMeta(repoId) {
-  if (!repoId) return null;
-  return REPO_META_CACHE.get(repoId) || null;
-}
-
-function cacheRepoMeta(repoId, meta) {
-  if (!repoId || !meta) return;
-  REPO_META_CACHE.set(repoId, meta);
-}
-
 function useGithubRepoMeta(repoId) {
-  const [state, setState] = useState(() => resolveRepoMeta(repoId) || null);
+  const [state, setState] = useState(null);
 
   useEffect(() => {
     if (!repoId) return;
-    const cached = resolveRepoMeta(repoId);
-    if (cached) {
-      setState(cached);
-      return;
-    }
 
     if (typeof window === "undefined") return;
     const prefersReducedMotion =
@@ -66,22 +46,14 @@ function useGithubRepoMeta(repoId) {
     }
 
     let active = true;
-    fetch(`https://api.github.com/repos/${repoId}`)
-      .then((res) => res.json())
-      .then((data) => {
+    fetchGithubRepoMeta(repoId)
+      .then((meta) => {
         if (!active) return;
-        const meta = {
-          stars: normalizeStars(data?.stargazers_count),
-          avatarUrl: typeof data?.owner?.avatar_url === "string" ? data.owner.avatar_url : null,
-        };
-        cacheRepoMeta(repoId, meta);
         setState(meta);
       })
       .catch(() => {
         if (!active) return;
-        const meta = { stars: null, avatarUrl: null };
-        cacheRepoMeta(repoId, meta);
-        setState(meta);
+        setState({ stars: null, avatarUrl: null });
       });
 
     return () => {

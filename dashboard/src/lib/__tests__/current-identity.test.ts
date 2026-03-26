@@ -14,7 +14,6 @@ describe("resolveCurrentIdentity", () => {
       Buffer.from(JSON.stringify(value)).toString("base64url").replace(/=/g, "");
     return `${encode({ alg: "HS256", typ: "JWT" })}.${encode(payload)}.sig`;
   }
-
   beforeEach(() => {
     vi.resetModules();
     api.getViewerIdentity.mockReset();
@@ -128,6 +127,24 @@ describe("resolveCurrentIdentity", () => {
     ).resolves.toEqual({
       userId: "u3",
       displayName: "Meta Neo",
+      avatarUrl: null,
+    });
+  });
+  it("returns placeholder identity when viewer identity cannot be resolved", async () => {
+    api.getViewerIdentity.mockRejectedValueOnce(new Error("boom"));
+
+    const mod = await import("../current-identity");
+
+    await expect(
+      mod.resolveCurrentIdentity({
+        accessToken: "token-4",
+        user: {
+          id: "u4",
+        },
+      }),
+    ).resolves.toEqual({
+      userId: "u4",
+      displayName: null,
       avatarUrl: null,
     });
   });

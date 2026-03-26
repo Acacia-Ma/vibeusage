@@ -17,7 +17,6 @@ export async function resolveCurrentIdentity(session: any): Promise<CurrentIdent
 
   const userId = normalizeString(session?.user?.id) ?? getAccessTokenUserId(session.accessToken);
   if (!userId) return null;
-
   try {
     const data = await getViewerIdentity({
       baseUrl: getInsforgeBaseUrl(),

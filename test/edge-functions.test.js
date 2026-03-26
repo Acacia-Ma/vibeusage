@@ -3652,6 +3652,92 @@ test("vibeusage-usage-summary uses hourly when rollup disabled", () =>
     );
   }));
 
+test("vibeusage-usage-summary ignores rollup flag for rolling windows", () =>
+  withRollupEnabled(async () => {
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
+
+    const userId = "99999999-9999-9999-9999-999999999998";
+    const userJwt = createUserJwt(userId);
+    const filters = [];
+
+    const rows = [
+      {
+        hour_start: "2025-12-19T12:00:00.000Z",
+        source: "codex",
+        model: "gpt-4o",
+        billable_total_tokens: "100",
+        total_tokens: "120",
+        input_tokens: "40",
+        cached_input_tokens: "10",
+        output_tokens: "50",
+        reasoning_output_tokens: "20",
+      },
+      {
+        hour_start: "2025-12-21T00:00:00.000Z",
+        source: "codex",
+        model: "gpt-4o",
+        billable_total_tokens: null,
+        total_tokens: "55",
+        input_tokens: "15",
+        cached_input_tokens: "5",
+        output_tokens: "25",
+        reasoning_output_tokens: "10",
+      },
+    ];
+
+    globalThis.createClient = (args) => {
+      if (args && args.edgeFunctionToken === userJwt) {
+        return {
+          auth: {
+            getCurrentUser: async () => ({ data: { user: { id: userId } }, error: null }),
+          },
+          database: {
+            from: (table) => {
+              if (table === "vibeusage_tracker_hourly") {
+                const query = createQueryMock({
+                  rows,
+                  onFilter: (entry) => filters.push(entry),
+                });
+                return { select: () => query };
+              }
+              if (table === "vibeusage_model_aliases") {
+                return createQueryMock({ rows: [] });
+              }
+              if (table === "vibeusage_pricing_profiles") {
+                return createQueryMock({ rows: [] });
+              }
+              if (table === "vibeusage_pricing_model_aliases") {
+                return createQueryMock({ rows: [] });
+              }
+              throw new Error(`Unexpected table ${table}`);
+            },
+          },
+        };
+      }
+      throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
+    };
+
+    const req = new Request(
+      "http://localhost/functions/vibeusage-usage-summary?from=2025-12-21&to=2025-12-21&rolling=1",
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${userJwt}` },
+      },
+    );
+
+    const res = await fn(req);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.rolling.last_7d.totals.billable_total_tokens, "150");
+    assert.equal(body.rolling.last_7d.active_days, 2);
+    assert.ok(filters.some((f) => f.op === "eq" && f.col === "user_id" && f.value === userId));
+    assert.ok(
+      filters.some(
+        (f) => f.op === "gte" && f.col === "hour_start" && f.value === "2025-12-15T00:00:00.000Z",
+      ),
+    );
+  }));
+
 test("vibeusage-project-usage-summary aggregates project usage", async () => {
   const fn = await loadEdgeFunction("vibeusage-project-usage-summary");
 
@@ -4121,6 +4207,103 @@ test("vibeusage-usage-summary returns rolling metrics when requested", () =>
     assert.equal(body.rolling.last_30d.avg_per_active_day, "75");
     assert.equal(body.rolling.last_30d.avg_per_day, "5");
     assert.equal(body.rolling.last_30d.window_days, 30);
+  }));
+
+test("vibeusage-usage-summary rolling window stays correct across paginated hourly pages", () =>
+  withRollupDisabled(async () => {
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
+
+    const userId = "55555555-5555-5555-5555-555555555555";
+    const userJwt = createUserJwt(userId);
+    const rangeCalls = [];
+
+    const firstPageRows = Array.from({ length: 1000 }, () => ({
+      hour_start: "2025-12-19T12:00:00.000Z",
+      source: "codex",
+      model: "gpt-4o",
+      billable_total_tokens: "1",
+      total_tokens: "1",
+      input_tokens: "1",
+      cached_input_tokens: "0",
+      output_tokens: "0",
+      reasoning_output_tokens: "0",
+    }));
+    const secondPageRows = [
+      {
+        hour_start: "2025-12-21T00:00:00.000Z",
+        source: "codex",
+        model: "gpt-4o",
+        billable_total_tokens: "500",
+        total_tokens: "500",
+        input_tokens: "500",
+        cached_input_tokens: "0",
+        output_tokens: "0",
+        reasoning_output_tokens: "0",
+      },
+    ];
+
+    globalThis.createClient = (args) => {
+      if (args && args.edgeFunctionToken === userJwt) {
+        return {
+          auth: {
+            getCurrentUser: async () => ({ data: { user: { id: userId } }, error: null }),
+          },
+          database: {
+            from: (table) => {
+              if (table === "vibeusage_tracker_hourly") {
+                const query = {
+                  select: () => query,
+                  eq: () => query,
+                  neq: () => query,
+                  gte: () => query,
+                  lt: () => query,
+                  lte: () => query,
+                  in: () => query,
+                  or: () => query,
+                  order: () => query,
+                  range: async (from, to) => {
+                    rangeCalls.push([from, to]);
+                    if (from === 0) return { data: firstPageRows, error: null };
+                    if (from === 1000) return { data: secondPageRows, error: null };
+                    return { data: [], error: null };
+                  },
+                };
+                return query;
+              }
+              if (table === "vibeusage_model_aliases") {
+                return createQueryMock({ rows: [] });
+              }
+              if (table === "vibeusage_pricing_profiles") {
+                return createQueryMock({ rows: [] });
+              }
+              if (table === "vibeusage_pricing_model_aliases") {
+                return createQueryMock({ rows: [] });
+              }
+              throw new Error(`Unexpected table ${table}`);
+            },
+          },
+        };
+      }
+      throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
+    };
+
+    const req = new Request(
+      "http://localhost/functions/vibeusage-usage-summary?from=2025-12-21&to=2025-12-21&rolling=1",
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${userJwt}` },
+      },
+    );
+
+    const res = await fn(req);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.rolling.last_7d.totals.billable_total_tokens, "1500");
+    assert.equal(body.rolling.last_7d.active_days, 2);
+    assert.equal(body.rolling.last_7d.avg_per_active_day, "750");
+    assert.equal(body.rolling.last_7d.avg_per_day, "214");
+    assert.ok(rangeCalls.some(([from, to]) => from === 0 && to === 999));
+    assert.ok(rangeCalls.some(([from, to]) => from === 1000 && to === 1999));
   }));
 
 test("vibeusage-usage-summary counts rolling active days in local timezone", () =>
@@ -4888,6 +5071,111 @@ test("vibeusage-usage-summary honors alias effective_from across range", () =>
     assert.equal(res.status, 200);
     const body = await res.json();
     assert.equal(body.totals.total_tokens, "100");
+  }));
+
+test("vibeusage-usage-summary canonical model filter stays correct across paginated hourly pages", () =>
+  withRollupEnabled(async () => {
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
+
+    const userId = "12121212-1212-1212-1212-121212121212";
+    const userJwt = createUserJwt(userId);
+    const rangeCalls = [];
+
+    const firstPageRows = Array.from({ length: 1000 }, () => ({
+      hour_start: "2025-01-15T00:00:00.000Z",
+      source: "codex",
+      model: "gpt-foo",
+      total_tokens: 1,
+      input_tokens: 1,
+      cached_input_tokens: 0,
+      output_tokens: 0,
+      reasoning_output_tokens: 0,
+    }));
+    const secondPageRows = [
+      {
+        hour_start: "2025-02-15T00:00:00.000Z",
+        source: "codex",
+        model: "gpt-foo",
+        total_tokens: 500,
+        input_tokens: 500,
+        cached_input_tokens: 0,
+        output_tokens: 0,
+        reasoning_output_tokens: 0,
+      },
+    ];
+
+    const aliasRows = [
+      {
+        usage_model: "gpt-foo",
+        canonical_model: "alpha",
+        display_name: "Alpha",
+        effective_from: "2025-01-01",
+        active: true,
+      },
+      {
+        usage_model: "gpt-foo",
+        canonical_model: "beta",
+        display_name: "Beta",
+        effective_from: "2025-02-01",
+        active: true,
+      },
+    ];
+
+    globalThis.createClient = (args) => {
+      if (args && args.edgeFunctionToken === userJwt) {
+        return {
+          auth: {
+            getCurrentUser: async () => ({ data: { user: { id: userId } }, error: null }),
+          },
+          database: {
+            from: (table) => {
+              if (table === "vibeusage_tracker_hourly") {
+                const query = {
+                  select: () => query,
+                  eq: () => query,
+                  neq: () => query,
+                  gte: () => query,
+                  lt: () => query,
+                  lte: () => query,
+                  in: () => query,
+                  or: () => query,
+                  order: () => query,
+                  range: async (from, to) => {
+                    rangeCalls.push([from, to]);
+                    if (from === 0) return { data: firstPageRows, error: null };
+                    if (from === 1000) return { data: secondPageRows, error: null };
+                    return { data: [], error: null };
+                  },
+                };
+                return query;
+              }
+              if (table === "vibeusage_model_aliases") {
+                return createQueryMock({ rows: aliasRows });
+              }
+              throw new Error(`Unexpected table ${table}`);
+            },
+          },
+        };
+      }
+      throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
+    };
+
+    const req = new Request(
+      "http://localhost/functions/vibeusage-usage-summary?from=2025-01-01&to=2025-02-15&model=alpha",
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${userJwt}` },
+      },
+    );
+
+    const res = await fn(req);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.totals.total_tokens, "1000");
+    assert.deepEqual(rangeCalls, [
+      [0, 999],
+      [1000, 1999],
+    ]);
   }));
 
 test("vibeusage-usage-summary prices per-alias effective_from when unfiltered", () =>

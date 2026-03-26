@@ -9,6 +9,7 @@
 const { handleOptions, json, requireMethod } = require("../shared/http");
 const { withRequestLogging } = require("../shared/logging");
 const { getBearerToken } = require("../shared/auth");
+const { isWithinInterval, normalizeIso } = require("../shared/date");
 const { getAnonKey, getBaseUrl, getServiceRoleKey } = require("../shared/env");
 const { sha256Hex } = require("../shared/crypto");
 
@@ -131,18 +132,4 @@ async function readApiJson(res) {
   } catch (_e) {
     return { data: null, error: text.slice(0, 300) };
   }
-}
-
-function normalizeIso(value) {
-  if (typeof value !== "string") return null;
-  const dt = new Date(value);
-  if (!Number.isFinite(dt.getTime())) return null;
-  return dt.toISOString();
-}
-
-function isWithinInterval(lastSyncAt, minutes) {
-  const lastMs = Date.parse(lastSyncAt);
-  if (!Number.isFinite(lastMs)) return false;
-  const windowMs = Math.max(0, minutes) * 60 * 1000;
-  return windowMs > 0 && Date.now() - lastMs < windowMs;
 }

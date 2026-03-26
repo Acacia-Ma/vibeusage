@@ -93,6 +93,7 @@ export function LeaderboardProfilePage({
     if (!userId) return;
     if (!mockEnabled && (!authTokenAllowed || !authTokenReady)) return;
     let active = true;
+    const controller = new AbortController();
     setProfileState((prev) => ({ ...prev, loading: true, error: null }));
     (async () => {
       const token = await resolveAuthAccessToken(effectiveAuthToken);
@@ -101,6 +102,7 @@ export function LeaderboardProfilePage({
         accessToken: token,
         userId,
         period,
+        signal: controller.signal,
       });
       if (!active) return;
       setProfileState({ loading: false, error: null, data });
@@ -110,6 +112,7 @@ export function LeaderboardProfilePage({
     });
     return () => {
       active = false;
+      controller.abort();
     };
   }, [authTokenAllowed, authTokenReady, baseUrl, effectiveAuthToken, mockEnabled, period, userId]);
 

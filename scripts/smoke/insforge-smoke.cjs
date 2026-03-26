@@ -14,6 +14,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { DEFAULT_INSFORGE_BASE_URL } = require("../../src/shared/runtime-defaults");
 loadDotEnv();
 
 const AUTH_RETRY_DELAY_MS = normalizePositiveInt(process.env.VIBEUSAGE_SMOKE_AUTH_RETRY_MS, 5000);
@@ -47,8 +48,7 @@ function loadDotEnv() {
 }
 
 async function main() {
-  const baseUrl =
-    process.env.VIBEUSAGE_INSFORGE_BASE_URL || "https://5tmappuk.us-east.insforge.app";
+  const baseUrl = process.env.VIBEUSAGE_INSFORGE_BASE_URL || DEFAULT_INSFORGE_BASE_URL;
   const email = process.env.VIBEUSAGE_SMOKE_EMAIL || "";
   const password = process.env.VIBEUSAGE_SMOKE_PASSWORD || "";
   const allowNoHeatmap = process.env.VIBEUSAGE_SMOKE_ALLOW_NO_HEATMAP === "1";

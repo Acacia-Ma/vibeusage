@@ -3,13 +3,14 @@
 
 const assert = require("node:assert/strict");
 const { createClient } = require("@insforge/sdk");
+const { DEFAULT_INSFORGE_BASE_URL } = require("../../src/shared/runtime-defaults");
 
 async function main() {
   const baseUrl =
     process.env.VIBEUSAGE_INSFORGE_BASE_URL ||
     process.env.VIBESCORE_INSFORGE_BASE_URL ||
     process.env.INSFORGE_BASE_URL ||
-    "https://5tmappuk.us-east.insforge.app";
+    DEFAULT_INSFORGE_BASE_URL;
 
   const anonKey = process.env.INSFORGE_ANON_KEY || "";
   const serviceRoleKey =

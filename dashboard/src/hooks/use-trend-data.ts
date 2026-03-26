@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { isAccessTokenReady, resolveAuthAccessToken } from "../lib/auth-token";
+import {
+  buildDashboardCacheKey,
+  clearDashboardCache,
+  readDashboardCache,
+  writeDashboardCache,
+} from "../lib/dashboard-cache";
 import { formatDateLocal, formatDateUTC } from "../lib/date-range";
 import { isMockEnabled } from "../lib/mock-data";
 import { getLocalDayKey, getTimeZoneCacheKey } from "../lib/timezone";
@@ -42,57 +48,39 @@ export function useTrendData({
     return "daily";
   }, [period]);
 
-  const storageKey = (() => {
-    if (!cacheKey) return null;
-    const host = safeHost(baseUrl) || "default";
-    const tzKey = getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes });
-    if (mode === "hourly") {
-      const dayKey = to || from || "day";
-      return `vibeusage.trend.${cacheKey}.${host}.hourly.${dayKey}.${tzKey}`;
-    }
-    if (mode === "monthly") {
-      const toKey = to || "today";
-      return `vibeusage.trend.${cacheKey}.${host}.monthly.${months}.${toKey}.${tzKey}`;
-    }
-    const rangeKey = `${from || ""}.${to || ""}`;
-    return `vibeusage.trend.${cacheKey}.${host}.daily.${rangeKey}.${tzKey}`;
-  })();
+  const storageKey = buildDashboardCacheKey({
+    scope: "trend",
+    cacheKey,
+    baseUrl,
+    segments:
+      mode === "hourly"
+        ? ["hourly", to || from || "day", getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes })]
+        : mode === "monthly"
+          ? [
+              "monthly",
+              months,
+              to || "today",
+              getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes }),
+            ]
+          : ["daily", from || "", to || "", getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes })],
+  });
 
   const readCache = useCallback(() => {
-    if (!storageKey || typeof window === "undefined") return null;
-    try {
-      const raw = window.localStorage.getItem(storageKey);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed || !Array.isArray(parsed.rows)) return null;
-      return parsed;
-    } catch (_e) {
-      return null;
-    }
+    return readDashboardCache(storageKey, (parsed) => Array.isArray(parsed?.rows));
   }, [storageKey]);
 
   const writeCache = useCallback(
     (payload: any) => {
-      if (!storageKey || typeof window === "undefined") return;
-      try {
-        window.localStorage.setItem(storageKey, JSON.stringify(payload));
-      } catch (_e) {
-        // ignore write errors
-      }
+      writeDashboardCache(storageKey, payload, { source: "edge" });
     },
     [storageKey],
   );
 
   const clearCache = useCallback(() => {
-    if (!storageKey || typeof window === "undefined") return;
-    try {
-      window.localStorage.removeItem(storageKey);
-    } catch (_e) {
-      // ignore remove errors
-    }
+    clearDashboardCache(storageKey);
   }, [storageKey]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async ({ signal }: any = {}) => {
     if (sharedEnabled) {
       setRows(Array.isArray(sharedRows) ? sharedRows : []);
       setRange({ from: sharedFrom, to: sharedTo });
@@ -104,6 +92,7 @@ export function useTrendData({
     }
     const resolvedToken = await resolveAuthAccessToken(accessToken);
     if (!resolvedToken && !mockEnabled) return;
+    if (signal?.aborted) return;
     setLoading(true);
     setError(null);
     try {
@@ -116,6 +105,7 @@ export function useTrendData({
           day,
           timeZone,
           tzOffsetMinutes,
+          signal,
         });
       } else if (mode === "monthly") {
         response = await getUsageMonthly({
@@ -125,6 +115,7 @@ export function useTrendData({
           to,
           timeZone,
           tzOffsetMinutes,
+          signal,
         });
       } else {
         response = await getUsageDaily({
@@ -134,8 +125,10 @@ export function useTrendData({
           to,
           timeZone,
           tzOffsetMinutes,
+          signal,
         });
       }
+      if (signal?.aborted) return;
 
       const nextFrom = response?.from || from || response?.day || null;
       const nextTo = response?.to || to || response?.day || null;
@@ -160,6 +153,7 @@ export function useTrendData({
         });
       }
       const nowIso = new Date().toISOString();
+      if (signal?.aborted) return;
 
       setRows(nextRows);
       setRange({ from: nextFrom, to: nextTo });
@@ -178,6 +172,7 @@ export function useTrendData({
         clearCache();
       }
     } catch (e) {
+      if (signal?.aborted || (e as any)?.name === "AbortError") return;
       if (cacheAllowed) {
         const cached = readCache();
         if (cached?.rows) {
@@ -226,6 +221,7 @@ export function useTrendData({
         setError(err?.message || String(err));
       }
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, [
@@ -309,7 +305,11 @@ export function useTrendData({
         setFetchedAt(cached.fetchedAt || null);
       }
     }
-    refresh();
+    const controller = new AbortController();
+    refresh({ signal: controller.signal });
+    return () => {
+      controller.abort();
+    };
   }, [
     accessToken,
     mockEnabled,
@@ -337,15 +337,6 @@ export function useTrendData({
     error,
     refresh,
   };
-}
-
-function safeHost(baseUrl: any) {
-  try {
-    const u = new URL(baseUrl);
-    return u.host;
-  } catch (_e) {
-    return null;
-  }
 }
 
 function parseUtcDate(yyyyMmDd: any) {

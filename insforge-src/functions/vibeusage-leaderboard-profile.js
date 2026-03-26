@@ -6,10 +6,22 @@
 const { handleOptions, json, requireMethod } = require("../shared/http");
 const { getBearerToken, getEdgeClientAndUserId } = require("../shared/auth");
 const { getAnonKey, getBaseUrl, getServiceRoleKey } = require("../shared/env");
-const { toUtcDay, addUtcDays, formatDateUTC } = require("../shared/date");
+require("../shared/date");
+require("../shared/user-identity-core");
+require("../shared/leaderboard-core");
 const { toBigInt, toPositiveIntOrNull } = require("../shared/numbers");
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const leaderboardCore = globalThis.__vibeusageLeaderboardCore;
+if (!leaderboardCore) throw new Error("leaderboard core not initialized");
+const {
+  normalizeLeaderboardPeriod,
+  computeLeaderboardWindow,
+  resolveLeaderboardOtherTokens,
+  normalizeLeaderboardDisplayName,
+  normalizeLeaderboardAvatarUrl,
+  normalizeLeaderboardGeneratedAt,
+} = leaderboardCore;
 
 module.exports = async function (request) {
   const opt = handleOptions(request);
@@ -30,11 +42,11 @@ module.exports = async function (request) {
   const viewerUserId = auth.ok ? auth.userId : null;
 
   const url = new URL(request.url);
-  const period = normalizePeriod(url.searchParams.get("period")) || "week";
+  const period = normalizeLeaderboardPeriod(url.searchParams.get("period")) || "week";
   const requestedUserId = normalizeUserId(url.searchParams.get("user_id"));
   if (!requestedUserId) return json({ error: "user_id is required" }, 400);
 
-  const { from, to } = computeWindow({ period });
+  const { from, to } = computeLeaderboardWindow({ period });
 
   const serviceRoleKey = getServiceRoleKey();
   if (!serviceRoleKey) return json({ error: "Service unavailable" }, 503);
@@ -82,21 +94,12 @@ module.exports = async function (request) {
       period,
       from,
       to,
-      generated_at: normalizeGeneratedAt(snapshot.generated_at),
+      generated_at: normalizeLeaderboardGeneratedAt(snapshot.generated_at),
       entry: normalizeSnapshotEntry(snapshot),
     },
     200,
   );
 };
-
-function normalizePeriod(raw) {
-  if (typeof raw !== "string") return null;
-  const v = raw.trim().toLowerCase();
-  if (v === "week") return v;
-  if (v === "month") return v;
-  if (v === "total") return v;
-  return null;
-}
 
 function normalizeUserId(value) {
   if (typeof value !== "string") return null;
@@ -107,44 +110,13 @@ function normalizeUserId(value) {
   return trimmed;
 }
 
-function computeWindow({ period }) {
-  const now = new Date();
-  const today = toUtcDay(now);
-
-  if (period === "week") {
-    const dow = today.getUTCDay(); // 0=Sunday
-    const from = addUtcDays(today, -dow);
-    const to = addUtcDays(from, 6);
-    return { from: formatDateUTC(from), to: formatDateUTC(to) };
-  }
-
-  if (period === "month") {
-    const from = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
-    const to = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
-    return { from: formatDateUTC(from), to: formatDateUTC(to) };
-  }
-
-  if (period === "total") {
-    return { from: "1970-01-01", to: "9999-12-31" };
-  }
-
-  return computeWindow({ period: "week" });
-}
-
-function normalizeGeneratedAt(value) {
-  if (typeof value !== "string") return new Date().toISOString();
-  const dt = new Date(value);
-  if (Number.isNaN(dt.getTime())) return new Date().toISOString();
-  return dt.toISOString();
-}
-
 function normalizeSnapshotEntry(row) {
-  const displayName = normalizeDisplayName(row?.display_name);
-  const avatarUrl = normalizeAvatarUrl(row?.avatar_url);
+  const displayName = normalizeLeaderboardDisplayName(row?.display_name);
+  const avatarUrl = normalizeLeaderboardAvatarUrl(row?.avatar_url);
   const gptTokens = toBigInt(row?.gpt_tokens);
   const claudeTokens = toBigInt(row?.claude_tokens);
   const totalTokens = toBigInt(row?.total_tokens);
-  const otherTokens = resolveOtherTokens({
+  const otherTokens = resolveLeaderboardOtherTokens({
     row,
     totalTokens,
     gptTokens,
@@ -161,24 +133,4 @@ function normalizeSnapshotEntry(row) {
     other_tokens: otherTokens.toString(),
     total_tokens: totalTokens.toString(),
   };
-}
-
-function resolveOtherTokens({ row, totalTokens, gptTokens, claudeTokens }) {
-  const explicit = row?.other_tokens;
-  if (explicit != null) return toBigInt(explicit);
-
-  const derived = totalTokens - gptTokens - claudeTokens;
-  return derived > 0n ? derived : 0n;
-}
-
-function normalizeDisplayName(value) {
-  if (typeof value !== "string") return "Anonymous";
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : "Anonymous";
-}
-
-function normalizeAvatarUrl(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
 }

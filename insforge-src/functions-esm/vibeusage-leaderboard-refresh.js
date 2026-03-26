@@ -1,15 +1,26 @@
 import { getBearerToken } from "./shared/auth.js";
-import { addUtcDays, formatDateUTC, toUtcDay } from "./shared/date.js";
-import { createEdgeClient } from "./shared/insforge-client.js";
+import "./shared/date.js";
+import { getAnonKey, getBaseUrl, getServiceRoleKey } from "./shared/env.js";
 import { handleOptions, json, requireMethod } from "./shared/http.js";
+import { createEdgeClient } from "./shared/insforge-client.js";
 import { toBigInt, toPositiveInt } from "./shared/numbers.js";
 import { forEachPage } from "./shared/pagination.js";
-import { getAnonKey, getBaseUrl, getServiceRoleKey } from "./shared/env.js";
 import { resolveUserIdentity } from "./shared/user-identity.js";
+import "../shared/user-identity-core.mjs";
+import "../shared/leaderboard-core.mjs";
 
 const PERIODS = ["week", "month"];
 const SOURCE_PAGE_SIZE = 1000;
 const INSERT_BATCH_SIZE = 500;
+const leaderboardCore = globalThis.__vibeusageLeaderboardCore;
+if (!leaderboardCore) throw new Error("leaderboard core not initialized");
+const {
+  normalizeLeaderboardPeriod,
+  computeLeaderboardWindow,
+  resolveLeaderboardOtherTokens,
+  normalizeLeaderboardDisplayName,
+  normalizeLeaderboardAvatarUrl,
+} = leaderboardCore;
 
 export default async function (request) {
   const opt = handleOptions(request);
@@ -25,7 +36,7 @@ export default async function (request) {
   if (!bearer || bearer !== serviceRoleKey) return json({ error: "Unauthorized" }, 401);
 
   const url = new URL(request.url);
-  const requested = normalizePeriod(url.searchParams.get("period"));
+  const requested = normalizeLeaderboardPeriod(url.searchParams.get("period"));
   if (url.searchParams.has("period") && !requested) return json({ error: "Invalid period" }, 400);
 
   const baseUrl = getBaseUrl();
@@ -42,10 +53,7 @@ export default async function (request) {
 
   try {
     for (const period of targetPeriods) {
-      const window = await computeWindow({ period });
-      if (!window.ok) return json({ error: window.error }, 500);
-
-      const { from, to } = window;
+      const { from, to } = computeLeaderboardWindow({ period });
       const { inserted } = await refreshPeriod({
         serviceClient,
         period,
@@ -61,39 +69,6 @@ export default async function (request) {
   }
 
   return json({ success: true, generated_at: generatedAt, results }, 200);
-}
-
-function normalizePeriod(raw) {
-  if (typeof raw !== "string") return null;
-  const v = raw.trim().toLowerCase();
-  if (v === "week") return v;
-  if (v === "month") return v;
-  if (v === "total") return v;
-  return null;
-}
-
-async function computeWindow({ period }) {
-  const now = new Date();
-  const today = toUtcDay(now);
-
-  if (period === "week") {
-    const dow = today.getUTCDay();
-    const from = addUtcDays(today, -dow);
-    const to = addUtcDays(from, 6);
-    return { ok: true, from: formatDateUTC(from), to: formatDateUTC(to) };
-  }
-
-  if (period === "month") {
-    const from = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
-    const to = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
-    return { ok: true, from: formatDateUTC(from), to: formatDateUTC(to) };
-  }
-
-  if (period === "total") {
-    return { ok: true, from: "1970-01-01", to: "9999-12-31" };
-  }
-
-  return { ok: false, error: `Invalid period: ${String(period)}` };
 }
 
 async function refreshPeriod({ serviceClient, period, from, to, generatedAt }) {
@@ -226,7 +201,7 @@ function normalizeSnapshotRow({ row, period, from, to, generatedAt, publicProfil
   const gptTokensBigInt = toBigInt(row.gpt_tokens);
   const claudeTokensBigInt = toBigInt(row.claude_tokens);
   const totalTokensBigInt = toBigInt(row.total_tokens);
-  const otherTokensBigInt = resolveOtherTokens({
+  const otherTokensBigInt = resolveLeaderboardOtherTokens({
     row,
     totalTokens: totalTokensBigInt,
     gptTokens: gptTokensBigInt,
@@ -238,9 +213,9 @@ function normalizeSnapshotRow({ row, period, from, to, generatedAt, publicProfil
   const otherTokens = otherTokensBigInt.toString();
   const totalTokens = totalTokensBigInt.toString();
 
-  const fallbackDisplayName = normalizeDisplayName(row.display_name);
-  const fallbackAvatarUrl = normalizeAvatarUrl(row.avatar_url);
-  const displayName = publicProfile?.displayName || fallbackDisplayName || "Anonymous";
+  const fallbackDisplayName = normalizeLeaderboardDisplayName(row.display_name);
+  const fallbackAvatarUrl = normalizeLeaderboardAvatarUrl(row.avatar_url);
+  const displayName = publicProfile?.displayName || fallbackDisplayName;
   const avatarUrl = publicProfile?.avatarUrl || fallbackAvatarUrl;
   const isPublic = publicProfile?.isPublic || false;
 
@@ -262,26 +237,6 @@ function normalizeSnapshotRow({ row, period, from, to, generatedAt, publicProfil
     is_public: isPublic,
     generated_at: generatedAt,
   };
-}
-
-function resolveOtherTokens({ row, totalTokens, gptTokens, claudeTokens }) {
-  const explicit = row?.other_tokens;
-  if (explicit != null) return toBigInt(explicit);
-
-  const derived = totalTokens - gptTokens - claudeTokens;
-  return derived > 0n ? derived : 0n;
-}
-
-function normalizeDisplayName(value) {
-  if (typeof value !== "string") return "Anonymous";
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : "Anonymous";
-}
-
-function normalizeAvatarUrl(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
 }
 
 function chunkRows(rows, size) {

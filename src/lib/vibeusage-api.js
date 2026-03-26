@@ -1,6 +1,10 @@
 "use strict";
 
 const { createInsforgeClient } = require("./insforge-client");
+const {
+  BACKEND_RUNTIME_UNAVAILABLE_MESSAGE,
+  FUNCTION_SLUGS,
+} = require("../shared/vibeusage-function-contract");
 
 async function signInWithPassword({ baseUrl, email, password }) {
   const client = createInsforgeClient({ baseUrl });
@@ -19,7 +23,7 @@ async function issueDeviceToken({ baseUrl, accessToken, deviceName, platform = "
   const data = await invokeFunction({
     baseUrl,
     accessToken,
-    slug: "vibeusage-device-token-issue",
+    slug: FUNCTION_SLUGS.deviceTokenIssue,
     method: "POST",
     body: { device_name: deviceName, platform },
     errorPrefix: "Device token issue failed",
@@ -40,7 +44,7 @@ async function exchangeLinkCode({ baseUrl, linkCode, requestId, deviceName, plat
   const data = await invokeFunction({
     baseUrl,
     accessToken: null,
-    slug: "vibeusage-link-code-exchange",
+    slug: FUNCTION_SLUGS.linkCodeExchange,
     method: "POST",
     body: {
       link_code: linkCode,
@@ -78,7 +82,7 @@ async function ingestHourly({
   const data = await invokeFunctionWithRetry({
     baseUrl,
     accessToken: deviceToken,
-    slug: "vibeusage-ingest",
+    slug: FUNCTION_SLUGS.ingest,
     method: "POST",
     body,
     errorPrefix: "Ingest failed",
@@ -95,7 +99,7 @@ async function syncHeartbeat({ baseUrl, deviceToken }) {
   const data = await invokeFunction({
     baseUrl,
     accessToken: deviceToken,
-    slug: "vibeusage-sync-ping",
+    slug: FUNCTION_SLUGS.syncPing,
     method: "POST",
     body: {},
     errorPrefix: "Sync heartbeat failed",
@@ -174,7 +178,7 @@ function extractSdkErrorMessage(error) {
 
 function normalizeBackendErrorMessage(message) {
   if (!isBackendRuntimeDownMessage(message)) return String(message || "Unknown error");
-  return "Backend runtime unavailable (InsForge). Please retry later.";
+  return BACKEND_RUNTIME_UNAVAILABLE_MESSAGE;
 }
 
 function isBackendRuntimeDownMessage(message) {

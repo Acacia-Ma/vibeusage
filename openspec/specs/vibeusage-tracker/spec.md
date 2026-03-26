@@ -3,9 +3,7 @@
 ## Purpose
 
 Provide a safe, idempotent token-usage tracker for Codex CLI, backed by an InsForge backend and a web dashboard for viewing usage.
-
 ## Requirements
-
 ### Requirement: CLI installation and commands
 
 The system SHALL provide a consent-driven, low-noise init experience that does not modify local files before explicit user confirmation (or explicit non-interactive override).
@@ -570,14 +568,22 @@ When the signed-in user is not present within the requested first page (`offset=
 
 ### Requirement: Dashboard shows identity information from login state
 
-The dashboard UI SHALL show an identity panel derived from the login state (name/email/userId). Rank MAY be shown as a placeholder until a backend rank endpoint exists.
+The dashboard UI SHALL show the authenticated viewer's identity from the current-user profile. The current-user profile SHALL be the single source of truth for dashboard display identity. Session payload fields and redirect parameters MUST NOT be treated as authoritative display identity.
 
-#### Scenario: Identity panel uses auth fields
+#### Scenario: Dashboard identity panel resolves profile-backed identity
 
-- **GIVEN** the user is signed in
+- **GIVEN** the user is signed in with a valid `accessToken` and `userId`
 - **WHEN** the dashboard renders the identity panel
-- **THEN** it SHALL display `name` when available, otherwise fall back to `email`
-- **AND** it MAY display `userId` as a secondary identifier
+- **THEN** it SHALL resolve display identity from the authenticated user's profile
+- **AND** it SHALL ignore stale or missing session `name` fields for display purposes
+- **AND** it SHALL fall back to the anonymous label only when the resolved profile lacks a usable display name
+
+#### Scenario: Token-only session restore hydrates profile before display
+
+- **GIVEN** the dashboard restores a valid auth session that includes `accessToken` and `userId` but lacks display identity fields
+- **WHEN** the dashboard resolves the current viewer identity
+- **THEN** it SHALL hydrate profile data from the backend using the authenticated `userId`
+- **AND** the identity panel SHALL display the hydrated profile name instead of deriving identity from session fallbacks
 
 ### Requirement: Public dashboard share link
 
@@ -1419,3 +1425,15 @@ The system SHALL provide a dry-run mode for `init` that reports planned changes 
 - **GIVEN** a user runs `npx --yes vibeusage init --dry-run`
 - **THEN** the CLI SHALL NOT write to local config or install hooks
 - **AND** the output SHALL indicate a preview-only run
+
+### Requirement: Dashboard auth redirects do not carry display identity
+
+Loopback auth redirect payloads used by the dashboard MUST NOT carry display identity fields such as `name`. Redirects MAY carry authentication metadata required to complete auth, but display identity SHALL be resolved only from the current-user profile after authentication.
+
+#### Scenario: Redirect payload excludes display name
+
+- **GIVEN** the dashboard completes an auth redirect flow
+- **WHEN** it builds a loopback redirect URL
+- **THEN** the redirect payload SHALL omit `name`
+- **AND** subsequent dashboard rendering SHALL resolve display identity from the authenticated user's profile
+

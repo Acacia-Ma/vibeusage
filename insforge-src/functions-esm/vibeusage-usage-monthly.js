@@ -1,5 +1,12 @@
-import { getAccessContext, getBearerToken } from "./shared/auth.js";
-import { applyCanaryFilter } from "./shared/canary.js";
+import {
+  prepareUsageEndpoint,
+  requireUsageAccess,
+  respondUsageRequestError,
+} from "./shared/core/usage-endpoint.js";
+import {
+  resolveUsageFilterRequestSnapshot,
+} from "./shared/core/usage-filter-request.js";
+import { collectFilteredUsageRows } from "./shared/core/usage-filtered-rows.js";
 import { initMonthlyBuckets, ingestMonthlyRow } from "./shared/core/usage-monthly.js";
 import {
   addDatePartsDays,
@@ -10,50 +17,24 @@ import {
   localDatePartsToUtc,
   parseDateParts,
 } from "./shared/date.js";
-import { isDebugEnabled, withSlowQueryDebugPayload } from "./shared/debug.js";
-import { getBaseUrl } from "./shared/env.js";
-import { handleOptions, json } from "./shared/http.js";
-import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
+import { withRequestLogging } from "./shared/logging.js";
 import { toPositiveIntOrNull } from "./shared/numbers.js";
-import { getSourceParam } from "./shared/source.js";
-import {
-  applyUsageModelFilter,
-  buildAliasTimeline,
-  fetchAliasRows,
-  forEachPage,
-  getModelParam,
-  resolveUsageModelsForCanonical,
-} from "./shared/usage-summary-support.js";
+import "../shared/usage-metrics-core.mjs";
 
 const MAX_MONTHS = 24;
+const usageMetricsCore = globalThis.__vibeusageUsageMetricsCore;
+if (!usageMetricsCore) throw new Error("usage metrics core not initialized");
 
 export default withRequestLogging("vibeusage-usage-monthly", async function (request, logger) {
-  const opt = handleOptions(request);
-  if (opt) return opt;
+  const endpoint = prepareUsageEndpoint({ request, logger });
+  if (!endpoint.ok) return endpoint.response;
+  const { url, respond, bearer } = endpoint;
 
-  const url = new URL(request.url);
-  const debugEnabled = isDebugEnabled(url);
-  const respond = (body, status, durationMs) =>
-    json(
-      debugEnabled ? withSlowQueryDebugPayload(body, { logger, durationMs, status }) : body,
-      status,
-    );
-
-  if (request.method !== "GET") return respond({ error: "Method not allowed" }, 405, 0);
-
-  const bearer = getBearerToken(request.headers.get("Authorization"));
-  if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
-
-  const auth = await getAccessContext({ baseUrl: getBaseUrl(), bearer, allowPublic: true });
-  if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
+  const access = await requireUsageAccess({ respond, bearer });
+  if (!access.ok) return access.response;
+  const { auth } = access;
 
   const tzContext = getUsageTimeZoneContext(url);
-  const sourceResult = getSourceParam(url);
-  if (!sourceResult.ok) return respond({ error: sourceResult.error }, 400, 0);
-  const source = sourceResult.source;
-  const modelResult = getModelParam(url);
-  if (!modelResult.ok) return respond({ error: modelResult.error }, 400, 0);
-  const model = modelResult.model;
 
   const monthsRaw = url.searchParams.get("months");
   const monthsParsed = toPositiveIntOrNull(monthsRaw);
@@ -83,73 +64,43 @@ export default withRequestLogging("vibeusage-usage-monthly", async function (req
   const startIso = startUtc.toISOString();
   const endIso = endUtc.toISOString();
 
-  const modelFilter = await resolveUsageModelsForCanonical({
+  const filterSnapshot = await resolveUsageFilterRequestSnapshot({
+    url,
     edgeClient: auth.edgeClient,
-    canonicalModel: model,
     effectiveDate: to,
   });
-  const canonicalModel = modelFilter.canonical;
-  const usageModels = modelFilter.usageModels;
-  const hasModelFilter = Array.isArray(usageModels) && usageModels.length > 0;
-  let aliasTimeline = null;
-  if (hasModelFilter) {
-    const aliasRows = await fetchAliasRows({
-      edgeClient: auth.edgeClient,
-      usageModels,
-      effectiveDate: to,
-    });
-    aliasTimeline = buildAliasTimeline({ usageModels, aliasRows });
-  }
+  if (!filterSnapshot.ok) return respondUsageRequestError(respond, filterSnapshot);
+  const { source, canonicalModel, usageModels, hasModelFilter, aliasTimeline } = filterSnapshot;
 
   const { monthKeys, buckets } = initMonthlyBuckets({ startMonthParts, months });
-  const queryStartMs = Date.now();
-  let rowCount = 0;
-  const { error } = await forEachPage({
-    createQuery: () => {
-      let query = auth.edgeClient.database
-        .from("vibeusage_tracker_hourly")
-        .select(
-          "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
-        )
-        .eq("user_id", auth.userId);
-      if (source) query = query.eq("source", source);
-      if (hasModelFilter) query = applyUsageModelFilter(query, usageModels);
-      query = applyCanaryFilter(query, { source, model: canonicalModel });
-      return query
-        .gte("hour_start", startIso)
-        .lt("hour_start", endIso)
-        .order("hour_start", { ascending: true })
-        .order("device_id", { ascending: true })
-        .order("source", { ascending: true })
-        .order("model", { ascending: true });
+  const { error, queryDurationMs } = await collectFilteredUsageRows({
+    logger,
+    queryLabel: "usage_monthly",
+    logMeta: {
+      range_months: months,
+      source: source || null,
+      model: canonicalModel || null,
+      tz: tzContext?.timeZone || null,
+      tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null,
     },
-    onPage: (rows) => {
-      const pageRows = Array.isArray(rows) ? rows : [];
-      rowCount += pageRows.length;
-      for (const row of pageRows) {
-        ingestMonthlyRow({
-          buckets,
-          row,
-          tzContext,
-          source,
-          canonicalModel,
-          hasModelFilter,
-          aliasTimeline,
-          to,
-        });
-      }
+    edgeClient: auth.edgeClient,
+    userId: auth.userId,
+    source,
+    usageModels,
+    canonicalModel,
+    hasModelFilter,
+    aliasTimeline,
+    effectiveDate: to,
+    startIso,
+    endIso,
+    onUsageRow: ({ row, usageRow }) => {
+      ingestMonthlyRow({
+        buckets,
+        row,
+        usageRow,
+        tzContext,
+      });
     },
-  });
-  const queryDurationMs = Date.now() - queryStartMs;
-  logSlowQuery(logger, {
-    query_label: "usage_monthly",
-    duration_ms: queryDurationMs,
-    row_count: rowCount,
-    range_months: months,
-    source: source || null,
-    model: canonicalModel || null,
-    tz: tzContext?.timeZone || null,
-    tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null,
   });
 
   if (error) return respond({ error: error.message }, 500, queryDurationMs);
@@ -158,12 +109,7 @@ export default withRequestLogging("vibeusage-usage-monthly", async function (req
     const bucket = buckets.get(key);
     return {
       month: key,
-      total_tokens: bucket.total.toString(),
-      billable_total_tokens: bucket.billable.toString(),
-      input_tokens: bucket.input.toString(),
-      cached_input_tokens: bucket.cached.toString(),
-      output_tokens: bucket.output.toString(),
-      reasoning_output_tokens: bucket.reasoning.toString(),
+      ...usageMetricsCore.buildUsageBucketPayload(bucket),
     };
   });
 

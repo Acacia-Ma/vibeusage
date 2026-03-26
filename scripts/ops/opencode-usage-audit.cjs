@@ -6,8 +6,7 @@ const path = require("node:path");
 
 const { beginBrowserAuth, openInBrowser } = require("../../src/lib/browser-auth");
 const { auditOpencodeUsage } = require("../../src/lib/opencode-usage-audit");
-
-const DEFAULT_BASE_URL = "https://5tmappuk.us-east.insforge.app";
+const { DEFAULT_INSFORGE_BASE_URL } = require("../../src/shared/runtime-defaults");
 
 function parseArgs(argv) {
   const out = {
@@ -75,7 +74,7 @@ async function runAuditCli(argv, deps = {}) {
   const audit = deps.audit || auditOpencodeUsage;
 
   const args = parseArgs(argv);
-  const baseUrl = args.baseUrl || env.VIBEUSAGE_INSFORGE_BASE_URL || DEFAULT_BASE_URL;
+  const baseUrl = args.baseUrl || env.VIBEUSAGE_INSFORGE_BASE_URL || DEFAULT_INSFORGE_BASE_URL;
   const storageDir = args.storageDir || resolveStorageDir(env);
   const accessToken = await resolveAccessToken({ env, baseUrl, noOpen: args.noOpen, log });
 

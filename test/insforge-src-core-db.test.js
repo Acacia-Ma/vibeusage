@@ -8,6 +8,9 @@ const usageSummaryCore = require("../insforge-src/shared/core/usage-summary");
 const records = require("../insforge-src/shared/db/records");
 const usageMonthlyCore = require("../insforge-src/shared/core/usage-monthly");
 const usageDailyCore = require("../insforge-src/shared/core/usage-daily");
+const usageAggregateCollector = require("../insforge-src/shared/core/usage-aggregate-collector");
+require("../insforge-src/shared/usage-pricing-core");
+const usagePricingCore = globalThis.__vibeusageUsagePricingCore;
 const usageFilter = require("../insforge-src/shared/core/usage-filter");
 const usageHourlyDb = require("../insforge-src/shared/db/usage-hourly");
 const ingestDb = require("../insforge-src/shared/db/ingest");
@@ -210,39 +213,37 @@ test("ingestMonthlyRow accumulates token totals into buckets", () => {
   const ok = usageMonthlyCore.ingestMonthlyRow({
     buckets,
     row,
+    usageRow: {
+      date: new Date("2026-01-15T00:00:00.000Z"),
+      billable: 5n,
+    },
     tzContext,
-    source: "codex",
-    canonicalModel: null,
-    hasModelFilter: false,
-    aliasTimeline: null,
-    to: "2026-01-31",
   });
   assert.equal(ok, true);
   const bucket = buckets.get("2026-01");
   assert.equal(bucket.total, 5n);
+  assert.equal(bucket.billable, 5n);
   assert.equal(bucket.input, 2n);
   assert.equal(bucket.cached, 1n);
 });
 
-test("ingestMonthlyRow respects model filter mismatches", () => {
+test("ingestMonthlyRow skips rows outside initialized month buckets", () => {
   const start = { year: 2026, month: 1, day: 1 };
   const { buckets } = usageMonthlyCore.initMonthlyBuckets({ startMonthParts: start, months: 1 });
   const tzContext = { timeZone: "UTC", offsetMinutes: 0 };
   const row = {
-    hour_start: "2026-01-15T00:00:00.000Z",
+    hour_start: "2026-02-15T00:00:00.000Z",
     source: "codex",
-    model: "other",
     total_tokens: 5,
   };
   const ok = usageMonthlyCore.ingestMonthlyRow({
     buckets,
     row,
+    usageRow: {
+      date: new Date("2026-02-15T00:00:00.000Z"),
+      billable: 5n,
+    },
     tzContext,
-    source: "codex",
-    canonicalModel: "gpt-4o",
-    hasModelFilter: true,
-    aliasTimeline: new Map(),
-    to: "2026-01-31",
   });
   assert.equal(ok, false);
   assert.equal(buckets.get("2026-01").total, 0n);
@@ -291,6 +292,174 @@ test("buildHourlyUsageQuery applies filters and ordering", () => {
 
 test("buildHourlyUsageQuery throws when edgeClient missing", () => {
   assert.throws(() => usageHourlyDb.buildHourlyUsageQuery({}), /edgeClient/i);
+});
+
+test("hourly usage db exports shared select contracts", () => {
+  assert.equal(usageHourlyDb.DEFAULT_HOURLY_USAGE_SELECT, "hour_start,source,model,total_tokens");
+  assert.equal(
+    usageHourlyDb.DETAILED_HOURLY_USAGE_SELECT,
+    "hour_start,source,model,billable_total_tokens,total_tokens,input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens",
+  );
+  assert.equal(
+    usageHourlyDb.AGGREGATE_HOURLY_USAGE_SELECT,
+    "source,hour:hour_start,sum_total_tokens:sum(total_tokens),sum_input_tokens:sum(input_tokens),sum_cached_input_tokens:sum(cached_input_tokens),sum_output_tokens:sum(output_tokens),sum_reasoning_output_tokens:sum(reasoning_output_tokens),sum_billable_total_tokens:sum(billable_total_tokens),count_rows:count(),count_billable_total_tokens:count(billable_total_tokens)",
+  );
+});
+
+test("forEachHourlyUsagePage paginates through hourly query rows", async () => {
+  const calls = [];
+  const pages = [
+    [{ hour_start: "2026-01-01T00:00:00.000Z" }, { hour_start: "2026-01-01T00:30:00.000Z" }],
+    [{ hour_start: "2026-01-01T01:00:00.000Z" }],
+  ];
+  const edgeClient = {
+    database: {
+      from: (table) => {
+        calls.push(["from", table]);
+        const query = {
+          eq: (field, value) => (calls.push(["eq", field, value]), query),
+          gte: (field, value) => (calls.push(["gte", field, value]), query),
+          lt: (field, value) => (calls.push(["lt", field, value]), query),
+          order: (field, opts) => (calls.push(["order", field, opts]), query),
+          neq: (field, value) => (calls.push(["neq", field, value]), query),
+          or: (value) => (calls.push(["or", value]), query),
+          range: async (from, to) => {
+            calls.push(["range", from, to]);
+            if (from === 0) return { data: pages[0], error: null };
+            if (from === 2) return { data: pages[1], error: null };
+            return { data: [], error: null };
+          },
+        };
+        return {
+          select: (cols) => (calls.push(["select", cols]), query),
+        };
+      },
+    },
+  };
+
+  const seen = [];
+  const result = await usageHourlyDb.forEachHourlyUsagePage({
+    edgeClient,
+    userId: "u1",
+    startIso: "2026-01-01T00:00:00.000Z",
+    endIso: "2026-01-02T00:00:00.000Z",
+    select: "hour_start",
+    pageSize: 2,
+    onPage: (rows) => seen.push(rows.map((row) => row.hour_start)),
+  });
+
+  assert.equal(result.error, null);
+  assert.equal(result.rowCount, 3);
+  assert.deepEqual(seen, [
+    ["2026-01-01T00:00:00.000Z", "2026-01-01T00:30:00.000Z"],
+    ["2026-01-01T01:00:00.000Z"],
+  ]);
+  assert.deepEqual(
+    calls.filter((call) => call[0] === "range"),
+    [
+      ["range", 0, 1],
+      ["range", 2, 3],
+    ],
+  );
+});
+
+test("collectAggregateUsageRange reuses hourly paging, filtering, and aggregate ingestion", async () => {
+  const pages = [
+    [
+      {
+        hour_start: "2026-01-01T00:00:00.000Z",
+        source: "codex",
+        model: "gpt-4o",
+        total_tokens: 6,
+        billable_total_tokens: 4,
+        input_tokens: 2,
+        cached_input_tokens: 0,
+        output_tokens: 4,
+        reasoning_output_tokens: 0,
+      },
+      {
+        hour_start: "2026-01-01T00:30:00.000Z",
+        source: "codex",
+        model: "other-model",
+        total_tokens: 9,
+        billable_total_tokens: 9,
+        input_tokens: 4,
+        cached_input_tokens: 0,
+        output_tokens: 5,
+        reasoning_output_tokens: 0,
+      },
+    ],
+    [
+      {
+        hour_start: "2026-01-01T01:00:00.000Z",
+        source: "codex",
+        model: "gpt-4o",
+        total_tokens: 5,
+        input_tokens: 3,
+        cached_input_tokens: 0,
+        output_tokens: 2,
+        reasoning_output_tokens: 0,
+      },
+    ],
+  ];
+
+  const edgeClient = {
+    database: {
+      from: () => {
+        const query = {
+          eq: () => query,
+          gte: () => query,
+          lt: () => query,
+          order: () => query,
+          neq: () => query,
+          or: () => query,
+          range: async (from) => {
+            if (from === 0) return { data: pages[0], error: null };
+            if (from === 2) return { data: pages[1], error: null };
+            return { data: [], error: null };
+          },
+        };
+        return {
+          select: () => query,
+        };
+      },
+    },
+  };
+
+  const state = usagePricingCore.createAggregateUsageState({
+    hasModelParam: false,
+    defaultModel: "unknown",
+  });
+  const seen = [];
+
+  const result = await usageAggregateCollector.collectAggregateUsageRange({
+    edgeClient,
+    userId: "u1",
+    canonicalModel: "gpt-4o",
+    hasModelFilter: true,
+    aliasTimeline: null,
+    effectiveDate: "2026-01-01",
+    startIso: "2026-01-01T00:00:00.000Z",
+    endIso: "2026-01-02T00:00:00.000Z",
+    state,
+    pageSize: 2,
+    onAccumulatedRow: ({ row, accumulation }) => {
+      seen.push([row.hour_start, accumulation.billable.toString()]);
+    },
+  });
+
+  assert.equal(result.error, null);
+  assert.equal(result.rowCount, 3);
+  assert.equal(result.state, state);
+  assert.deepEqual(seen, [
+    ["2026-01-01T00:00:00.000Z", "4"],
+    ["2026-01-01T01:00:00.000Z", "5"],
+  ]);
+  assert.equal(state.totals.total_tokens, 11n);
+  assert.equal(state.totals.billable_total_tokens, 9n);
+  assert.equal(state.pricingBuckets.size, 1);
+  assert.deepEqual(Array.from(state.distinctModels), ["gpt-4o"]);
+  assert.deepEqual(Array.from(state.distinctUsageModels), ["gpt-4o"]);
 });
 
 test("fetchDeviceTokenRow uses records API and ignores revoked tokens", async () => {
@@ -434,6 +603,23 @@ test("shouldIncludeUsageRow returns true when model filter disabled", () => {
     canonicalModel: null,
     hasModelFilter: false,
     aliasTimeline: new Map(),
+    to: "2026-01-25",
+  });
+  assert.equal(ok, true);
+});
+
+test("shouldIncludeUsageRow matches canonical alias rows via effective timeline", () => {
+  const ok = usageFilter.shouldIncludeUsageRow({
+    row: { hour_start: "2026-01-25T00:00:00.000Z", model: "gpt-4o-mini" },
+    canonicalModel: "gpt-4o",
+    hasModelFilter: true,
+    aliasTimeline: new Map([
+      [
+        "gpt-4o-mini",
+        [{ model_id: "gpt-4o", model: "GPT-4o", effective_from: "2026-01-01" }],
+      ],
+      ["gpt-4o", [{ model_id: "gpt-4o", model: "GPT-4o", effective_from: "2026-01-01" }]],
+    ]),
     to: "2026-01-25",
   });
   assert.equal(ok, true);

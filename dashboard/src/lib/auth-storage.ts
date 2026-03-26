@@ -1,4 +1,4 @@
-const STORAGE_KEY = "vibeusage.dashboard.auth.v1";
+const LEGACY_AUTH_STORAGE_KEY = "vibeusage.dashboard.auth.v1";
 const SESSION_EXPIRED_KEY = "vibeusage.dashboard.session_expired.v1";
 const SESSION_SOFT_EXPIRED_KEY = "vibeusage.dashboard.session_soft_expired.v1";
 const AUTH_EVENT_NAME = "vibeusage:auth-storage";
@@ -40,31 +40,10 @@ function buildTokenFingerprint(token: any) {
   return `fnv1a:${(hash >>> 0).toString(16)}`;
 }
 
-export function loadAuthFromStorage() {
-  try {
-    const storage = getStorage();
-    if (!storage || typeof storage.getItem !== "function") return null;
-    const raw = storage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (typeof parsed?.accessToken !== "string" || parsed.accessToken.length === 0) return null;
-    return parsed;
-  } catch (_e) {
-    return null;
-  }
-}
-
-export function saveAuthToStorage(auth: any) {
-  const storage = getStorage();
-  if (!storage || typeof storage.setItem !== "function") return;
-  storage.setItem(STORAGE_KEY, JSON.stringify(auth));
-  emitAuthStorageChange();
-}
-
 export function clearAuthStorage() {
   const storage = getStorage();
   if (!storage || typeof storage.removeItem !== "function") return;
-  storage.removeItem(STORAGE_KEY);
+  storage.removeItem(LEGACY_AUTH_STORAGE_KEY);
   emitAuthStorageChange();
 }
 
@@ -206,7 +185,6 @@ export function subscribeAuthStorage(handler: any) {
   }
   const onChange = () => {
     handler({
-      auth: loadAuthFromStorage(),
       sessionExpired: loadSessionExpired(),
       sessionSoftExpired: loadSessionSoftExpired(),
     });

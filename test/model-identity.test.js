@@ -5,7 +5,10 @@ const {
   buildIdentityMap,
   applyModelIdentity,
   resolveModelIdentity,
+  resolveUsageFilterContext,
+  resolveUsageTimelineContext,
   resolveUsageModelsForCanonical,
+  matchesCanonicalModelAtDate,
 } = require("../insforge-src/shared/model-identity");
 
 test("normalizeUsageModelKey lowercases and trims", () => {
@@ -120,6 +123,64 @@ test("resolveUsageModelsForCanonical includes same-day alias timestamps", async 
   assert.ok(usageModels.includes("gpt-foo"));
 });
 
+test("resolveUsageFilterContext builds alias timeline once model filter is active", async () => {
+  const edgeClient = createEdgeClient([
+    {
+      usage_model: "gpt-foo",
+      canonical_model: "alpha",
+      display_name: "Alpha",
+      effective_from: "2025-01-01T12:00:00Z",
+      active: true,
+    },
+  ]);
+
+  const context = await resolveUsageFilterContext({
+    edgeClient,
+    canonicalModel: "alpha",
+    effectiveDate: "2025-01-01",
+  });
+
+  assert.equal(context.canonicalModel, "alpha");
+  assert.equal(context.hasModelFilter, true);
+  assert.deepEqual(context.usageModels, ["alpha", "gpt-foo"]);
+  assert.ok(context.aliasTimeline instanceof Map);
+  assert.deepEqual(context.aliasTimeline.get("gpt-foo"), [
+    {
+      effective_from: "2025-01-01",
+      model: "Alpha",
+      model_id: "alpha",
+    },
+  ]);
+});
+
+test("resolveUsageTimelineContext normalizes usage models and builds alias timeline", async () => {
+  const edgeClient = createEdgeClient([
+    {
+      usage_model: "gpt-foo",
+      canonical_model: "alpha",
+      display_name: "Alpha",
+      effective_from: "2025-01-01T12:00:00Z",
+      active: true,
+    },
+  ]);
+
+  const context = await resolveUsageTimelineContext({
+    edgeClient,
+    usageModels: [" GPT-FOO "],
+    effectiveDate: "2025-01-01",
+  });
+
+  assert.deepEqual(context.usageModels, ["gpt-foo"]);
+  assert.ok(context.aliasTimeline instanceof Map);
+  assert.deepEqual(context.aliasTimeline.get("gpt-foo"), [
+    {
+      effective_from: "2025-01-01",
+      model: "Alpha",
+      model_id: "alpha",
+    },
+  ]);
+});
+
 test("resolveModelIdentity includes same-day alias timestamps", async () => {
   const edgeClient = createEdgeClient([
     {
@@ -138,4 +199,43 @@ test("resolveModelIdentity includes same-day alias timestamps", async () => {
   });
 
   assert.deepEqual(identityMap.get("gpt-foo"), { model_id: "alpha", model: "Alpha" });
+});
+
+test("matchesCanonicalModelAtDate compares identities via alias timeline", () => {
+  assert.equal(
+    matchesCanonicalModelAtDate({
+      rawModel: "gpt-foo",
+      canonicalModel: "alpha",
+      dateKey: "2025-01-15",
+      timeline: new Map([
+        [
+          "gpt-foo",
+          [{ model_id: "alpha", model: "Alpha", effective_from: "2025-01-01" }],
+        ],
+        [
+          "alpha",
+          [{ model_id: "alpha", model: "Alpha", effective_from: "2025-01-01" }],
+        ],
+      ]),
+    }),
+    true,
+  );
+  assert.equal(
+    matchesCanonicalModelAtDate({
+      rawModel: "gpt-foo",
+      canonicalModel: "beta",
+      dateKey: "2025-01-15",
+      timeline: new Map([
+        [
+          "gpt-foo",
+          [{ model_id: "alpha", model: "Alpha", effective_from: "2025-01-01" }],
+        ],
+        [
+          "beta",
+          [{ model_id: "beta", model: "Beta", effective_from: "2025-01-01" }],
+        ],
+      ]),
+    }),
+    false,
+  );
 });

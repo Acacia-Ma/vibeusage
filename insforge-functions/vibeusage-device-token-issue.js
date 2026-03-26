@@ -7,10 +7,11 @@ var __commonJS = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
 
-// insforge-src/shared/http.js
-var require_http = __commonJS({
-  "insforge-src/shared/http.js"(exports2, module2) {
+// insforge-src/shared/http-core.js
+var require_http_core = __commonJS({
+  "insforge-src/shared/http-core.js"() {
     "use strict";
+    var CORE_KEY = "__vibeusageHttpCore";
     var corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -43,24 +44,595 @@ var require_http = __commonJS({
       try {
         const data = await request.json();
         return { error: null, status: 200, data };
-      } catch (_e) {
+      } catch (_error) {
         return { error: "Invalid JSON", status: 400, data: null };
       }
     }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          corsHeaders,
+          handleOptions: handleOptions2,
+          json: json2,
+          requireMethod: requireMethod2,
+          readJson: readJson2
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
+// insforge-src/shared/http.js
+var require_http = __commonJS({
+  "insforge-src/shared/http.js"(exports2, module2) {
+    "use strict";
+    require_http_core();
+    var httpCore = globalThis.__vibeusageHttpCore;
+    if (!httpCore) throw new Error("http core not initialized");
     module2.exports = {
-      corsHeaders,
-      handleOptions: handleOptions2,
-      json: json2,
-      requireMethod: requireMethod2,
-      readJson: readJson2
+      corsHeaders: httpCore.corsHeaders,
+      handleOptions: httpCore.handleOptions,
+      json: httpCore.json,
+      requireMethod: httpCore.requireMethod,
+      readJson: httpCore.readJson
     };
   }
 });
 
-// insforge-src/shared/logging.js
-var require_logging = __commonJS({
-  "insforge-src/shared/logging.js"(exports2, module2) {
+// insforge-src/shared/runtime-primitives-core.js
+var require_runtime_primitives_core = __commonJS({
+  "insforge-src/shared/runtime-primitives-core.js"() {
     "use strict";
+    var CORE_KEY = "__vibeusageRuntimePrimitivesCore";
+    var MAX_SOURCE_LENGTH = 64;
+    function toBigInt(value) {
+      if (typeof value === "bigint") return value >= 0n ? value : 0n;
+      if (typeof value === "number") {
+        if (!Number.isFinite(value) || value <= 0) return 0n;
+        return BigInt(Math.floor(value));
+      }
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!/^[0-9]+$/.test(trimmed)) return 0n;
+        try {
+          return BigInt(trimmed);
+        } catch (_error) {
+          return 0n;
+        }
+      }
+      return 0n;
+    }
+    function toPositiveIntOrNull(value) {
+      if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!/^[0-9]+$/.test(trimmed)) return null;
+        const n = Number.parseInt(trimmed, 10);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      }
+      if (typeof value === "bigint") {
+        if (value <= 0n) return null;
+        const n = Number(value);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      }
+      return null;
+    }
+    function toPositiveInt(value) {
+      const n = toPositiveIntOrNull(value);
+      return n == null ? 0 : n;
+    }
+    function normalizeSource(value) {
+      if (typeof value !== "string") return null;
+      const normalized = value.trim().toLowerCase();
+      if (!normalized) return null;
+      if (normalized.length > MAX_SOURCE_LENGTH) return normalized.slice(0, MAX_SOURCE_LENGTH);
+      return normalized;
+    }
+    function getSourceParam(url) {
+      if (!url || typeof url.searchParams?.get !== "function") {
+        return { ok: false, error: "Invalid request URL" };
+      }
+      const raw = url.searchParams.get("source");
+      if (raw == null) return { ok: true, source: null };
+      if (raw.trim() === "") return { ok: true, source: null };
+      const normalized = normalizeSource(raw);
+      if (!normalized) return { ok: false, error: "Invalid source" };
+      return { ok: true, source: normalized };
+    }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          MAX_SOURCE_LENGTH,
+          toBigInt,
+          toPositiveInt,
+          toPositiveIntOrNull,
+          normalizeSource,
+          getSourceParam
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
+// insforge-src/shared/usage-model-core.js
+var require_usage_model_core = __commonJS({
+  "insforge-src/shared/usage-model-core.js"() {
+    "use strict";
+    var CORE_KEY = "__vibeusageUsageModelCore";
+    var DEFAULT_MODEL = "unknown";
+    function normalizeModel(value) {
+      if (typeof value !== "string") return null;
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    }
+    function normalizeUsageModel(value) {
+      const normalized = normalizeModel(value);
+      return normalized ? normalized.toLowerCase() : null;
+    }
+    function escapeLike(value) {
+      return String(value).replace(/[\\%_]/g, "\\$&");
+    }
+    function applyUsageModelFilter(query, usageModels) {
+      if (!query || typeof query.or !== "function") return query;
+      const models = Array.isArray(usageModels) ? usageModels : [];
+      const terms = [];
+      const seen = /* @__PURE__ */ new Set();
+      for (const model of models) {
+        const normalized = normalizeUsageModel(model);
+        if (!normalized) continue;
+        const exact = `model.ilike.${escapeLike(normalized)}`;
+        if (seen.has(exact)) continue;
+        seen.add(exact);
+        terms.push(exact);
+      }
+      if (terms.length === 0) return query;
+      return query.or(terms.join(","));
+    }
+    function getModelParam(url) {
+      if (!url || typeof url.searchParams?.get !== "function") {
+        return { ok: false, error: "Invalid request URL" };
+      }
+      const raw = url.searchParams.get("model");
+      if (raw == null || raw.trim() === "") return { ok: true, model: null };
+      const normalized = normalizeUsageModel(raw);
+      if (!normalized) return { ok: false, error: "Invalid model" };
+      return { ok: true, model: normalized };
+    }
+    function normalizeDateKey(value) {
+      if (typeof value !== "string") return null;
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      return trimmed.length >= 10 ? trimmed.slice(0, 10) : trimmed;
+    }
+    function extractDateKey(value) {
+      if (value instanceof Date) return value.toISOString().slice(0, 10);
+      if (typeof value === "string" && value.length >= 10) return value.slice(0, 10);
+      return null;
+    }
+    function nextDateKey(dateKey) {
+      if (!dateKey) return null;
+      const date = /* @__PURE__ */ new Date(`${dateKey}T00:00:00Z`);
+      if (Number.isNaN(date.getTime())) return null;
+      date.setUTCDate(date.getUTCDate() + 1);
+      return date.toISOString().slice(0, 10);
+    }
+    function normalizeUsageModelKey(value) {
+      return normalizeUsageModel(value);
+    }
+    function normalizeDisplayNameValue(value) {
+      if (typeof value !== "string") return null;
+      const trimmed = value.trim();
+      return trimmed || null;
+    }
+    function buildIdentityMap({ usageModels, aliasRows } = {}) {
+      const normalized = /* @__PURE__ */ new Set();
+      for (const model of Array.isArray(usageModels) ? usageModels : []) {
+        const key = normalizeUsageModelKey(model);
+        if (key) normalized.add(key);
+      }
+      const map = /* @__PURE__ */ new Map();
+      for (const row of Array.isArray(aliasRows) ? aliasRows : []) {
+        const usageKey = normalizeUsageModelKey(row?.usage_model);
+        const canonical = normalizeUsageModelKey(row?.canonical_model);
+        if (!usageKey || !canonical) continue;
+        if (normalized.size > 0 && !normalized.has(usageKey)) continue;
+        const display = normalizeDisplayNameValue(row?.display_name) || canonical;
+        const effective = String(row?.effective_from || "");
+        const existing = map.get(usageKey);
+        if (!existing || effective > existing.effective_from) {
+          map.set(usageKey, { model_id: canonical, model: display, effective_from: effective });
+        }
+      }
+      for (const key of normalized) {
+        if (!map.has(key)) {
+          map.set(key, { model_id: key, model: key, effective_from: "" });
+        }
+      }
+      const result = /* @__PURE__ */ new Map();
+      for (const [key, value] of map.entries()) {
+        result.set(key, { model_id: value.model_id, model: value.model });
+      }
+      return result;
+    }
+    function applyModelIdentity({ rawModel, identityMap } = {}) {
+      const normalized = normalizeUsageModelKey(rawModel) || DEFAULT_MODEL;
+      const entry = identityMap && typeof identityMap.get === "function" ? identityMap.get(normalized) : null;
+      if (entry) return { model_id: entry.model_id, model: entry.model };
+      const display = normalizeDisplayNameValue(rawModel) || DEFAULT_MODEL;
+      return { model_id: normalized, model: display };
+    }
+    function readQueryOutcome(result, query) {
+      const data = Array.isArray(result?.data) ? result.data : Array.isArray(query?.data) ? query.data : null;
+      const error = result?.error || query?.error || null;
+      return { data, error };
+    }
+    async function resolveModelIdentity({ edgeClient, usageModels, effectiveDate } = {}) {
+      const models = Array.isArray(usageModels) ? usageModels.map(normalizeUsageModelKey).filter(Boolean) : [];
+      if (!models.length) return /* @__PURE__ */ new Map();
+      const database = edgeClient?.database;
+      if (!database || typeof database.from !== "function") {
+        return buildIdentityMap({ usageModels: models, aliasRows: [] });
+      }
+      const dateKey = normalizeDateKey(effectiveDate) || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+      const dateKeyNext = nextDateKey(dateKey) || dateKey;
+      const query = database.from("vibeusage_model_aliases").select("usage_model,canonical_model,display_name,effective_from");
+      if (!query || typeof query.eq !== "function" || typeof query.in !== "function" || typeof query.lt !== "function" || typeof query.order !== "function") {
+        return buildIdentityMap({ usageModels: models, aliasRows: [] });
+      }
+      const result = await query.eq("active", true).in("usage_model", models).lt("effective_from", dateKeyNext).order("effective_from", { ascending: false });
+      const { data, error } = readQueryOutcome(result, query);
+      if (error || !Array.isArray(data)) {
+        return buildIdentityMap({ usageModels: models, aliasRows: [] });
+      }
+      return buildIdentityMap({ usageModels: models, aliasRows: data });
+    }
+    async function resolveUsageModelsForCanonical({ edgeClient, canonicalModel, effectiveDate } = {}) {
+      const canonical = normalizeUsageModelKey(canonicalModel);
+      if (!canonical) return { canonical: null, usageModels: [] };
+      const database = edgeClient?.database;
+      if (!database || typeof database.from !== "function") {
+        return { canonical, usageModels: [canonical] };
+      }
+      const dateKey = normalizeDateKey(effectiveDate) || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+      const dateKeyNext = nextDateKey(dateKey) || dateKey;
+      const query = database.from("vibeusage_model_aliases").select("usage_model,canonical_model,effective_from");
+      if (!query || typeof query.eq !== "function" || typeof query.lt !== "function" || typeof query.order !== "function") {
+        return { canonical, usageModels: [canonical] };
+      }
+      const result = await query.eq("active", true).eq("canonical_model", canonical).lt("effective_from", dateKeyNext).order("effective_from", { ascending: false });
+      const { data, error } = readQueryOutcome(result, query);
+      if (error || !Array.isArray(data)) {
+        return { canonical, usageModels: [canonical] };
+      }
+      const usageMap = /* @__PURE__ */ new Map();
+      for (const row of data) {
+        const usageKey = normalizeUsageModelKey(row?.usage_model);
+        if (!usageKey) continue;
+        const effective = String(row?.effective_from || "");
+        const existing = usageMap.get(usageKey);
+        if (!existing || effective > existing) usageMap.set(usageKey, effective);
+      }
+      const usageModelsSet = /* @__PURE__ */ new Set([canonical]);
+      for (const usageKey of usageMap.keys()) {
+        usageModelsSet.add(usageKey);
+      }
+      return { canonical, usageModels: Array.from(usageModelsSet.values()) };
+    }
+    async function resolveUsageFilterContext({ edgeClient, canonicalModel, effectiveDate } = {}) {
+      const modelFilter = await resolveUsageModelsForCanonical({
+        edgeClient,
+        canonicalModel,
+        effectiveDate
+      });
+      const resolvedCanonicalModel = modelFilter.canonical;
+      const timelineContext = await resolveUsageTimelineContext({
+        edgeClient,
+        usageModels: modelFilter.usageModels,
+        effectiveDate
+      });
+      const usageModels = timelineContext.usageModels;
+      const hasModelFilter = usageModels.length > 0;
+      if (!hasModelFilter) {
+        return {
+          canonicalModel: resolvedCanonicalModel,
+          usageModels,
+          hasModelFilter,
+          aliasTimeline: null
+        };
+      }
+      return {
+        canonicalModel: resolvedCanonicalModel,
+        usageModels,
+        hasModelFilter,
+        aliasTimeline: timelineContext.aliasTimeline
+      };
+    }
+    async function resolveUsageTimelineContext({ edgeClient, usageModels, effectiveDate } = {}) {
+      const normalizedUsageModels = Array.isArray(usageModels) ? usageModels.map((model) => normalizeUsageModelKey(model)).filter(Boolean) : [];
+      if (!normalizedUsageModels.length) {
+        return {
+          usageModels: [],
+          aliasTimeline: null
+        };
+      }
+      const aliasRows = await fetchAliasRows({
+        edgeClient,
+        usageModels: normalizedUsageModels,
+        effectiveDate
+      });
+      return {
+        usageModels: normalizedUsageModels,
+        aliasTimeline: buildAliasTimeline({
+          usageModels: normalizedUsageModels,
+          aliasRows
+        })
+      };
+    }
+    function resolveIdentityAtDate({ rawModel, usageKey, dateKey, timeline } = {}) {
+      const normalizedKey = usageKey || normalizeUsageModelKey(rawModel) || DEFAULT_MODEL;
+      const normalizedDateKey = extractDateKey(dateKey) || dateKey || null;
+      const entries = timeline && typeof timeline.get === "function" ? timeline.get(normalizedKey) : null;
+      if (Array.isArray(entries)) {
+        let match = null;
+        for (const entry of entries) {
+          if (entry.effective_from && normalizedDateKey && entry.effective_from <= normalizedDateKey) {
+            match = entry;
+          } else if (entry.effective_from && normalizedDateKey && entry.effective_from > normalizedDateKey) {
+            break;
+          }
+        }
+        if (match) return { model_id: match.model_id, model: match.model };
+      }
+      const display = normalizeModel(rawModel) || DEFAULT_MODEL;
+      return { model_id: normalizedKey, model: display };
+    }
+    function matchesCanonicalModelAtDate({ rawModel, canonicalModel, dateKey, timeline } = {}) {
+      if (!canonicalModel) return true;
+      const identity = resolveIdentityAtDate({ rawModel, dateKey, timeline });
+      const filterIdentity = resolveIdentityAtDate({
+        rawModel: canonicalModel,
+        usageKey: canonicalModel,
+        dateKey,
+        timeline
+      });
+      return identity.model_id === filterIdentity.model_id;
+    }
+    function buildAliasTimeline({ usageModels, aliasRows } = {}) {
+      const normalized = new Set(
+        Array.isArray(usageModels) ? usageModels.map((model) => normalizeUsageModelKey(model)).filter(Boolean) : []
+      );
+      const timeline = /* @__PURE__ */ new Map();
+      for (const row of Array.isArray(aliasRows) ? aliasRows : []) {
+        const usageKey = normalizeUsageModelKey(row?.usage_model);
+        const canonical = normalizeUsageModelKey(row?.canonical_model);
+        if (!usageKey || !canonical) continue;
+        if (normalized.size > 0 && !normalized.has(usageKey)) continue;
+        const display = normalizeModel(row?.display_name) || canonical;
+        const effective = extractDateKey(row?.effective_from || "");
+        if (!effective) continue;
+        const entry = { model_id: canonical, model: display, effective_from: effective };
+        const list = timeline.get(usageKey);
+        if (list) {
+          list.push(entry);
+        } else {
+          timeline.set(usageKey, [entry]);
+        }
+      }
+      for (const list of timeline.values()) {
+        list.sort((a, b) => String(a.effective_from).localeCompare(String(b.effective_from)));
+      }
+      return timeline;
+    }
+    async function fetchAliasRows({ edgeClient, usageModels, effectiveDate } = {}) {
+      const models = Array.isArray(usageModels) ? usageModels.map((model) => normalizeUsageModelKey(model)).filter(Boolean) : [];
+      const database = edgeClient?.database;
+      if (!models.length || !database || typeof database.from !== "function") return [];
+      const dateKey = extractDateKey(effectiveDate) || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+      const dateKeyNext = nextDateKey(dateKey) || dateKey;
+      const query = database.from("vibeusage_model_aliases").select("usage_model,canonical_model,display_name,effective_from");
+      if (!query || typeof query.eq !== "function" || typeof query.in !== "function" || typeof query.lt !== "function" || typeof query.order !== "function") {
+        return [];
+      }
+      const result = await query.eq("active", true).in("usage_model", models).lt("effective_from", dateKeyNext).order("effective_from", { ascending: true });
+      const { data, error } = readQueryOutcome(result, query);
+      if (error || !Array.isArray(data)) return [];
+      return data;
+    }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          normalizeModel,
+          normalizeUsageModel,
+          applyUsageModelFilter,
+          getModelParam,
+          normalizeDateKey,
+          extractDateKey,
+          normalizeUsageModelKey,
+          buildIdentityMap,
+          applyModelIdentity,
+          resolveModelIdentity,
+          resolveUsageModelsForCanonical,
+          resolveUsageFilterContext,
+          resolveUsageTimelineContext,
+          resolveIdentityAtDate,
+          matchesCanonicalModelAtDate,
+          buildAliasTimeline,
+          fetchAliasRows
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
+// insforge-src/shared/env-core.js
+var require_env_core = __commonJS({
+  "insforge-src/shared/env-core.js"() {
+    "use strict";
+    var CORE_KEY = "__vibeusageEnvCore";
+    var DEFAULT_BASE_URL = "http://insforge:7130";
+    var DEFAULT_USAGE_MAX_DAYS = 800;
+    var DEFAULT_SLOW_QUERY_THRESHOLD_MS = 2e3;
+    var DEFAULT_PRICING_MODEL = "gpt-5.2-codex";
+    var DEFAULT_PRICING_SOURCE = "openrouter";
+    var runtimePrimitivesCore = globalThis.__vibeusageRuntimePrimitivesCore;
+    if (!runtimePrimitivesCore) throw new Error("runtime primitives core not initialized");
+    var usageModelCore = globalThis.__vibeusageUsageModelCore;
+    if (!usageModelCore) throw new Error("usage-model core not initialized");
+    function readDenoEnvValue(key) {
+      try {
+        if (typeof Deno !== "undefined" && Deno?.env?.get) {
+          const value = Deno.env.get(key);
+          return value == null ? null : value;
+        }
+      } catch (_error) {
+      }
+      return null;
+    }
+    function readEnvValue(key) {
+      const denoValue = readDenoEnvValue(key);
+      if (denoValue != null) return denoValue;
+      try {
+        if (typeof process !== "undefined" && process?.env) {
+          const value = process.env[key];
+          if (value != null) return value;
+        }
+      } catch (_error) {
+      }
+      return null;
+    }
+    function clampInt(value, min, max) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return min;
+      return Math.min(max, Math.max(min, Math.floor(n)));
+    }
+    function getBaseUrl2() {
+      return readDenoEnvValue("INSFORGE_INTERNAL_URL") || DEFAULT_BASE_URL;
+    }
+    function firstHeaderValue(value) {
+      if (typeof value !== "string") return null;
+      const first = value.split(",")[0]?.trim();
+      return first || null;
+    }
+    function getForwardedBaseUrl(request) {
+      const headers = request?.headers;
+      if (!headers || typeof headers.get !== "function") return null;
+      const forwardedHost = firstHeaderValue(headers.get("x-forwarded-host"));
+      const host = forwardedHost || firstHeaderValue(headers.get("host"));
+      if (!host) return null;
+      const proto = firstHeaderValue(headers.get("x-forwarded-proto")) || "https";
+      return `${proto}://${host}`;
+    }
+    function getRequestBaseUrl(request) {
+      const forwarded = getForwardedBaseUrl(request);
+      if (forwarded) return forwarded;
+      if (request && typeof request.url === "string") {
+        try {
+          const url = new URL(request.url);
+          if (url.origin && url.origin !== "null") return url.origin;
+        } catch (_error) {
+        }
+      }
+      return getBaseUrl2();
+    }
+    function getServiceRoleKey2() {
+      return readDenoEnvValue("INSFORGE_SERVICE_ROLE_KEY") || readDenoEnvValue("SERVICE_ROLE_KEY") || readDenoEnvValue("INSFORGE_API_KEY") || readDenoEnvValue("API_KEY") || null;
+    }
+    function getAnonKey2() {
+      return readDenoEnvValue("ANON_KEY") || readDenoEnvValue("INSFORGE_ANON_KEY") || null;
+    }
+    function getJwtSecret() {
+      return readDenoEnvValue("INSFORGE_JWT_SECRET") || null;
+    }
+    function getUsageMaxDays() {
+      const raw = readEnvValue("VIBEUSAGE_USAGE_MAX_DAYS");
+      if (raw == null || raw === "") return DEFAULT_USAGE_MAX_DAYS;
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n <= 0) return DEFAULT_USAGE_MAX_DAYS;
+      return clampInt(n, 1, 5e3);
+    }
+    function getSlowQueryThresholdMs() {
+      const raw = readEnvValue("VIBEUSAGE_SLOW_QUERY_MS");
+      if (raw == null || raw === "") return DEFAULT_SLOW_QUERY_THRESHOLD_MS;
+      const n = Number(raw);
+      if (!Number.isFinite(n)) return DEFAULT_SLOW_QUERY_THRESHOLD_MS;
+      if (n <= 0) return 0;
+      return clampInt(n, 1, 6e4);
+    }
+    function normalizePricingModel(value) {
+      const normalized = usageModelCore.normalizeModel?.(value) || null;
+      if (!normalized || normalized.toLowerCase() === "unknown") return null;
+      return normalized;
+    }
+    function getPricingDefaults() {
+      const primaryModel = normalizePricingModel(readEnvValue("VIBEUSAGE_PRICING_MODEL"));
+      const primarySource = runtimePrimitivesCore.normalizeSource(
+        readEnvValue("VIBEUSAGE_PRICING_SOURCE")
+      );
+      return {
+        model: primaryModel || DEFAULT_PRICING_MODEL,
+        source: primarySource || DEFAULT_PRICING_SOURCE
+      };
+    }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          readEnvValue,
+          clampInt,
+          getBaseUrl: getBaseUrl2,
+          getRequestBaseUrl,
+          getServiceRoleKey: getServiceRoleKey2,
+          getAnonKey: getAnonKey2,
+          getJwtSecret,
+          getUsageMaxDays,
+          getSlowQueryThresholdMs,
+          getPricingDefaults
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
+// insforge-src/shared/env.js
+var require_env = __commonJS({
+  "insforge-src/shared/env.js"(exports2, module2) {
+    "use strict";
+    require_runtime_primitives_core();
+    require_usage_model_core();
+    require_env_core();
+    var envCore = globalThis.__vibeusageEnvCore;
+    if (!envCore) throw new Error("env core not initialized");
+    module2.exports = {
+      getBaseUrl: envCore.getBaseUrl,
+      getRequestBaseUrl: envCore.getRequestBaseUrl,
+      getServiceRoleKey: envCore.getServiceRoleKey,
+      getAnonKey: envCore.getAnonKey,
+      getJwtSecret: envCore.getJwtSecret,
+      getUsageMaxDays: envCore.getUsageMaxDays,
+      getSlowQueryThresholdMs: envCore.getSlowQueryThresholdMs,
+      getPricingDefaults: envCore.getPricingDefaults
+    };
+  }
+});
+
+// insforge-src/shared/logging-core.js
+var require_logging_core = __commonJS({
+  "insforge-src/shared/logging-core.js"() {
+    "use strict";
+    var CORE_KEY = "__vibeusageLoggingCore";
+    var envCore = globalThis.__vibeusageEnvCore;
+    if (!envCore) throw new Error("env core not initialized");
     function createRequestId() {
       if (globalThis?.crypto?.randomUUID) return globalThis.crypto.randomUUID();
       return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -70,6 +642,21 @@ var require_logging = __commonJS({
       if (status >= 500) return "SERVER_ERROR";
       if (status >= 400) return "CLIENT_ERROR";
       return null;
+    }
+    function getResponseStatus(response) {
+      if (response && typeof response.status === "number") return response.status;
+      return null;
+    }
+    function resolveFunctionName(functionName, request) {
+      if (request && typeof request.url === "string") {
+        try {
+          const url = new URL(request.url);
+          const match = url.pathname.match(/\/functions\/([^/?#]+)/);
+          if (match && match[1]) return match[1];
+        } catch (_error) {
+        }
+      }
+      return functionName;
     }
     function createLogger({ functionName }) {
       const requestId = createRequestId();
@@ -86,9 +673,9 @@ var require_logging = __commonJS({
           const res = await fetch(url, init);
           recordUpstream(res.status, Date.now() - upstreamStart);
           return res;
-        } catch (err) {
+        } catch (error) {
           recordUpstream(null, Date.now() - upstreamStart);
-          throw err;
+          throw error;
         }
       }
       function log({ stage, status, errorCode, ...extra }) {
@@ -111,46 +698,25 @@ var require_logging = __commonJS({
         fetch: fetchWithUpstream
       };
     }
-    function getResponseStatus(response) {
-      if (response && typeof response.status === "number") return response.status;
-      return null;
-    }
-    function resolveFunctionName(functionName, request) {
-      if (request && typeof request.url === "string") {
-        try {
-          const url = new URL(request.url);
-          const match = url.pathname.match(/\/functions\/([^/?#]+)/);
-          if (match && match[1]) return match[1];
-        } catch (_e) {
-        }
-      }
-      return functionName;
-    }
     function withRequestLogging2(functionName, handler) {
       return async function(request) {
         const resolvedName = resolveFunctionName(functionName, request);
         const logger = createLogger({ functionName: resolvedName });
         try {
           const response = await handler(request, logger);
-          const status = getResponseStatus(response);
-          logger.log({ stage: "response", status });
+          logger.log({ stage: "response", status: getResponseStatus(response) });
           return response;
-        } catch (err) {
+        } catch (error) {
           logger.log({ stage: "exception", status: 500, errorCode: "UNHANDLED_EXCEPTION" });
-          throw err;
+          throw error;
         }
       };
     }
-    module2.exports = {
-      withRequestLogging: withRequestLogging2,
-      logSlowQuery,
-      getSlowQueryThresholdMs
-    };
     function logSlowQuery(logger, fields) {
       if (!logger || typeof logger.log !== "function") return;
       const durationMs = Number(fields?.duration_ms ?? fields?.durationMs);
       if (!Number.isFinite(durationMs)) return;
-      const thresholdMs = getSlowQueryThresholdMs();
+      const thresholdMs = envCore.getSlowQueryThresholdMs();
       if (durationMs < thresholdMs) return;
       logger.log({
         stage: "slow_query",
@@ -160,131 +726,45 @@ var require_logging = __commonJS({
       });
     }
     function getSlowQueryThresholdMs() {
-      const raw = readEnvValue("VIBEUSAGE_SLOW_QUERY_MS");
-      if (raw == null || raw === "") return 2e3;
-      const n = Number(raw);
-      if (!Number.isFinite(n)) return 2e3;
-      if (n <= 0) return 0;
-      return clampInt(n, 1, 6e4);
+      return envCore.getSlowQueryThresholdMs();
     }
-    function readEnvValue(key) {
-      try {
-        if (typeof Deno !== "undefined" && Deno?.env?.get) {
-          const value = Deno.env.get(key);
-          if (value !== void 0) return value;
-        }
-      } catch (_e) {
-      }
-      try {
-        if (typeof process !== "undefined" && process?.env) {
-          return process.env[key];
-        }
-      } catch (_e) {
-      }
-      return null;
-    }
-    function clampInt(value, min, max) {
-      const n = Number(value);
-      if (!Number.isFinite(n)) return min;
-      return Math.min(max, Math.max(min, Math.floor(n)));
-    }
-  }
-});
-
-// insforge-src/shared/env.js
-var require_env = __commonJS({
-  "insforge-src/shared/env.js"(exports2, module2) {
-    "use strict";
-    function getBaseUrl2() {
-      return Deno.env.get("INSFORGE_INTERNAL_URL") || "http://insforge:7130";
-    }
-    function getServiceRoleKey2() {
-      return Deno.env.get("INSFORGE_SERVICE_ROLE_KEY") || Deno.env.get("SERVICE_ROLE_KEY") || Deno.env.get("INSFORGE_API_KEY") || Deno.env.get("API_KEY") || null;
-    }
-    function getAnonKey2() {
-      return Deno.env.get("ANON_KEY") || Deno.env.get("INSFORGE_ANON_KEY") || null;
-    }
-    function getJwtSecret() {
-      return Deno.env.get("INSFORGE_JWT_SECRET") || null;
-    }
-    module2.exports = {
-      getBaseUrl: getBaseUrl2,
-      getServiceRoleKey: getServiceRoleKey2,
-      getAnonKey: getAnonKey2,
-      getJwtSecret
-    };
-  }
-});
-
-// insforge-src/shared/public-view.js
-var require_public_view = __commonJS({
-  "insforge-src/shared/public-view.js"(exports2, module2) {
-    "use strict";
-    var { getAnonKey: getAnonKey2, getServiceRoleKey: getServiceRoleKey2 } = require_env();
-    var PUBLIC_USER_TOKEN_RE = /^pv1-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
-    async function resolvePublicView({ baseUrl, shareToken }) {
-      const token = normalizeShareToken(shareToken);
-      if (!token) {
-        return { ok: false, edgeClient: null, userId: null };
-      }
-      const serviceRoleKey = getServiceRoleKey2();
-      if (!serviceRoleKey) return { ok: false, edgeClient: null, userId: null };
-      const anonKey = getAnonKey2();
-      const dbClient = createClient({
-        baseUrl,
-        anonKey: anonKey || serviceRoleKey,
-        edgeFunctionToken: serviceRoleKey
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          createLogger,
+          withRequestLogging: withRequestLogging2,
+          logSlowQuery,
+          getSlowQueryThresholdMs
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
       });
-      const resolvedUserId = await resolvePublicUserId({ dbClient, token });
-      if (!resolvedUserId) {
-        return { ok: false, edgeClient: null, userId: null };
-      }
-      const { data: settings, error: settingsErr } = await dbClient.database.from("vibeusage_user_settings").select("leaderboard_public").eq("user_id", resolvedUserId).maybeSingle();
-      if (settingsErr || settings?.leaderboard_public !== true) {
-        return { ok: false, edgeClient: null, userId: null };
-      }
-      return { ok: true, edgeClient: dbClient, userId: resolvedUserId };
     }
-    async function resolvePublicUserId({ dbClient, token }) {
-      if (!dbClient || !token) return null;
-      const { data, error } = await dbClient.database.from("vibeusage_public_views").select("user_id").eq("user_id", token.userId).is("revoked_at", null).maybeSingle();
-      if (error || !data?.user_id) return null;
-      return data.user_id;
-    }
-    function normalizeToken(value) {
-      if (typeof value !== "string") return null;
-      const token = value.trim();
-      if (!token) return null;
-      if (token.length > 256) return null;
-      return token;
-    }
-    function normalizeShareToken(value) {
-      const token = normalizeToken(value);
-      if (!token) return null;
-      const normalized = token.toLowerCase();
-      if (token !== normalized) return null;
-      const publicUserMatch = normalized.match(PUBLIC_USER_TOKEN_RE);
-      if (publicUserMatch?.[1]) {
-        return { kind: "user", userId: publicUserMatch[1] };
-      }
-      return null;
-    }
-    function isPublicShareToken(value) {
-      return Boolean(normalizeShareToken(value));
-    }
+  }
+});
+
+// insforge-src/shared/logging.js
+var require_logging = __commonJS({
+  "insforge-src/shared/logging.js"(exports2, module2) {
+    "use strict";
+    require_env();
+    require_logging_core();
+    var loggingCore = globalThis.__vibeusageLoggingCore;
+    if (!loggingCore) throw new Error("logging core not initialized");
     module2.exports = {
-      resolvePublicView,
-      isPublicShareToken
+      withRequestLogging: loggingCore.withRequestLogging,
+      logSlowQuery: loggingCore.logSlowQuery,
+      getSlowQueryThresholdMs: loggingCore.getSlowQueryThresholdMs
     };
   }
 });
 
-// insforge-src/shared/auth.js
-var require_auth = __commonJS({
-  "insforge-src/shared/auth.js"(exports2, module2) {
+// insforge-src/shared/auth-core.js
+var require_auth_core = __commonJS({
+  "insforge-src/shared/auth-core.js"() {
     "use strict";
-    var { getAnonKey: getAnonKey2, getJwtSecret } = require_env();
-    var { resolvePublicView, isPublicShareToken } = require_public_view();
+    var CORE_KEY = "__vibeusageAuthCore";
     function getBearerToken2(headerValue) {
       if (!headerValue) return null;
       const prefix = "Bearer ";
@@ -294,44 +774,38 @@ var require_auth = __commonJS({
     }
     function decodeBase64Url(value) {
       if (typeof value !== "string") return null;
-      let s = value.replace(/-/g, "+").replace(/_/g, "/");
-      const pad = s.length % 4;
-      if (pad) s += "=".repeat(4 - pad);
+      let normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+      const pad = normalized.length % 4;
+      if (pad) normalized += "=".repeat(4 - pad);
       try {
-        if (typeof atob === "function") return atob(s);
-      } catch (_e) {
+        if (typeof atob === "function") return atob(normalized);
+      } catch (_error) {
       }
       try {
         if (typeof Buffer !== "undefined") {
-          return Buffer.from(s, "base64").toString("utf8");
+          return Buffer.from(normalized, "base64").toString("utf8");
         }
-      } catch (_e) {
+      } catch (_error) {
       }
       return null;
     }
-    function decodeJwtPayload(token) {
+    function decodeJwtSection(token, index) {
       if (typeof token !== "string") return null;
       const parts = token.split(".");
-      if (parts.length < 2) return null;
-      const raw = decodeBase64Url(parts[1]);
+      if (parts.length < index + 1) return null;
+      const raw = decodeBase64Url(parts[index]);
       if (!raw) return null;
       try {
         return JSON.parse(raw);
-      } catch (_e) {
+      } catch (_error) {
         return null;
       }
     }
+    function decodeJwtPayload(token) {
+      return decodeJwtSection(token, 1);
+    }
     function decodeJwtHeader(token) {
-      if (typeof token !== "string") return null;
-      const parts = token.split(".");
-      if (parts.length < 2) return null;
-      const raw = decodeBase64Url(parts[0]);
-      if (!raw) return null;
-      try {
-        return JSON.parse(raw);
-      } catch (_e) {
-        return null;
-      }
+      return decodeJwtSection(token, 0);
     }
     function getJwtRole(token) {
       const payload = decodeJwtPayload(token);
@@ -348,8 +822,7 @@ var require_auth = __commonJS({
       return null;
     }
     function isProjectAdminBearer(token) {
-      const role = getJwtRole(token);
-      return role === "project_admin";
+      return getJwtRole(token) === "project_admin";
     }
     function isJwtExpired(payload) {
       const exp = Number(payload?.exp);
@@ -362,7 +835,7 @@ var require_auth = __commonJS({
         if (typeof Buffer !== "undefined") {
           base64 = Buffer.from(value).toString("base64");
         }
-      } catch (_e) {
+      } catch (_error) {
       }
       if (!base64 && typeof btoa === "function" && value instanceof ArrayBuffer) {
         const bytes = new Uint8Array(value);
@@ -373,37 +846,25 @@ var require_auth = __commonJS({
       if (!base64) return null;
       return base64.replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
     }
-    async function verifyUserJwtHs256({ token }) {
-      const secret = getJwtSecret();
+    async function verifyUserJwtHs256({ token, jwtSecret }) {
+      const secret = typeof jwtSecret === "string" && jwtSecret.length > 0 ? jwtSecret : null;
       if (!secret) {
         return { ok: false, userId: null, error: "Missing jwt secret", code: "missing_jwt_secret" };
       }
-      if (typeof token !== "string") {
-        return { ok: false, userId: null, error: "Invalid token" };
-      }
+      if (typeof token !== "string") return { ok: false, userId: null, error: "Invalid token" };
       const parts = token.split(".");
-      if (parts.length !== 3) {
-        return { ok: false, userId: null, error: "Invalid token" };
-      }
+      if (parts.length !== 3) return { ok: false, userId: null, error: "Invalid token" };
       const header = decodeJwtHeader(token);
       if (!header || header.alg !== "HS256") {
         return { ok: false, userId: null, error: "Unsupported alg" };
       }
       const payload = decodeJwtPayload(token);
-      if (!payload) {
-        return { ok: false, userId: null, error: "Invalid payload" };
-      }
+      if (!payload) return { ok: false, userId: null, error: "Invalid payload" };
       const exp = Number(payload?.exp);
-      if (!Number.isFinite(exp)) {
-        return { ok: false, userId: null, error: "Missing exp" };
-      }
-      if (isJwtExpired(payload)) {
-        return { ok: false, userId: null, error: "Token expired" };
-      }
+      if (!Number.isFinite(exp)) return { ok: false, userId: null, error: "Missing exp" };
+      if (isJwtExpired(payload)) return { ok: false, userId: null, error: "Token expired" };
       const cryptoSubtle = globalThis.crypto?.subtle;
-      if (!cryptoSubtle) {
-        return { ok: false, userId: null, error: "Crypto unavailable" };
-      }
+      if (!cryptoSubtle) return { ok: false, userId: null, error: "Crypto unavailable" };
       const data = `${parts[0]}.${parts[1]}`;
       const encoder = new TextEncoder();
       const key = await cryptoSubtle.importKey(
@@ -419,33 +880,30 @@ var require_auth = __commonJS({
         return { ok: false, userId: null, error: "Invalid signature" };
       }
       const userId = typeof payload.sub === "string" ? payload.sub : null;
-      if (!userId) {
-        return { ok: false, userId: null, error: "Missing sub" };
-      }
+      if (!userId) return { ok: false, userId: null, error: "Missing sub" };
       return { ok: true, userId, error: null };
     }
-    async function getEdgeClientAndUserId2({ baseUrl, bearer }) {
-      const auth = await getEdgeClientAndUserIdFast({ baseUrl, bearer });
-      if (!auth.ok) {
-        return {
-          ok: false,
-          edgeClient: null,
-          userId: null,
-          status: auth.status ?? 401,
-          error: auth.error ?? "Unauthorized",
-          code: auth.code ?? null
-        };
+    function getClaimedJwtUser({ token }) {
+      const header = decodeJwtHeader(token);
+      if (!header || header.alg !== "HS256") {
+        return { ok: false, userId: null, code: "invalid_jwt" };
       }
-      return { ok: true, edgeClient: auth.edgeClient, userId: auth.userId };
+      const payload = decodeJwtPayload(token);
+      if (!payload || isJwtExpired(payload)) {
+        return { ok: false, userId: null, code: "invalid_jwt" };
+      }
+      const userId = typeof payload.sub === "string" ? payload.sub : null;
+      if (!userId) return { ok: false, userId: null, code: "invalid_jwt" };
+      return { ok: true, userId, code: null };
     }
-    async function getEdgeClientAndUserIdFast({ baseUrl, bearer }) {
-      const anonKey = getAnonKey2();
-      const edgeClient = createClient({
-        baseUrl,
-        anonKey: anonKey || void 0,
-        edgeFunctionToken: bearer
-      });
-      const local = await verifyUserJwtHs256({ token: bearer });
+    async function getEdgeClientAndUserIdFast({
+      baseUrl,
+      bearer,
+      createUserEdgeClient,
+      jwtSecret
+    } = {}) {
+      const edgeClient = typeof createUserEdgeClient === "function" ? await createUserEdgeClient({ baseUrl, bearer }) : null;
+      const local = await verifyUserJwtHs256({ token: bearer, jwtSecret });
       if (local.ok) {
         return { ok: true, edgeClient, userId: local.userId };
       }
@@ -472,7 +930,39 @@ var require_auth = __commonJS({
       }
       return { ok: true, edgeClient, userId: claimed.userId };
     }
-    async function getAccessContext({ baseUrl, bearer, allowPublic = false }) {
+    async function getEdgeClientAndUserId2({
+      baseUrl,
+      bearer,
+      createUserEdgeClient,
+      jwtSecret
+    } = {}) {
+      const auth = await getEdgeClientAndUserIdFast({
+        baseUrl,
+        bearer,
+        createUserEdgeClient,
+        jwtSecret
+      });
+      if (!auth.ok) {
+        return {
+          ok: false,
+          edgeClient: null,
+          userId: null,
+          status: auth.status ?? 401,
+          error: auth.error ?? "Unauthorized",
+          code: auth.code ?? null
+        };
+      }
+      return { ok: true, edgeClient: auth.edgeClient, userId: auth.userId };
+    }
+    async function getAccessContext({
+      baseUrl,
+      bearer,
+      allowPublic = false,
+      createUserEdgeClient,
+      jwtSecret,
+      isPublicShareToken,
+      resolvePublicView
+    } = {}) {
       if (!bearer) {
         return {
           ok: false,
@@ -484,7 +974,12 @@ var require_auth = __commonJS({
           code: "missing_bearer"
         };
       }
-      const auth = await getEdgeClientAndUserIdFast({ baseUrl, bearer });
+      const auth = await getEdgeClientAndUserIdFast({
+        baseUrl,
+        bearer,
+        createUserEdgeClient,
+        jwtSecret
+      });
       if (auth.ok) {
         return { ok: true, edgeClient: auth.edgeClient, userId: auth.userId, accessType: "user" };
       }
@@ -499,7 +994,7 @@ var require_auth = __commonJS({
           code: auth.code ?? null
         };
       }
-      if (!isPublicShareToken(bearer)) {
+      if (typeof isPublicShareToken !== "function" || !isPublicShareToken(bearer)) {
         return {
           ok: false,
           edgeClient: null,
@@ -510,8 +1005,8 @@ var require_auth = __commonJS({
           code: auth.code ?? null
         };
       }
-      const publicView = await resolvePublicView({ baseUrl, shareToken: bearer });
-      if (!publicView.ok) {
+      const publicView = typeof resolvePublicView === "function" ? await resolvePublicView({ baseUrl, shareToken: bearer }) : null;
+      if (!publicView?.ok) {
         return {
           ok: false,
           edgeClient: null,
@@ -528,26 +1023,293 @@ var require_auth = __commonJS({
         accessType: "public"
       };
     }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          getBearerToken: getBearerToken2,
+          isProjectAdminBearer,
+          verifyUserJwtHs256,
+          getEdgeClientAndUserIdFast,
+          getEdgeClientAndUserId: getEdgeClientAndUserId2,
+          getAccessContext
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
+// insforge-src/shared/public-sharing-core.js
+var require_public_sharing_core = __commonJS({
+  "insforge-src/shared/public-sharing-core.js"() {
+    "use strict";
+    var CORE_KEY = "__vibeusagePublicSharingCore";
+    var PUBLIC_USER_TOKEN_RE = /^pv1-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
+    function buildPublicShareToken(userId) {
+      if (typeof userId !== "string") return "";
+      const normalized = userId.trim().toLowerCase();
+      if (!normalized) return "";
+      return `pv1-${normalized}`;
+    }
+    function disabledState() {
+      return {
+        enabled: false,
+        updated_at: null,
+        share_token: null
+      };
+    }
+    function normalizeUpdatedAt(value) {
+      return typeof value === "string" ? value : null;
+    }
+    function normalizeToken(value) {
+      if (typeof value !== "string") return null;
+      const token = value.trim();
+      if (!token) return null;
+      if (token.length > 256) return null;
+      return token;
+    }
+    function normalizeShareToken(value) {
+      const token = normalizeToken(value);
+      if (!token) return null;
+      const normalized = token.toLowerCase();
+      if (token !== normalized) return null;
+      const publicUserMatch = normalized.match(PUBLIC_USER_TOKEN_RE);
+      if (publicUserMatch?.[1]) {
+        return { kind: "user", userId: publicUserMatch[1] };
+      }
+      return null;
+    }
+    function isPublicShareToken(value) {
+      return Boolean(normalizeShareToken(value));
+    }
+    async function resolvePublicUserId({ dbClient, token }) {
+      if (!dbClient || !token) return null;
+      const { data, error } = await dbClient.database.from("vibeusage_public_views").select("user_id").eq("user_id", token.userId).is("revoked_at", null).maybeSingle();
+      if (error || !data?.user_id) return null;
+      return data.user_id;
+    }
+    async function resolvePublicView({
+      baseUrl,
+      shareToken,
+      serviceRoleKey,
+      anonKey,
+      createServiceClient
+    } = {}) {
+      const token = normalizeShareToken(shareToken);
+      if (!token) {
+        return { ok: false, edgeClient: null, userId: null };
+      }
+      if (typeof serviceRoleKey !== "string" || serviceRoleKey.length === 0) {
+        return { ok: false, edgeClient: null, userId: null };
+      }
+      if (typeof createServiceClient !== "function") {
+        return { ok: false, edgeClient: null, userId: null };
+      }
+      const dbClient = await createServiceClient({
+        baseUrl,
+        anonKey: anonKey || serviceRoleKey,
+        edgeFunctionToken: serviceRoleKey
+      });
+      const resolvedUserId = await resolvePublicUserId({ dbClient, token });
+      if (!resolvedUserId) {
+        return { ok: false, edgeClient: null, userId: null };
+      }
+      const { data: settings, error: settingsErr } = await dbClient.database.from("vibeusage_user_settings").select("leaderboard_public").eq("user_id", resolvedUserId).maybeSingle();
+      if (settingsErr || settings?.leaderboard_public !== true) {
+        return { ok: false, edgeClient: null, userId: null };
+      }
+      return { ok: true, edgeClient: dbClient, userId: resolvedUserId };
+    }
+    async function getPublicVisibilityState({ edgeClient, userId }) {
+      if (!edgeClient || typeof userId !== "string" || userId.trim().length === 0) {
+        return disabledState();
+      }
+      try {
+        const { data, error } = await edgeClient.database.from("vibeusage_public_views").select("user_id,revoked_at,updated_at").eq("user_id", userId).maybeSingle();
+        if (error) return disabledState();
+        const enabled = Boolean(data && !data.revoked_at);
+        return {
+          enabled,
+          updated_at: normalizeUpdatedAt(data?.updated_at),
+          share_token: enabled ? buildPublicShareToken(userId) : null
+        };
+      } catch (_error) {
+        return disabledState();
+      }
+    }
+    async function setPublicVisibilityState({
+      edgeClient,
+      userId,
+      enabled,
+      nowIso,
+      sha256Hex: sha256Hex2
+    } = {}) {
+      if (!edgeClient) throw new TypeError("edgeClient is required");
+      if (typeof userId !== "string" || userId.trim().length === 0) {
+        throw new TypeError("userId is required");
+      }
+      if (typeof enabled !== "boolean") {
+        throw new TypeError("enabled must be boolean");
+      }
+      if (typeof sha256Hex2 !== "function") {
+        throw new TypeError("sha256Hex is required");
+      }
+      if (enabled) {
+        await enablePublicVisibility({ edgeClient, userId, nowIso, sha256Hex: sha256Hex2 });
+      } else {
+        await disablePublicVisibility({ edgeClient, userId, nowIso });
+      }
+      return getPublicVisibilityState({ edgeClient, userId });
+    }
+    async function enablePublicVisibility({ edgeClient, userId, nowIso, sha256Hex: sha256Hex2 }) {
+      const table = edgeClient.database.from("vibeusage_public_views");
+      const shareToken = buildPublicShareToken(userId);
+      const tokenHash = await sha256Hex2(shareToken);
+      const updatedAt = typeof nowIso === "string" && nowIso ? nowIso : (/* @__PURE__ */ new Date()).toISOString();
+      const nextRow = {
+        user_id: userId,
+        token_hash: tokenHash,
+        revoked_at: null,
+        updated_at: updatedAt
+      };
+      if (typeof table.upsert === "function") {
+        try {
+          const { error: upsertErr } = await table.upsert([nextRow], { onConflict: "user_id" });
+          if (!upsertErr) return;
+        } catch (_error) {
+        }
+      }
+      const { data: existing, error: selectErr } = await table.select("user_id").eq("user_id", userId).maybeSingle();
+      if (selectErr) throw new Error(selectErr.message || "Failed to select public visibility row");
+      if (existing?.user_id) {
+        const { error: updateErr } = await table.update({ token_hash: tokenHash, revoked_at: null, updated_at: updatedAt }).eq("user_id", userId);
+        if (updateErr) throw new Error(updateErr.message || "Failed to update public visibility row");
+        return;
+      }
+      const { error: insertErr } = await table.insert([nextRow]);
+      if (insertErr) throw new Error(insertErr.message || "Failed to insert public visibility row");
+    }
+    async function disablePublicVisibility({ edgeClient, userId, nowIso }) {
+      const updatedAt = typeof nowIso === "string" && nowIso ? nowIso : (/* @__PURE__ */ new Date()).toISOString();
+      const { error } = await edgeClient.database.from("vibeusage_public_views").update({ revoked_at: updatedAt, updated_at: updatedAt }).eq("user_id", userId);
+      if (error) throw new Error(error.message || "Failed to revoke public visibility row");
+    }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          buildPublicShareToken,
+          isPublicShareToken,
+          resolvePublicView,
+          getPublicVisibilityState,
+          setPublicVisibilityState
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+});
+
+// insforge-src/shared/public-view.js
+var require_public_view = __commonJS({
+  "insforge-src/shared/public-view.js"(exports2, module2) {
+    "use strict";
+    require_public_sharing_core();
+    var { getAnonKey: getAnonKey2, getServiceRoleKey: getServiceRoleKey2 } = require_env();
+    var publicSharingCore = globalThis.__vibeusagePublicSharingCore;
+    if (!publicSharingCore) throw new Error("public sharing core not initialized");
+    async function resolvePublicView({ baseUrl, shareToken }) {
+      return publicSharingCore.resolvePublicView({
+        baseUrl,
+        shareToken,
+        anonKey: getAnonKey2(),
+        serviceRoleKey: getServiceRoleKey2(),
+        createServiceClient: ({ baseUrl: baseUrl2, anonKey, edgeFunctionToken }) => createClient({
+          baseUrl: baseUrl2,
+          anonKey,
+          edgeFunctionToken
+        })
+      });
+    }
     module2.exports = {
-      getBearerToken: getBearerToken2,
-      getAccessContext,
-      getEdgeClientAndUserId: getEdgeClientAndUserId2,
-      getEdgeClientAndUserIdFast,
-      isProjectAdminBearer,
-      verifyUserJwtHs256
+      resolvePublicView,
+      isPublicShareToken: publicSharingCore.isPublicShareToken
     };
-    function getClaimedJwtUser({ token }) {
-      const header = decodeJwtHeader(token);
-      if (!header || header.alg !== "HS256") {
-        return { ok: false, userId: null, code: "invalid_jwt" };
-      }
-      const payload = decodeJwtPayload(token);
-      if (!payload || isJwtExpired(payload)) {
-        return { ok: false, userId: null, code: "invalid_jwt" };
-      }
-      const userId = typeof payload.sub === "string" ? payload.sub : null;
-      if (!userId) return { ok: false, userId: null, code: "invalid_jwt" };
-      return { ok: true, userId, code: null };
+  }
+});
+
+// insforge-src/shared/auth.js
+var require_auth = __commonJS({
+  "insforge-src/shared/auth.js"(exports2, module2) {
+    "use strict";
+    require_auth_core();
+    var { getAnonKey: getAnonKey2, getJwtSecret } = require_env();
+    var { resolvePublicView, isPublicShareToken } = require_public_view();
+    var authCore = globalThis.__vibeusageAuthCore;
+    if (!authCore) throw new Error("auth core not initialized");
+    module2.exports = {
+      getBearerToken: authCore.getBearerToken,
+      getAccessContext: ({ baseUrl, bearer, allowPublic = false }) => authCore.getAccessContext({
+        baseUrl,
+        bearer,
+        allowPublic,
+        jwtSecret: getJwtSecret(),
+        createUserEdgeClient: ({ baseUrl: baseUrl2, bearer: bearer2 }) => createClient({
+          baseUrl: baseUrl2,
+          anonKey: getAnonKey2() || void 0,
+          edgeFunctionToken: bearer2
+        }),
+        isPublicShareToken,
+        resolvePublicView
+      }),
+      getEdgeClientAndUserId: ({ baseUrl, bearer }) => authCore.getEdgeClientAndUserId({
+        baseUrl,
+        bearer,
+        jwtSecret: getJwtSecret(),
+        createUserEdgeClient: ({ baseUrl: baseUrl2, bearer: bearer2 }) => createClient({
+          baseUrl: baseUrl2,
+          anonKey: getAnonKey2() || void 0,
+          edgeFunctionToken: bearer2
+        })
+      }),
+      getEdgeClientAndUserIdFast: ({ baseUrl, bearer }) => authCore.getEdgeClientAndUserIdFast({
+        baseUrl,
+        bearer,
+        jwtSecret: getJwtSecret(),
+        createUserEdgeClient: ({ baseUrl: baseUrl2, bearer: bearer2 }) => createClient({
+          baseUrl: baseUrl2,
+          anonKey: getAnonKey2() || void 0,
+          edgeFunctionToken: bearer2
+        })
+      }),
+      isProjectAdminBearer: authCore.isProjectAdminBearer,
+      verifyUserJwtHs256: ({ token }) => authCore.verifyUserJwtHs256({ token, jwtSecret: getJwtSecret() })
+    };
+  }
+});
+
+// insforge-src/shared/crypto-core.js
+var require_crypto_core = __commonJS({
+  "insforge-src/shared/crypto-core.js"() {
+    "use strict";
+    var CORE_KEY = "__vibeusageCryptoCore";
+    async function sha256Hex2(input) {
+      const data = new TextEncoder().encode(String(input ?? ""));
+      const hash = await crypto.subtle.digest("SHA-256", data);
+      return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    }
+    if (!globalThis[CORE_KEY]) {
+      Object.defineProperty(globalThis, CORE_KEY, {
+        value: {
+          sha256Hex: sha256Hex2
+        },
+        configurable: true,
+        enumerable: false,
+        writable: false
+      });
     }
   }
 });
@@ -556,13 +1318,11 @@ var require_auth = __commonJS({
 var require_crypto = __commonJS({
   "insforge-src/shared/crypto.js"(exports2, module2) {
     "use strict";
-    async function sha256Hex2(input) {
-      const data = new TextEncoder().encode(input);
-      const hash = await crypto.subtle.digest("SHA-256", data);
-      return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
-    }
+    require_crypto_core();
+    var cryptoCore = globalThis.__vibeusageCryptoCore;
+    if (!cryptoCore) throw new Error("crypto core not initialized");
     module2.exports = {
-      sha256Hex: sha256Hex2
+      sha256Hex: cryptoCore.sha256Hex
     };
   }
 });
