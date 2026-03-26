@@ -236,6 +236,7 @@ export function useUsageData({
       setFetchedAt(null);
       return;
     }
+    setLoading(true);
     if (!cacheAllowed) {
       clearCache();
       setDaily([]);
@@ -260,6 +261,7 @@ export function useUsageData({
         setDaily(filledDaily);
         setSource("cache");
         setFetchedAt(cached.fetchedAt || null);
+        setError(null);
       } else {
         setDaily([]);
         setSummary(null);

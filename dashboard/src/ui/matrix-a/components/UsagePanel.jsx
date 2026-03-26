@@ -52,6 +52,7 @@ export const UsagePanel = React.memo(function UsagePanel({
   const toggleLabel = breakdownCollapsed ? expandLabel : collapseLabel;
   const toggleAriaLabel = breakdownCollapsed ? expandAriaLabel : collapseAriaLabel;
   const showBreakdownToggle = Boolean(onToggleBreakdown && toggleLabel);
+  const showSummaryLoadingPlaceholder = loading && (!summaryValue || summaryValue === "—");
   const costLabelText = typeof costInfoIcon === "string" ? costInfoIcon : "";
   const costLabelMatch = costLabelText.match(/^\[\s*(.+?)\s*\]$/);
   const costLabelCore = costLabelMatch ? costLabelMatch[1] : null;
@@ -141,7 +142,16 @@ export const UsagePanel = React.memo(function UsagePanel({
           <div className="text-center relative">
             <div className="text-heading text-matrix-muted mb-2">{summaryLabel}</div>
             <div className="text-5xl md:text-8xl font-black text-white tracking-[-0.06em] tabular-nums leading-none glow-text select-none -translate-y-[5px]">
-              {summaryValue && summaryValue !== "—" ? (
+              {showSummaryLoadingPlaceholder ? (
+                <span
+                  className="inline-flex h-12 w-24 items-center justify-center border border-matrix-ghost bg-matrix-panelStrong md:h-20 md:w-40"
+                  data-testid="usage-summary-loading"
+                  aria-label={copy("usage.button.loading")}
+                >
+                  <span className="sr-only">{copy("usage.button.loading")}</span>
+                  <span className="h-3 w-12 bg-matrix-bright/70 md:h-4 md:w-20" />
+                </span>
+              ) : summaryValue && summaryValue !== "—" ? (
                 <span className="relative inline-block leading-none">
                   {summaryAnimate ? (
                     <ScrambleText
