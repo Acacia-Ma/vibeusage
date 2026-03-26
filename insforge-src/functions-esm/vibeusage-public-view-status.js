@@ -1,14 +1,9 @@
-// Edge function: vibeusage-public-view-status
-// Returns whether the authenticated user has an active public dashboard share token.
+import { getBearerToken, getEdgeClientAndUserId } from "./shared/auth.js";
+import { getBaseUrl } from "./shared/env.js";
+import { handleOptions, json } from "./shared/http.js";
+import { withRequestLogging } from "./shared/logging.js";
 
-"use strict";
-
-const { handleOptions, json } = require("../shared/http");
-const { getBearerToken, getEdgeClientAndUserId } = require("../shared/auth");
-const { getBaseUrl } = require("../shared/env");
-const { withRequestLogging } = require("../shared/logging");
-
-module.exports = withRequestLogging("vibeusage-public-view-status", async function (request) {
+export default withRequestLogging("vibeusage-public-view-status", async function (request) {
   const opt = handleOptions(request);
   if (opt) return opt;
 
@@ -17,8 +12,7 @@ module.exports = withRequestLogging("vibeusage-public-view-status", async functi
   const bearer = getBearerToken(request.headers.get("Authorization"));
   if (!bearer) return json({ error: "Missing bearer token" }, 401);
 
-  const baseUrl = getBaseUrl();
-  const auth = await getEdgeClientAndUserId({ baseUrl, bearer });
+  const auth = await getEdgeClientAndUserId({ baseUrl: getBaseUrl(), bearer });
   if (!auth.ok) return json({ error: auth.error || "Unauthorized" }, auth.status || 401);
 
   const { data: settings, error: settingsErr } = await auth.edgeClient.database
@@ -37,7 +31,5 @@ module.exports = withRequestLogging("vibeusage-public-view-status", async functi
     .maybeSingle();
 
   if (error) return json({ error: "Failed to fetch public view status" }, 500);
-
-  const enabled = Boolean(data && !data.revoked_at);
-  return json({ enabled }, 200);
+  return json({ enabled: Boolean(data && !data.revoked_at) }, 200);
 });

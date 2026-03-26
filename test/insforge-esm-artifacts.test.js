@@ -5,6 +5,11 @@ const { test } = require("node:test");
 
 const ROOT = process.cwd();
 const FUNCTION_SLUGS = [
+  "vibeusage-debug-auth",
+  "vibeusage-leaderboard-settings",
+  "vibeusage-public-view-issue",
+  "vibeusage-public-view-revoke",
+  "vibeusage-public-view-status",
   "vibeusage-usage-daily",
   "vibeusage-link-code-init",
   "vibeusage-public-visibility",
@@ -17,7 +22,7 @@ function readFile(relPath) {
   return fs.readFileSync(path.join(ROOT, relPath), "utf8");
 }
 
-test("migrated authed functions use esm sources", () => {
+test("migrated edge functions use esm sources", () => {
   const loaderSrc = readFile("scripts/lib/load-edge-function.cjs");
   for (const slug of FUNCTION_SLUGS) {
     assert.match(
@@ -27,7 +32,7 @@ test("migrated authed functions use esm sources", () => {
   }
 });
 
-test("migrated authed function artifacts do not include CommonJS wrappers", () => {
+test("migrated edge function artifacts do not include CommonJS wrappers", () => {
   for (const slug of FUNCTION_SLUGS) {
     const artifact = readFile(`insforge-functions/${slug}.js`);
     assert.doesNotMatch(artifact, /__commonJS/);

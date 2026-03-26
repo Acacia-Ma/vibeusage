@@ -62,8 +62,8 @@ test("share html includes app entry script", () => {
 });
 
 test("legacy public view edge functions are retired", () => {
-  const issueSrc = read("insforge-src/functions/vibeusage-public-view-issue.js");
-  const revokeSrc = read("insforge-src/functions/vibeusage-public-view-revoke.js");
+  const issueSrc = read("insforge-src/functions-esm/vibeusage-public-view-issue.js");
+  const revokeSrc = read("insforge-src/functions-esm/vibeusage-public-view-revoke.js");
   assert.match(issueSrc, /retired/i);
   assert.match(revokeSrc, /retired/i);
 });

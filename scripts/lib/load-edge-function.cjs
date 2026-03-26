@@ -4,11 +4,19 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
 const MIGRATED_FUNCTION_SOURCES = new Map([
+  ["vibeusage-debug-auth", "insforge-src/functions-esm/vibeusage-debug-auth.js"],
   ["vibeusage-link-code-init", "insforge-src/functions-esm/vibeusage-link-code-init.js"],
   ["vibeusage-leaderboard", "insforge-src/functions-esm/vibeusage-leaderboard.js"],
   ["vibeusage-leaderboard-refresh", "insforge-src/functions-esm/vibeusage-leaderboard-refresh.js"],
+  [
+    "vibeusage-leaderboard-settings",
+    "insforge-src/functions-esm/vibeusage-leaderboard-settings.js",
+  ],
   ["vibeusage-public-visibility", "insforge-src/functions-esm/vibeusage-public-visibility.js"],
+  ["vibeusage-public-view-issue", "insforge-src/functions-esm/vibeusage-public-view-issue.js"],
   ["vibeusage-public-view-profile", "insforge-src/functions-esm/vibeusage-public-view-profile.js"],
+  ["vibeusage-public-view-revoke", "insforge-src/functions-esm/vibeusage-public-view-revoke.js"],
+  ["vibeusage-public-view-status", "insforge-src/functions-esm/vibeusage-public-view-status.js"],
   ["vibeusage-usage-daily", "insforge-src/functions-esm/vibeusage-usage-daily.js"],
   ["vibeusage-usage-hourly", "insforge-src/functions-esm/vibeusage-usage-hourly.js"],
   ["vibeusage-usage-monthly", "insforge-src/functions-esm/vibeusage-usage-monthly.js"],

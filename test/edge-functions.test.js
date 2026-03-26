@@ -316,7 +316,7 @@ test("getEdgeClientAndUserIdFast rejects malformed jwt claims when jwt secret mi
 });
 
 test("vibeusage-debug-auth accepts locally verified jwt", async () => {
-  const fn = require("../insforge-functions/vibeusage-debug-auth");
+  const fn = await loadEdgeFunction("vibeusage-debug-auth");
   const userId = "33333333-3333-3333-3333-333333333333";
   const userJwt = createUserJwt(userId);
   globalThis.createClient = () => {
@@ -335,6 +335,78 @@ test("vibeusage-debug-auth accepts locally verified jwt", async () => {
   assert.equal(body.hasBearer, true);
   assert.equal(body.authOk, true);
   assert.equal(body.userId, userId);
+});
+
+test("vibeusage-public-view-status rejects missing bearer token", async () => {
+  setDenoEnv({ INSFORGE_INTERNAL_URL: BASE_URL, INSFORGE_ANON_KEY: ANON_KEY });
+  const fn = await loadEdgeFunction("vibeusage-public-view-status");
+
+  const res = await fn(new Request("http://localhost/functions/vibeusage-public-view-status", { method: "GET" }));
+  assert.equal(res.status, 401);
+  const body = await res.json();
+  assert.equal(body.error, "Missing bearer token");
+});
+
+test("vibeusage-public-view-status returns disabled when public visibility is off", async () => {
+  setDenoEnv({ INSFORGE_INTERNAL_URL: BASE_URL, INSFORGE_ANON_KEY: ANON_KEY });
+  const userId = "44444444-4444-4444-4444-444444444444";
+  const userJwt = createUserJwt(userId);
+  const fn = await loadEdgeFunction("vibeusage-public-view-status");
+
+  globalThis.createClient = (args) => {
+    assert.equal(args?.baseUrl, BASE_URL);
+    assert.equal(args?.anonKey, ANON_KEY);
+    assert.equal(args?.edgeFunctionToken, userJwt);
+    return {
+      database: {
+        from(table) {
+          if (table === "vibeusage_user_settings") {
+            return {
+              select() {
+                return {
+                  eq() {
+                    return {
+                      maybeSingle: async () => ({
+                        data: { leaderboard_public: false },
+                        error: null,
+                      }),
+                    };
+                  },
+                };
+              },
+            };
+          }
+          throw new Error(`Unexpected table: ${table}`);
+        },
+      },
+    };
+  };
+
+  const res = await fn(
+    new Request("http://localhost/functions/vibeusage-public-view-status", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${userJwt}` },
+    }),
+  );
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.deepEqual(body, { enabled: false });
+});
+
+test("vibeusage-public-view issue and revoke endpoints stay retired", async () => {
+  const issueFn = await loadEdgeFunction("vibeusage-public-view-issue");
+  const revokeFn = await loadEdgeFunction("vibeusage-public-view-revoke");
+  const cases = [
+    [issueFn, "vibeusage-public-view-issue"],
+    [revokeFn, "vibeusage-public-view-revoke"],
+  ];
+
+  for (const [fn, slug] of cases) {
+    const res = await fn(new Request(`http://localhost/functions/${slug}`, { method: "GET" }));
+    assert.equal(res.status, 410);
+    const body = await res.json();
+    assert.equal(body.error, "Endpoint retired");
+  }
 });
 
 function createServiceDbMock() {
@@ -8214,7 +8286,7 @@ test("vibeusage-leaderboard-refresh snapshots weekly leaderboard with token fiel
 });
 
 test("vibeusage-leaderboard-settings is retired on GET and POST", async () => {
-  const fn = require("../insforge-functions/vibeusage-leaderboard-settings");
+  const fn = await loadEdgeFunction("vibeusage-leaderboard-settings");
 
   const cases = [
     new Request("http://localhost/functions/vibeusage-leaderboard-settings", {
