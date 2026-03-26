@@ -2606,12 +2606,32 @@ async function resolveUsageFilterRequestContext({ edgeClient, model, effectiveDa
     aliasTimeline: filterContext.aliasTimeline
   };
 }
+async function resolveUsageFilterRequestSnapshot({ url, edgeClient, effectiveDate } = {}) {
+  const requestParams = resolveUsageFilterRequestParams({ url });
+  if (!requestParams?.ok) return requestParams;
+  const filterContext = await resolveUsageFilterRequestContext({
+    edgeClient,
+    model: requestParams.model,
+    effectiveDate
+  });
+  return {
+    ok: true,
+    source: requestParams.source,
+    model: requestParams.model,
+    hasModelParam: requestParams.hasModelParam,
+    canonicalModel: filterContext.canonicalModel,
+    usageModels: filterContext.usageModels,
+    hasModelFilter: filterContext.hasModelFilter,
+    aliasTimeline: filterContext.aliasTimeline
+  };
+}
 if (!globalThis[CORE_KEY17]) {
   Object.defineProperty(globalThis, CORE_KEY17, {
     value: {
       resolveUsageModelRequestParams,
       resolveUsageFilterRequestParams,
-      resolveUsageFilterRequestContext
+      resolveUsageFilterRequestContext,
+      resolveUsageFilterRequestSnapshot
     },
     configurable: true,
     enumerable: false,
@@ -2633,29 +2653,28 @@ async function resolveAggregateUsageRequestContext({
 } = {}) {
   const rangeContext = usageRangeRequestCore.resolveUsageRangeRequestContext({ url, tzContext });
   if (!rangeContext?.ok) return rangeContext;
-  const modelParams = usageFilterRequestCore.resolveUsageModelRequestParams({ url });
-  if (!modelParams?.ok) return modelParams;
   const { from, to, dayKeys, startIso, endIso } = rangeContext;
-  const filterContext = await usageFilterRequestCore.resolveUsageFilterRequestContext({
+  const filterSnapshot = await usageFilterRequestCore.resolveUsageFilterRequestSnapshot({
+    url,
     edgeClient,
-    model: modelParams.model,
     effectiveDate: to
   });
+  if (!filterSnapshot?.ok) return filterSnapshot;
   return {
     ok: true,
     auth,
-    source: rangeContext.source,
-    model: modelParams.model,
-    hasModelParam: modelParams.hasModelParam,
+    source: filterSnapshot.source,
+    model: filterSnapshot.model,
+    hasModelParam: filterSnapshot.hasModelParam,
     from,
     to,
     dayKeys,
     startIso,
     endIso,
-    canonicalModel: filterContext.canonicalModel,
-    usageModels: filterContext.usageModels,
-    hasModelFilter: filterContext.hasModelFilter,
-    aliasTimeline: filterContext.aliasTimeline
+    canonicalModel: filterSnapshot.canonicalModel,
+    usageModels: filterSnapshot.usageModels,
+    hasModelFilter: filterSnapshot.hasModelFilter,
+    aliasTimeline: filterSnapshot.aliasTimeline
   };
 }
 if (!globalThis[CORE_KEY18]) {

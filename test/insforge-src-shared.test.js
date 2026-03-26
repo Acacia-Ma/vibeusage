@@ -1154,6 +1154,29 @@ test("usage filter request core resolves source/model params and filter context"
       effective_from: "2025-02-01",
     },
   ]);
+
+  const snapshot = await usageFilterRequest.resolveUsageFilterRequestSnapshot({
+    url: new URL(
+      "https://example.com/functions/v1/vibeusage-usage-monthly?source=openrouter&model=gpt-foo",
+    ),
+    edgeClient,
+    effectiveDate: "2025-02-16",
+  });
+
+  assert.equal(snapshot.ok, true);
+  assert.equal(snapshot.source, "openrouter");
+  assert.equal(snapshot.model, "gpt-foo");
+  assert.equal(snapshot.hasModelParam, true);
+  assert.equal(snapshot.canonicalModel, "gpt-foo");
+  assert.deepEqual(snapshot.usageModels, ["gpt-foo"]);
+  assert.equal(snapshot.hasModelFilter, true);
+  assert.deepEqual(snapshot.aliasTimeline.get("gpt-foo"), [
+    {
+      model_id: "alpha",
+      model: "Alpha",
+      effective_from: "2025-02-01",
+    },
+  ]);
 });
 
 test("usage row collector core scans hourly rows through shared normalization and filtering", async () => {

@@ -11,4 +11,5 @@ module.exports = {
   resolveUsageModelRequestParams: usageFilterRequestCore.resolveUsageModelRequestParams,
   resolveUsageFilterRequestParams: usageFilterRequestCore.resolveUsageFilterRequestParams,
   resolveUsageFilterRequestContext: usageFilterRequestCore.resolveUsageFilterRequestContext,
+  resolveUsageFilterRequestSnapshot: usageFilterRequestCore.resolveUsageFilterRequestSnapshot,
 };

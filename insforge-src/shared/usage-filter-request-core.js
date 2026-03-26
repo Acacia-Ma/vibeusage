@@ -55,12 +55,35 @@ async function resolveUsageFilterRequestContext({ edgeClient, model, effectiveDa
   };
 }
 
+async function resolveUsageFilterRequestSnapshot({ url, edgeClient, effectiveDate } = {}) {
+  const requestParams = resolveUsageFilterRequestParams({ url });
+  if (!requestParams?.ok) return requestParams;
+
+  const filterContext = await resolveUsageFilterRequestContext({
+    edgeClient,
+    model: requestParams.model,
+    effectiveDate,
+  });
+
+  return {
+    ok: true,
+    source: requestParams.source,
+    model: requestParams.model,
+    hasModelParam: requestParams.hasModelParam,
+    canonicalModel: filterContext.canonicalModel,
+    usageModels: filterContext.usageModels,
+    hasModelFilter: filterContext.hasModelFilter,
+    aliasTimeline: filterContext.aliasTimeline,
+  };
+}
+
 if (!globalThis[CORE_KEY]) {
   Object.defineProperty(globalThis, CORE_KEY, {
     value: {
       resolveUsageModelRequestParams,
       resolveUsageFilterRequestParams,
       resolveUsageFilterRequestContext,
+      resolveUsageFilterRequestSnapshot,
     },
     configurable: true,
     enumerable: false,

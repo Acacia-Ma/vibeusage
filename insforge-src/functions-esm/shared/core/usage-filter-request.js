@@ -11,3 +11,5 @@ export const resolveUsageModelRequestParams =
   usageFilterRequestCore.resolveUsageModelRequestParams;
 export const resolveUsageFilterRequestContext =
   usageFilterRequestCore.resolveUsageFilterRequestContext;
+export const resolveUsageFilterRequestSnapshot =
+  usageFilterRequestCore.resolveUsageFilterRequestSnapshot;

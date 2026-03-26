@@ -17,31 +17,29 @@ async function resolveAggregateUsageRequestContext({
   const rangeContext = usageRangeRequestCore.resolveUsageRangeRequestContext({ url, tzContext });
   if (!rangeContext?.ok) return rangeContext;
 
-  const modelParams = usageFilterRequestCore.resolveUsageModelRequestParams({ url });
-  if (!modelParams?.ok) return modelParams;
-
   const { from, to, dayKeys, startIso, endIso } = rangeContext;
-  const filterContext = await usageFilterRequestCore.resolveUsageFilterRequestContext({
+  const filterSnapshot = await usageFilterRequestCore.resolveUsageFilterRequestSnapshot({
+    url,
     edgeClient,
-    model: modelParams.model,
     effectiveDate: to,
   });
+  if (!filterSnapshot?.ok) return filterSnapshot;
 
   return {
     ok: true,
     auth,
-    source: rangeContext.source,
-    model: modelParams.model,
-    hasModelParam: modelParams.hasModelParam,
+    source: filterSnapshot.source,
+    model: filterSnapshot.model,
+    hasModelParam: filterSnapshot.hasModelParam,
     from,
     to,
     dayKeys,
     startIso,
     endIso,
-    canonicalModel: filterContext.canonicalModel,
-    usageModels: filterContext.usageModels,
-    hasModelFilter: filterContext.hasModelFilter,
-    aliasTimeline: filterContext.aliasTimeline,
+    canonicalModel: filterSnapshot.canonicalModel,
+    usageModels: filterSnapshot.usageModels,
+    hasModelFilter: filterSnapshot.hasModelFilter,
+    aliasTimeline: filterSnapshot.aliasTimeline,
   };
 }
 

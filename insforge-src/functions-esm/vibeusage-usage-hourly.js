@@ -9,8 +9,7 @@ import {
   resolveUsageHourlyRowSlot,
 } from "./shared/core/usage-hourly.js";
 import {
-  resolveUsageFilterRequestContext,
-  resolveUsageFilterRequestParams,
+  resolveUsageFilterRequestSnapshot,
 } from "./shared/core/usage-filter-request.js";
 import { collectHourlyUsageRows } from "./shared/core/usage-row-collector.js";
 import { createUsageJsonResponder } from "./shared/core/usage-response.js";
@@ -50,9 +49,16 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
     return respond({ error: requestContext.error }, requestContext.status || 400, 0);
   }
   const { timeMode, dayKey, startUtc, endUtc, startIso, endIso } = requestContext;
-  const requestParams = resolveUsageFilterRequestParams({ url });
-  if (!requestParams.ok) return respond({ error: requestParams.error }, requestParams.status || 400, 0);
-  const { source, model } = requestParams;
+  const filterSnapshot = await resolveUsageFilterRequestSnapshot({
+    url,
+    edgeClient: auth.edgeClient,
+    effectiveDate: dayKey,
+  });
+  if (!filterSnapshot.ok) {
+    return respond({ error: filterSnapshot.error }, filterSnapshot.status || 400, 0);
+  }
+  const { source, model, canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
+    filterSnapshot;
 
   const { hourKeys, buckets, bucketMap } = createHourlyBuckets(dayKey);
   const syncMeta = await getSyncMeta({
@@ -62,13 +68,6 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
     endUtc,
     tzContext,
   });
-
-  const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
-    await resolveUsageFilterRequestContext({
-      edgeClient: auth.edgeClient,
-      model,
-      effectiveDate: dayKey,
-    });
 
   if (timeMode === "utc") {
     const aggregateStartMs = Date.now();

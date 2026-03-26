@@ -1072,12 +1072,32 @@ async function resolveUsageFilterRequestContext({ edgeClient, model, effectiveDa
     aliasTimeline: filterContext.aliasTimeline
   };
 }
+async function resolveUsageFilterRequestSnapshot({ url, edgeClient, effectiveDate } = {}) {
+  const requestParams = resolveUsageFilterRequestParams({ url });
+  if (!requestParams?.ok) return requestParams;
+  const filterContext = await resolveUsageFilterRequestContext({
+    edgeClient,
+    model: requestParams.model,
+    effectiveDate
+  });
+  return {
+    ok: true,
+    source: requestParams.source,
+    model: requestParams.model,
+    hasModelParam: requestParams.hasModelParam,
+    canonicalModel: filterContext.canonicalModel,
+    usageModels: filterContext.usageModels,
+    hasModelFilter: filterContext.hasModelFilter,
+    aliasTimeline: filterContext.aliasTimeline
+  };
+}
 if (!globalThis[CORE_KEY6]) {
   Object.defineProperty(globalThis, CORE_KEY6, {
     value: {
       resolveUsageModelRequestParams,
       resolveUsageFilterRequestParams,
-      resolveUsageFilterRequestContext
+      resolveUsageFilterRequestContext,
+      resolveUsageFilterRequestSnapshot
     },
     configurable: true,
     enumerable: false,
@@ -1093,6 +1113,7 @@ if (!usageFilterRequestCore) {
 var resolveUsageFilterRequestParams2 = usageFilterRequestCore.resolveUsageFilterRequestParams;
 var resolveUsageModelRequestParams2 = usageFilterRequestCore.resolveUsageModelRequestParams;
 var resolveUsageFilterRequestContext2 = usageFilterRequestCore.resolveUsageFilterRequestContext;
+var resolveUsageFilterRequestSnapshot2 = usageFilterRequestCore.resolveUsageFilterRequestSnapshot;
 
 // insforge-src/shared/canary-core.mjs
 var CORE_KEY7 = "__vibeusageCanaryCore";
@@ -2271,9 +2292,6 @@ var vibeusage_usage_monthly_default = withRequestLogging2("vibeusage-usage-month
   const auth = await getAccessContext2({ baseUrl: getBaseUrl2(), bearer, allowPublic: true });
   if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
   const tzContext = getUsageTimeZoneContext2(url);
-  const requestParams = resolveUsageFilterRequestParams2({ url });
-  if (!requestParams.ok) return respond({ error: requestParams.error }, requestParams.status || 400, 0);
-  const { source, model } = requestParams;
   const monthsRaw = url.searchParams.get("months");
   const monthsParsed = toPositiveIntOrNull2(monthsRaw);
   const months = monthsParsed == null ? MAX_MONTHS : monthsParsed;
@@ -2296,11 +2314,15 @@ var vibeusage_usage_monthly_default = withRequestLogging2("vibeusage-usage-month
   const endUtc = localDatePartsToUtc2(addDatePartsDays2(toParts, 1), tzContext);
   const startIso = startUtc.toISOString();
   const endIso = endUtc.toISOString();
-  const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } = await resolveUsageFilterRequestContext2({
+  const filterSnapshot = await resolveUsageFilterRequestSnapshot2({
+    url,
     edgeClient: auth.edgeClient,
-    model,
     effectiveDate: to
   });
+  if (!filterSnapshot.ok) {
+    return respond({ error: filterSnapshot.error }, filterSnapshot.status || 400, 0);
+  }
+  const { source, canonicalModel, usageModels, hasModelFilter, aliasTimeline } = filterSnapshot;
   const { monthKeys, buckets } = initMonthlyBuckets2({ startMonthParts, months });
   const queryStartMs = Date.now();
   let rowCount = 0;

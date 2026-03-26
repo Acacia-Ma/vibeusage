@@ -5,8 +5,7 @@ import {
   resolveUsageHeatmapRequestContext,
 } from "./shared/core/usage-heatmap.js";
 import {
-  resolveUsageFilterRequestContext,
-  resolveUsageFilterRequestParams,
+  resolveUsageFilterRequestSnapshot,
 } from "./shared/core/usage-filter-request.js";
 import { collectHourlyUsageRows } from "./shared/core/usage-row-collector.js";
 import { createUsageJsonResponder } from "./shared/core/usage-response.js";
@@ -32,10 +31,6 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
   if (!bearer) return respond({ error: "Missing bearer token" }, 401, 0);
 
   const tzContext = getUsageTimeZoneContext(url);
-  const requestParams = resolveUsageFilterRequestParams({ url });
-  if (!requestParams.ok) return respond({ error: requestParams.error }, requestParams.status || 400, 0);
-  const { source, model } = requestParams;
-
   const requestContext = resolveUsageHeatmapRequestContext({ url, tzContext });
   if (!requestContext.ok) {
     return respond({ error: requestContext.error }, requestContext.status || 400, 0);
@@ -46,12 +41,15 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
   const auth = await getAccessContext({ baseUrl: getBaseUrl(), bearer, allowPublic: true });
   if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
 
-  const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
-    await resolveUsageFilterRequestContext({
-      edgeClient: auth.edgeClient,
-      model,
-      effectiveDate: to,
-    });
+  const filterSnapshot = await resolveUsageFilterRequestSnapshot({
+    url,
+    edgeClient: auth.edgeClient,
+    effectiveDate: to,
+  });
+  if (!filterSnapshot.ok) {
+    return respond({ error: filterSnapshot.error }, filterSnapshot.status || 400, 0);
+  }
+  const { source, canonicalModel, usageModels, hasModelFilter, aliasTimeline } = filterSnapshot;
 
   const valuesByDay = new Map();
   const queryStartMs = Date.now();

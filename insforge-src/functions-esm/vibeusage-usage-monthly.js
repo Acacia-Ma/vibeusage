@@ -1,7 +1,6 @@
 import { getAccessContext, getBearerToken } from "./shared/auth.js";
 import {
-  resolveUsageFilterRequestContext,
-  resolveUsageFilterRequestParams,
+  resolveUsageFilterRequestSnapshot,
 } from "./shared/core/usage-filter-request.js";
 import { forEachHourlyUsagePage } from "./shared/db/usage-hourly.js";
 import { initMonthlyBuckets, ingestMonthlyRow } from "./shared/core/usage-monthly.js";
@@ -41,9 +40,6 @@ export default withRequestLogging("vibeusage-usage-monthly", async function (req
   if (!auth.ok) return respond({ error: auth.error || "Unauthorized" }, auth.status || 401, 0);
 
   const tzContext = getUsageTimeZoneContext(url);
-  const requestParams = resolveUsageFilterRequestParams({ url });
-  if (!requestParams.ok) return respond({ error: requestParams.error }, requestParams.status || 400, 0);
-  const { source, model } = requestParams;
 
   const monthsRaw = url.searchParams.get("months");
   const monthsParsed = toPositiveIntOrNull(monthsRaw);
@@ -73,12 +69,15 @@ export default withRequestLogging("vibeusage-usage-monthly", async function (req
   const startIso = startUtc.toISOString();
   const endIso = endUtc.toISOString();
 
-  const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } =
-    await resolveUsageFilterRequestContext({
-      edgeClient: auth.edgeClient,
-      model,
-      effectiveDate: to,
-    });
+  const filterSnapshot = await resolveUsageFilterRequestSnapshot({
+    url,
+    edgeClient: auth.edgeClient,
+    effectiveDate: to,
+  });
+  if (!filterSnapshot.ok) {
+    return respond({ error: filterSnapshot.error }, filterSnapshot.status || 400, 0);
+  }
+  const { source, canonicalModel, usageModels, hasModelFilter, aliasTimeline } = filterSnapshot;
 
   const { monthKeys, buckets } = initMonthlyBuckets({ startMonthParts, months });
   const queryStartMs = Date.now();

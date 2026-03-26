@@ -1780,12 +1780,32 @@ async function resolveUsageFilterRequestContext({ edgeClient, model, effectiveDa
     aliasTimeline: filterContext.aliasTimeline
   };
 }
+async function resolveUsageFilterRequestSnapshot({ url, edgeClient, effectiveDate } = {}) {
+  const requestParams = resolveUsageFilterRequestParams({ url });
+  if (!requestParams?.ok) return requestParams;
+  const filterContext = await resolveUsageFilterRequestContext({
+    edgeClient,
+    model: requestParams.model,
+    effectiveDate
+  });
+  return {
+    ok: true,
+    source: requestParams.source,
+    model: requestParams.model,
+    hasModelParam: requestParams.hasModelParam,
+    canonicalModel: filterContext.canonicalModel,
+    usageModels: filterContext.usageModels,
+    hasModelFilter: filterContext.hasModelFilter,
+    aliasTimeline: filterContext.aliasTimeline
+  };
+}
 if (!globalThis[CORE_KEY10]) {
   Object.defineProperty(globalThis, CORE_KEY10, {
     value: {
       resolveUsageModelRequestParams,
       resolveUsageFilterRequestParams,
-      resolveUsageFilterRequestContext
+      resolveUsageFilterRequestContext,
+      resolveUsageFilterRequestSnapshot
     },
     configurable: true,
     enumerable: false,
@@ -1801,6 +1821,7 @@ if (!usageFilterRequestCore) {
 var resolveUsageFilterRequestParams2 = usageFilterRequestCore.resolveUsageFilterRequestParams;
 var resolveUsageModelRequestParams2 = usageFilterRequestCore.resolveUsageModelRequestParams;
 var resolveUsageFilterRequestContext2 = usageFilterRequestCore.resolveUsageFilterRequestContext;
+var resolveUsageFilterRequestSnapshot2 = usageFilterRequestCore.resolveUsageFilterRequestSnapshot;
 
 // insforge-src/shared/pagination-core.mjs
 var CORE_KEY11 = "__vibeusagePaginationCore";
@@ -2451,9 +2472,15 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
     return respond({ error: requestContext.error }, requestContext.status || 400, 0);
   }
   const { timeMode, dayKey, startUtc, endUtc, startIso, endIso } = requestContext;
-  const requestParams = resolveUsageFilterRequestParams2({ url });
-  if (!requestParams.ok) return respond({ error: requestParams.error }, requestParams.status || 400, 0);
-  const { source, model } = requestParams;
+  const filterSnapshot = await resolveUsageFilterRequestSnapshot2({
+    url,
+    edgeClient: auth.edgeClient,
+    effectiveDate: dayKey
+  });
+  if (!filterSnapshot.ok) {
+    return respond({ error: filterSnapshot.error }, filterSnapshot.status || 400, 0);
+  }
+  const { source, model, canonicalModel, usageModels, hasModelFilter, aliasTimeline } = filterSnapshot;
   const { hourKeys, buckets, bucketMap } = createHourlyBuckets2(dayKey);
   const syncMeta = await getSyncMeta({
     edgeClient: auth.edgeClient,
@@ -2461,11 +2488,6 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
     startUtc,
     endUtc,
     tzContext
-  });
-  const { canonicalModel, usageModels, hasModelFilter, aliasTimeline } = await resolveUsageFilterRequestContext2({
-    edgeClient: auth.edgeClient,
-    model,
-    effectiveDate: dayKey
   });
   if (timeMode === "utc") {
     const aggregateStartMs = Date.now();
