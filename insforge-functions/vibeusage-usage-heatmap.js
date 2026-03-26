@@ -1900,8 +1900,128 @@ var resolveUsageModelRequestParams2 = usageFilterRequestCore.resolveUsageModelRe
 var resolveUsageFilterRequestContext2 = usageFilterRequestCore.resolveUsageFilterRequestContext;
 var resolveUsageFilterRequestSnapshot2 = usageFilterRequestCore.resolveUsageFilterRequestSnapshot;
 
+// insforge-src/shared/logging-core.mjs
+var CORE_KEY12 = "__vibeusageLoggingCore";
+var envCore4 = globalThis.__vibeusageEnvCore;
+if (!envCore4) throw new Error("env core not initialized");
+function createRequestId() {
+  if (globalThis?.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+function errorCodeFromStatus(status) {
+  if (typeof status !== "number") return "UNKNOWN_ERROR";
+  if (status >= 500) return "SERVER_ERROR";
+  if (status >= 400) return "CLIENT_ERROR";
+  return null;
+}
+function getResponseStatus(response) {
+  if (response && typeof response.status === "number") return response.status;
+  return null;
+}
+function resolveFunctionName(functionName, request) {
+  if (request && typeof request.url === "string") {
+    try {
+      const url = new URL(request.url);
+      const match = url.pathname.match(/\/functions\/([^/?#]+)/);
+      if (match && match[1]) return match[1];
+    } catch (_error) {
+    }
+  }
+  return functionName;
+}
+function createLogger({ functionName }) {
+  const requestId = createRequestId();
+  const startMs = Date.now();
+  let upstreamStatus = null;
+  let upstreamLatencyMs = null;
+  function recordUpstream(status, latencyMs) {
+    upstreamStatus = typeof status === "number" ? status : null;
+    upstreamLatencyMs = typeof latencyMs === "number" ? latencyMs : null;
+  }
+  async function fetchWithUpstream(url, init) {
+    const upstreamStart = Date.now();
+    try {
+      const res = await fetch(url, init);
+      recordUpstream(res.status, Date.now() - upstreamStart);
+      return res;
+    } catch (error) {
+      recordUpstream(null, Date.now() - upstreamStart);
+      throw error;
+    }
+  }
+  function log({ stage, status, errorCode, ...extra }) {
+    const payload = {
+      ...extra || {},
+      request_id: requestId,
+      function: functionName,
+      stage: stage || "response",
+      status: typeof status === "number" ? status : null,
+      latency_ms: Date.now() - startMs,
+      error_code: errorCode ?? errorCodeFromStatus(status),
+      upstream_status: upstreamStatus ?? null,
+      upstream_latency_ms: upstreamLatencyMs ?? null
+    };
+    console.log(JSON.stringify(payload));
+  }
+  return {
+    requestId,
+    log,
+    fetch: fetchWithUpstream
+  };
+}
+function withRequestLogging(functionName, handler) {
+  return async function(request) {
+    const resolvedName = resolveFunctionName(functionName, request);
+    const logger = createLogger({ functionName: resolvedName });
+    try {
+      const response = await handler(request, logger);
+      logger.log({ stage: "response", status: getResponseStatus(response) });
+      return response;
+    } catch (error) {
+      logger.log({ stage: "exception", status: 500, errorCode: "UNHANDLED_EXCEPTION" });
+      throw error;
+    }
+  };
+}
+function logSlowQuery(logger, fields) {
+  if (!logger || typeof logger.log !== "function") return;
+  const durationMs = Number(fields?.duration_ms ?? fields?.durationMs);
+  if (!Number.isFinite(durationMs)) return;
+  const thresholdMs = envCore4.getSlowQueryThresholdMs();
+  if (durationMs < thresholdMs) return;
+  logger.log({
+    stage: "slow_query",
+    status: 200,
+    ...fields || {},
+    duration_ms: Math.round(durationMs)
+  });
+}
+function getSlowQueryThresholdMs3() {
+  return envCore4.getSlowQueryThresholdMs();
+}
+if (!globalThis[CORE_KEY12]) {
+  Object.defineProperty(globalThis, CORE_KEY12, {
+    value: {
+      createLogger,
+      withRequestLogging,
+      logSlowQuery,
+      getSlowQueryThresholdMs: getSlowQueryThresholdMs3
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/logging.js
+var loggingCore = globalThis.__vibeusageLoggingCore;
+if (!loggingCore) throw new Error("logging core not initialized");
+var createLogger2 = loggingCore.createLogger;
+var withRequestLogging2 = loggingCore.withRequestLogging;
+var logSlowQuery2 = loggingCore.logSlowQuery;
+
 // insforge-src/shared/canary-core.mjs
-var CORE_KEY12 = "__vibeusageCanaryCore";
+var CORE_KEY13 = "__vibeusageCanaryCore";
 function isCanaryTag(value) {
   if (typeof value !== "string") return false;
   return value.trim().toLowerCase() === "canary";
@@ -1911,8 +2031,8 @@ function applyCanaryFilter(query, { source, model } = {}) {
   if (isCanaryTag(source) || isCanaryTag(model)) return query;
   return query.neq("source", "canary").neq("model", "canary");
 }
-if (!globalThis[CORE_KEY12]) {
-  Object.defineProperty(globalThis, CORE_KEY12, {
+if (!globalThis[CORE_KEY13]) {
+  Object.defineProperty(globalThis, CORE_KEY13, {
     value: {
       applyCanaryFilter,
       isCanaryTag
@@ -1924,7 +2044,7 @@ if (!globalThis[CORE_KEY12]) {
 }
 
 // insforge-src/shared/pagination-core.mjs
-var CORE_KEY13 = "__vibeusagePaginationCore";
+var CORE_KEY14 = "__vibeusagePaginationCore";
 var MAX_PAGE_SIZE = 1e3;
 function normalizePageSize(value) {
   const size = Number(value);
@@ -1958,8 +2078,8 @@ async function forEachPage({ createQuery, pageSize, onPage }) {
   }
   return { error: null };
 }
-if (!globalThis[CORE_KEY13]) {
-  Object.defineProperty(globalThis, CORE_KEY13, {
+if (!globalThis[CORE_KEY14]) {
+  Object.defineProperty(globalThis, CORE_KEY14, {
     value: {
       MAX_PAGE_SIZE,
       normalizePageSize,
@@ -1972,7 +2092,7 @@ if (!globalThis[CORE_KEY13]) {
 }
 
 // insforge-src/shared/usage-filter-core.mjs
-var CORE_KEY14 = "__vibeusageUsageFilterCore";
+var CORE_KEY15 = "__vibeusageUsageFilterCore";
 var usageModelCore3 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore3) throw new Error("usage-model core not initialized");
 var { extractDateKey: extractDateKey2, matchesCanonicalModelAtDate: matchesCanonicalModelAtDate2 } = usageModelCore3;
@@ -1986,8 +2106,8 @@ function shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimel
     timeline: aliasTimeline
   });
 }
-if (!globalThis[CORE_KEY14]) {
-  Object.defineProperty(globalThis, CORE_KEY14, {
+if (!globalThis[CORE_KEY15]) {
+  Object.defineProperty(globalThis, CORE_KEY15, {
     value: {
       shouldIncludeUsageRow
     },
@@ -1998,7 +2118,7 @@ if (!globalThis[CORE_KEY14]) {
 }
 
 // insforge-src/shared/usage-hourly-query-core.mjs
-var CORE_KEY15 = "__vibeusageUsageHourlyQueryCore";
+var CORE_KEY16 = "__vibeusageUsageHourlyQueryCore";
 var usageModelCore4 = globalThis.__vibeusageUsageModelCore;
 if (!usageModelCore4) throw new Error("usage-model core not initialized");
 var canaryCore = globalThis.__vibeusageCanaryCore;
@@ -2071,8 +2191,8 @@ async function forEachHourlyUsagePage({
   });
   return { error, rowCount };
 }
-if (!globalThis[CORE_KEY15]) {
-  Object.defineProperty(globalThis, CORE_KEY15, {
+if (!globalThis[CORE_KEY16]) {
+  Object.defineProperty(globalThis, CORE_KEY16, {
     value: {
       DEFAULT_HOURLY_USAGE_SELECT,
       DETAILED_HOURLY_USAGE_SELECT,
@@ -2087,7 +2207,7 @@ if (!globalThis[CORE_KEY15]) {
 }
 
 // insforge-src/shared/usage-metrics-core.mjs
-var CORE_KEY16 = "__vibeusageUsageMetricsCore";
+var CORE_KEY17 = "__vibeusageUsageMetricsCore";
 var BILLABLE_INPUT_OUTPUT_REASONING = /* @__PURE__ */ new Set(["codex", "every-code"]);
 var BILLABLE_ADD_ALL = /* @__PURE__ */ new Set(["claude", "opencode"]);
 var BILLABLE_TOTAL = /* @__PURE__ */ new Set(["gemini"]);
@@ -2207,8 +2327,8 @@ function buildUsageBucketPayload(bucket, extra) {
     extra
   );
 }
-if (!globalThis[CORE_KEY16]) {
-  Object.defineProperty(globalThis, CORE_KEY16, {
+if (!globalThis[CORE_KEY17]) {
+  Object.defineProperty(globalThis, CORE_KEY17, {
     value: {
       createTotals,
       addRowTotals,
@@ -2229,7 +2349,7 @@ if (!globalThis[CORE_KEY16]) {
 }
 
 // insforge-src/shared/usage-row-core.mjs
-var CORE_KEY17 = "__vibeusageUsageRowCore";
+var CORE_KEY18 = "__vibeusageUsageRowCore";
 var DEFAULT_SOURCE = "codex";
 var DEFAULT_MODEL2 = "unknown";
 var runtimePrimitivesCore4 = globalThis.__vibeusageRuntimePrimitivesCore;
@@ -2279,8 +2399,8 @@ function resolveHourlyUsageRowState({
     usageKey
   };
 }
-if (!globalThis[CORE_KEY17]) {
-  Object.defineProperty(globalThis, CORE_KEY17, {
+if (!globalThis[CORE_KEY18]) {
+  Object.defineProperty(globalThis, CORE_KEY18, {
     value: {
       resolveHourlyUsageRowState
     },
@@ -2291,7 +2411,7 @@ if (!globalThis[CORE_KEY17]) {
 }
 
 // insforge-src/shared/usage-row-collector-core.mjs
-var CORE_KEY18 = "__vibeusageUsageRowCollectorCore";
+var CORE_KEY19 = "__vibeusageUsageRowCollectorCore";
 var usageFilterCore = globalThis.__vibeusageUsageFilterCore;
 var usageHourlyQueryCore = globalThis.__vibeusageUsageHourlyQueryCore;
 var usageRowCore = globalThis.__vibeusageUsageRowCore;
@@ -2351,8 +2471,8 @@ async function collectHourlyUsageRows({
   });
   return { error, rowCount };
 }
-if (!globalThis[CORE_KEY18]) {
-  Object.defineProperty(globalThis, CORE_KEY18, {
+if (!globalThis[CORE_KEY19]) {
+  Object.defineProperty(globalThis, CORE_KEY19, {
     value: {
       collectHourlyUsageRows
     },
@@ -2367,125 +2487,48 @@ var usageRowCollectorCore = globalThis.__vibeusageUsageRowCollectorCore;
 if (!usageRowCollectorCore) throw new Error("usage row collector core not initialized");
 var collectHourlyUsageRows2 = usageRowCollectorCore.collectHourlyUsageRows;
 
-// insforge-src/shared/logging-core.mjs
-var CORE_KEY19 = "__vibeusageLoggingCore";
-var envCore4 = globalThis.__vibeusageEnvCore;
-if (!envCore4) throw new Error("env core not initialized");
-function createRequestId() {
-  if (globalThis?.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-function errorCodeFromStatus(status) {
-  if (typeof status !== "number") return "UNKNOWN_ERROR";
-  if (status >= 500) return "SERVER_ERROR";
-  if (status >= 400) return "CLIENT_ERROR";
-  return null;
-}
-function getResponseStatus(response) {
-  if (response && typeof response.status === "number") return response.status;
-  return null;
-}
-function resolveFunctionName(functionName, request) {
-  if (request && typeof request.url === "string") {
-    try {
-      const url = new URL(request.url);
-      const match = url.pathname.match(/\/functions\/([^/?#]+)/);
-      if (match && match[1]) return match[1];
-    } catch (_error) {
-    }
-  }
-  return functionName;
-}
-function createLogger({ functionName }) {
-  const requestId = createRequestId();
-  const startMs = Date.now();
-  let upstreamStatus = null;
-  let upstreamLatencyMs = null;
-  function recordUpstream(status, latencyMs) {
-    upstreamStatus = typeof status === "number" ? status : null;
-    upstreamLatencyMs = typeof latencyMs === "number" ? latencyMs : null;
-  }
-  async function fetchWithUpstream(url, init) {
-    const upstreamStart = Date.now();
-    try {
-      const res = await fetch(url, init);
-      recordUpstream(res.status, Date.now() - upstreamStart);
-      return res;
-    } catch (error) {
-      recordUpstream(null, Date.now() - upstreamStart);
-      throw error;
-    }
-  }
-  function log({ stage, status, errorCode, ...extra }) {
-    const payload = {
-      ...extra || {},
-      request_id: requestId,
-      function: functionName,
-      stage: stage || "response",
-      status: typeof status === "number" ? status : null,
-      latency_ms: Date.now() - startMs,
-      error_code: errorCode ?? errorCodeFromStatus(status),
-      upstream_status: upstreamStatus ?? null,
-      upstream_latency_ms: upstreamLatencyMs ?? null
-    };
-    console.log(JSON.stringify(payload));
-  }
-  return {
-    requestId,
-    log,
-    fetch: fetchWithUpstream
-  };
-}
-function withRequestLogging(functionName, handler) {
-  return async function(request) {
-    const resolvedName = resolveFunctionName(functionName, request);
-    const logger = createLogger({ functionName: resolvedName });
-    try {
-      const response = await handler(request, logger);
-      logger.log({ stage: "response", status: getResponseStatus(response) });
-      return response;
-    } catch (error) {
-      logger.log({ stage: "exception", status: 500, errorCode: "UNHANDLED_EXCEPTION" });
-      throw error;
-    }
-  };
-}
-function logSlowQuery(logger, fields) {
-  if (!logger || typeof logger.log !== "function") return;
-  const durationMs = Number(fields?.duration_ms ?? fields?.durationMs);
-  if (!Number.isFinite(durationMs)) return;
-  const thresholdMs = envCore4.getSlowQueryThresholdMs();
-  if (durationMs < thresholdMs) return;
-  logger.log({
-    stage: "slow_query",
-    status: 200,
-    ...fields || {},
-    duration_ms: Math.round(durationMs)
+// insforge-src/functions-esm/shared/core/usage-filtered-rows.js
+async function collectFilteredUsageRows({
+  logger,
+  queryLabel,
+  logMeta,
+  edgeClient,
+  userId,
+  source,
+  usageModels,
+  canonicalModel,
+  hasModelFilter,
+  aliasTimeline,
+  effectiveDate,
+  startIso,
+  endIso,
+  rowStateOptions,
+  onUsageRow
+} = {}) {
+  const queryStartMs = Date.now();
+  const { error, rowCount } = await collectHourlyUsageRows2({
+    edgeClient,
+    userId,
+    source,
+    usageModels,
+    canonicalModel,
+    hasModelFilter,
+    aliasTimeline,
+    effectiveDate,
+    startIso,
+    endIso,
+    rowStateOptions,
+    onUsageRow
   });
-}
-function getSlowQueryThresholdMs3() {
-  return envCore4.getSlowQueryThresholdMs();
-}
-if (!globalThis[CORE_KEY19]) {
-  Object.defineProperty(globalThis, CORE_KEY19, {
-    value: {
-      createLogger,
-      withRequestLogging,
-      logSlowQuery,
-      getSlowQueryThresholdMs: getSlowQueryThresholdMs3
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
+  const queryDurationMs = Date.now() - queryStartMs;
+  logSlowQuery2(logger, {
+    query_label: queryLabel,
+    duration_ms: queryDurationMs,
+    row_count: rowCount,
+    ...logMeta || {}
   });
+  return { error, rowCount, queryDurationMs };
 }
-
-// insforge-src/functions-esm/shared/logging.js
-var loggingCore = globalThis.__vibeusageLoggingCore;
-if (!loggingCore) throw new Error("logging core not initialized");
-var createLogger2 = loggingCore.createLogger;
-var withRequestLogging2 = loggingCore.withRequestLogging;
-var logSlowQuery2 = loggingCore.logSlowQuery;
 
 // insforge-src/functions-esm/vibeusage-usage-heatmap.js
 var vibeusage_usage_heatmap_default = withRequestLogging2("vibeusage-usage-heatmap", async function(request, logger) {
@@ -2507,9 +2550,17 @@ var vibeusage_usage_heatmap_default = withRequestLogging2("vibeusage-usage-heatm
   if (!filterSnapshot.ok) return respondUsageRequestError(respond, filterSnapshot);
   const { source, canonicalModel, usageModels, hasModelFilter, aliasTimeline } = filterSnapshot;
   const valuesByDay = /* @__PURE__ */ new Map();
-  const queryStartMs = Date.now();
-  let rowCount = 0;
-  const { error, rowCount: scannedRows } = await collectHourlyUsageRows2({
+  const { error, queryDurationMs } = await collectFilteredUsageRows({
+    logger,
+    queryLabel: "usage_heatmap",
+    logMeta: {
+      range_weeks: weeks,
+      range_days: weeks * 7,
+      source: source || null,
+      model: canonicalModel || null,
+      tz: tzContext?.timeZone || null,
+      tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null
+    },
     edgeClient: auth.edgeClient,
     userId: auth.userId,
     source,
@@ -2527,19 +2578,6 @@ var vibeusage_usage_heatmap_default = withRequestLogging2("vibeusage-usage-heatm
         billable: usageRow.billable
       });
     }
-  });
-  rowCount += scannedRows;
-  const queryDurationMs = Date.now() - queryStartMs;
-  logSlowQuery2(logger, {
-    query_label: "usage_heatmap",
-    duration_ms: queryDurationMs,
-    row_count: rowCount,
-    range_weeks: weeks,
-    range_days: weeks * 7,
-    source: source || null,
-    model: canonicalModel || null,
-    tz: tzContext?.timeZone || null,
-    tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null
   });
   if (error) return respond({ error: error.message }, 500, queryDurationMs);
   return respond(

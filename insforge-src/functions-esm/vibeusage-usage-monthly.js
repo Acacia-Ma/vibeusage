@@ -6,7 +6,7 @@ import {
 import {
   resolveUsageFilterRequestSnapshot,
 } from "./shared/core/usage-filter-request.js";
-import { collectHourlyUsageRows } from "./shared/core/usage-row-collector.js";
+import { collectFilteredUsageRows } from "./shared/core/usage-filtered-rows.js";
 import { initMonthlyBuckets, ingestMonthlyRow } from "./shared/core/usage-monthly.js";
 import {
   addDatePartsDays,
@@ -17,7 +17,7 @@ import {
   localDatePartsToUtc,
   parseDateParts,
 } from "./shared/date.js";
-import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
+import { withRequestLogging } from "./shared/logging.js";
 import { toPositiveIntOrNull } from "./shared/numbers.js";
 import "../shared/usage-metrics-core.mjs";
 
@@ -73,8 +73,16 @@ export default withRequestLogging("vibeusage-usage-monthly", async function (req
   const { source, canonicalModel, usageModels, hasModelFilter, aliasTimeline } = filterSnapshot;
 
   const { monthKeys, buckets } = initMonthlyBuckets({ startMonthParts, months });
-  const queryStartMs = Date.now();
-  const { error, rowCount } = await collectHourlyUsageRows({
+  const { error, queryDurationMs } = await collectFilteredUsageRows({
+    logger,
+    queryLabel: "usage_monthly",
+    logMeta: {
+      range_months: months,
+      source: source || null,
+      model: canonicalModel || null,
+      tz: tzContext?.timeZone || null,
+      tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null,
+    },
     edgeClient: auth.edgeClient,
     userId: auth.userId,
     source,
@@ -93,17 +101,6 @@ export default withRequestLogging("vibeusage-usage-monthly", async function (req
         tzContext,
       });
     },
-  });
-  const queryDurationMs = Date.now() - queryStartMs;
-  logSlowQuery(logger, {
-    query_label: "usage_monthly",
-    duration_ms: queryDurationMs,
-    row_count: rowCount,
-    range_months: months,
-    source: source || null,
-    model: canonicalModel || null,
-    tz: tzContext?.timeZone || null,
-    tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null,
   });
 
   if (error) return respond({ error: error.message }, 500, queryDurationMs);

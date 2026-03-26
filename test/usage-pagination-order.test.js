@@ -25,6 +25,7 @@ test("usage pagination uses deterministic ordering", () => {
     "order('hour_start',{ascending:true}).order('user_id',{ascending:true}).order('device_id',{ascending:true}).order('source',{ascending:true}).order('model',{ascending:true})";
   const hourlyScanCall = "forEachHourlyUsagePage(";
   const rowCollectorCall = "collectHourlyUsageRows(";
+  const filteredRowsCall = "collectFilteredUsageRows(";
   const aggregateCollectorCall = "collectAggregateUsageRange(";
   const aggregateRequestCall = "resolveAggregateUsageRequestContext(";
   const aggregateEndpointStartCall = "startAggregateUsageRequest(";
@@ -74,7 +75,7 @@ test("usage pagination uses deterministic ordering", () => {
   assert.equal(
     countOccurrences(
       normalize(readFile("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js")),
-      rowCollectorCall,
+      filteredRowsCall,
     ),
     1,
   );
@@ -171,6 +172,11 @@ test("usage pagination uses deterministic ordering", () => {
       "asyncfunctioncollectHourlyUsageRows(",
     ),
   );
+  assert.ok(
+    normalize(readFile("insforge-src/functions-esm/shared/core/usage-filtered-rows.js")).includes(
+      "collectHourlyUsageRows(",
+    ),
+  );
   assert.equal(
     countOccurrences(
       normalize(readFile("insforge-src/shared/usage-pricing-core.js")),
@@ -181,8 +187,15 @@ test("usage pagination uses deterministic ordering", () => {
   assert.ok(
     countOccurrences(
       normalize(readFile("insforge-src/functions-esm/vibeusage-usage-monthly.js")),
-      rowCollectorCall,
+      filteredRowsCall,
     ) === 1,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-monthly.js")),
+      rowCollectorCall,
+    ),
+    0,
   );
   assert.equal(
     countOccurrences(
@@ -194,16 +207,30 @@ test("usage pagination uses deterministic ordering", () => {
   assert.equal(
     countOccurrences(
       normalize(readFile("insforge-src/functions-esm/vibeusage-usage-heatmap.js")),
-      rowCollectorCall,
+      filteredRowsCall,
     ),
     1,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-heatmap.js")),
+      rowCollectorCall,
+    ),
+    0,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-hourly.js")),
+      filteredRowsCall,
+    ),
+    2,
   );
   assert.equal(
     countOccurrences(
       normalize(readFile("insforge-src/functions-esm/vibeusage-usage-hourly.js")),
       rowCollectorCall,
     ),
-    2,
+    0,
   );
   assert.equal(
     countOccurrences(

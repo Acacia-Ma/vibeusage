@@ -68,6 +68,7 @@
 - [x] 4.2.44 Converge hourly detail and aggregate select contracts through `usage-hourly-query-core` while keeping endpoint-specific collectors and envelopes explicit.
 - [x] 4.2.45 Converge `summary/daily` aggregate endpoint orchestration through a shared ESM helper while keeping rolling and daily bucket assembly explicit.
 - [x] 4.2.46 Converge monthly filtered hourly row collection through `usage-row-collector-core` while keeping monthly window resolution, bucket initialization, and response envelope explicit.
+- [x] 4.2.47 Converge filtered usage endpoint scan/log orchestration through a shared ESM helper while keeping endpoint-specific request contexts, accumulators, and envelopes explicit.
 
 ## 5. Verification
 

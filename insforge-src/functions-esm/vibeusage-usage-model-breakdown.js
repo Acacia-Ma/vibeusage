@@ -3,10 +3,10 @@ import {
   requireUsageAccess,
   respondUsageRequestError,
 } from "./shared/core/usage-endpoint.js";
+import { collectFilteredUsageRows } from "./shared/core/usage-filtered-rows.js";
 import { resolveUsageRangeRequestContext } from "./shared/core/usage-range-request.js";
-import { collectHourlyUsageRows } from "./shared/core/usage-row-collector.js";
 import { getUsageTimeZoneContext } from "./shared/date.js";
-import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
+import { withRequestLogging } from "./shared/logging.js";
 import { buildPricingMetadata, computeUsageCost, resolvePricingProfile } from "./shared/pricing.js";
 import "../shared/usage-pricing-core.mjs";
 import {
@@ -50,9 +50,17 @@ export default withRequestLogging(
     const rowsBuffer = [];
     const distinctModels = new Set();
 
-    const queryStartMs = Date.now();
-    let rowCount = 0;
-    const { error, rowCount: scannedRows } = await collectHourlyUsageRows({
+    const { error, queryDurationMs } = await collectFilteredUsageRows({
+      logger,
+      queryLabel: "usage_model_breakdown",
+      logMeta: {
+        range_days: dayKeys.length,
+        source: sourceFilter || null,
+        tz: tzContext?.timeZone || null,
+        tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes)
+          ? tzContext.offsetMinutes
+          : null,
+      },
       edgeClient: auth.edgeClient,
       userId: auth.userId,
       source: sourceFilter,
@@ -84,17 +92,6 @@ export default withRequestLogging(
           distinctModels.add(usageRow.usageKey);
         }
       },
-    });
-    rowCount += scannedRows;
-    const queryDurationMs = Date.now() - queryStartMs;
-    logSlowQuery(logger, {
-      query_label: "usage_model_breakdown",
-      duration_ms: queryDurationMs,
-      row_count: rowCount,
-      range_days: dayKeys.length,
-      source: sourceFilter || null,
-      tz: tzContext?.timeZone || null,
-      tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null,
     });
 
     if (error) return respond({ error: error.message }, 500, queryDurationMs);

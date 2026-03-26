@@ -11,13 +11,13 @@ import {
 import {
   resolveUsageFilterRequestSnapshot,
 } from "./shared/core/usage-filter-request.js";
-import { collectHourlyUsageRows } from "./shared/core/usage-row-collector.js";
+import { collectFilteredUsageRows } from "./shared/core/usage-filtered-rows.js";
 import {
   formatDateUTC,
   formatLocalDateKey,
   getUsageTimeZoneContext,
 } from "./shared/date.js";
-import { logSlowQuery, withRequestLogging } from "./shared/logging.js";
+import { withRequestLogging } from "./shared/logging.js";
 
 export default withRequestLogging("vibeusage-usage-heatmap", async function (request, logger) {
   const endpoint = prepareUsageEndpoint({ request, logger });
@@ -43,9 +43,17 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
   const { source, canonicalModel, usageModels, hasModelFilter, aliasTimeline } = filterSnapshot;
 
   const valuesByDay = new Map();
-  const queryStartMs = Date.now();
-  let rowCount = 0;
-  const { error, rowCount: scannedRows } = await collectHourlyUsageRows({
+  const { error, queryDurationMs } = await collectFilteredUsageRows({
+    logger,
+    queryLabel: "usage_heatmap",
+    logMeta: {
+      range_weeks: weeks,
+      range_days: weeks * 7,
+      source: source || null,
+      model: canonicalModel || null,
+      tz: tzContext?.timeZone || null,
+      tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null,
+    },
     edgeClient: auth.edgeClient,
     userId: auth.userId,
     source,
@@ -66,19 +74,6 @@ export default withRequestLogging("vibeusage-usage-heatmap", async function (req
         billable: usageRow.billable,
       });
     },
-  });
-  rowCount += scannedRows;
-  const queryDurationMs = Date.now() - queryStartMs;
-  logSlowQuery(logger, {
-    query_label: "usage_heatmap",
-    duration_ms: queryDurationMs,
-    row_count: rowCount,
-    range_weeks: weeks,
-    range_days: weeks * 7,
-    source: source || null,
-    model: canonicalModel || null,
-    tz: tzContext?.timeZone || null,
-    tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null,
   });
 
   if (error) return respond({ error: error.message }, 500, queryDurationMs);

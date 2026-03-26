@@ -2163,200 +2163,8 @@ var resolveUsageModelRequestParams2 = usageFilterRequestCore.resolveUsageModelRe
 var resolveUsageFilterRequestContext2 = usageFilterRequestCore.resolveUsageFilterRequestContext;
 var resolveUsageFilterRequestSnapshot2 = usageFilterRequestCore.resolveUsageFilterRequestSnapshot;
 
-// insforge-src/shared/usage-filter-core.mjs
-var CORE_KEY16 = "__vibeusageUsageFilterCore";
-var usageModelCore4 = globalThis.__vibeusageUsageModelCore;
-if (!usageModelCore4) throw new Error("usage-model core not initialized");
-var { extractDateKey: extractDateKey2, matchesCanonicalModelAtDate: matchesCanonicalModelAtDate2 } = usageModelCore4;
-function shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to }) {
-  if (!hasModelFilter) return true;
-  const dateKey = extractDateKey2(row?.hour_start || row?.day) || to;
-  return matchesCanonicalModelAtDate2({
-    rawModel: row?.model,
-    canonicalModel,
-    dateKey,
-    timeline: aliasTimeline
-  });
-}
-if (!globalThis[CORE_KEY16]) {
-  Object.defineProperty(globalThis, CORE_KEY16, {
-    value: {
-      shouldIncludeUsageRow
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
-  });
-}
-
-// insforge-src/shared/usage-row-core.mjs
-var CORE_KEY17 = "__vibeusageUsageRowCore";
-var DEFAULT_SOURCE = "codex";
-var DEFAULT_MODEL2 = "unknown";
-var runtimePrimitivesCore6 = globalThis.__vibeusageRuntimePrimitivesCore;
-if (!runtimePrimitivesCore6) throw new Error("runtime primitives core not initialized");
-var usageModelCore5 = globalThis.__vibeusageUsageModelCore;
-if (!usageModelCore5) throw new Error("usage-model core not initialized");
-var usageMetricsCore2 = globalThis.__vibeusageUsageMetricsCore;
-if (!usageMetricsCore2) throw new Error("usage metrics core not initialized");
-var { extractDateKey: extractDateKey3, normalizeUsageModel: normalizeUsageModel2, normalizeUsageModelKey: normalizeUsageModelKey2 } = usageModelCore5;
-var { resolveBillableTotals: resolveBillableTotals2 } = usageMetricsCore2;
-function resolveHourlyUsageRowState({
-  row,
-  source,
-  effectiveDate,
-  defaultSource = DEFAULT_SOURCE,
-  defaultModel = DEFAULT_MODEL2,
-  allowMissingTimestamp = false,
-  useDefaultSourceForBilling = false
-} = {}) {
-  const ts = row?.hour_start;
-  let date = null;
-  let dateKey = effectiveDate || null;
-  if (ts) {
-    date = new Date(ts);
-    if (!Number.isFinite(date.getTime())) {
-      if (!allowMissingTimestamp) return null;
-      date = null;
-    } else {
-      dateKey = extractDateKey3(ts) || effectiveDate || null;
-    }
-  } else if (!allowMissingTimestamp) {
-    return null;
-  }
-  const sourceKey = runtimePrimitivesCore6.normalizeSource(row?.source) || source || defaultSource;
-  const billingSource = row?.source || source || (useDefaultSourceForBilling ? defaultSource : null);
-  const normalizedModel = normalizeUsageModel2(row?.model) || defaultModel;
-  const usageKey = normalizeUsageModelKey2(normalizedModel) || defaultModel;
-  const { billable, hasStoredBillable } = resolveBillableTotals2({ row, source: billingSource });
-  return {
-    billable,
-    date,
-    dateKey,
-    hasStoredBillable,
-    normalizedModel,
-    sourceKey,
-    timestamp: ts || null,
-    usageKey
-  };
-}
-if (!globalThis[CORE_KEY17]) {
-  Object.defineProperty(globalThis, CORE_KEY17, {
-    value: {
-      resolveHourlyUsageRowState
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
-  });
-}
-
-// insforge-src/shared/usage-row-collector-core.mjs
-var CORE_KEY18 = "__vibeusageUsageRowCollectorCore";
-var usageFilterCore = globalThis.__vibeusageUsageFilterCore;
-var usageHourlyQueryCore2 = globalThis.__vibeusageUsageHourlyQueryCore;
-var usageRowCore = globalThis.__vibeusageUsageRowCore;
-if (!usageFilterCore) throw new Error("usage filter core not initialized");
-if (!usageHourlyQueryCore2) throw new Error("usage hourly query core not initialized");
-if (!usageRowCore) throw new Error("usage row core not initialized");
-async function collectHourlyUsageRows({
-  edgeClient,
-  userId,
-  source,
-  usageModels,
-  canonicalModel,
-  hasModelFilter = false,
-  aliasTimeline = null,
-  effectiveDate,
-  startIso,
-  endIso,
-  select,
-  pageSize,
-  rowStateOptions,
-  onUsageRow
-} = {}) {
-  if (typeof onUsageRow !== "function") {
-    throw new Error("onUsageRow must be a function");
-  }
-  const { error, rowCount } = await usageHourlyQueryCore2.forEachHourlyUsagePage({
-    edgeClient,
-    userId,
-    source,
-    usageModels,
-    canonicalModel,
-    startIso,
-    endIso,
-    select: select || usageHourlyQueryCore2.DETAILED_HOURLY_USAGE_SELECT,
-    pageSize,
-    onPage: async (rows) => {
-      for (const row of rows) {
-        const usageRow = usageRowCore.resolveHourlyUsageRowState({
-          row,
-          source,
-          effectiveDate,
-          ...rowStateOptions || {}
-        });
-        if (!usageRow) continue;
-        if (!usageFilterCore.shouldIncludeUsageRow({
-          row,
-          canonicalModel,
-          hasModelFilter,
-          aliasTimeline,
-          to: effectiveDate
-        })) {
-          continue;
-        }
-        await onUsageRow({ row, usageRow });
-      }
-    }
-  });
-  return { error, rowCount };
-}
-if (!globalThis[CORE_KEY18]) {
-  Object.defineProperty(globalThis, CORE_KEY18, {
-    value: {
-      collectHourlyUsageRows
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
-  });
-}
-
-// insforge-src/functions-esm/shared/core/usage-row-collector.js
-var usageRowCollectorCore = globalThis.__vibeusageUsageRowCollectorCore;
-if (!usageRowCollectorCore) throw new Error("usage row collector core not initialized");
-var collectHourlyUsageRows2 = usageRowCollectorCore.collectHourlyUsageRows;
-
-// insforge-src/functions-esm/shared/date.js
-var dateCore2 = globalThis.__vibeusageDateCore;
-if (!dateCore2) throw new Error("date core not initialized");
-var isDate2 = dateCore2.isDate;
-var toUtcDay2 = dateCore2.toUtcDay;
-var formatDateUTC3 = dateCore2.formatDateUTC;
-var normalizeIso2 = dateCore2.normalizeIso;
-var parseUtcDateString3 = dateCore2.parseUtcDateString;
-var addUtcDays3 = dateCore2.addUtcDays;
-var computeHeatmapWindowUtc2 = dateCore2.computeHeatmapWindowUtc;
-var parseDateParts3 = dateCore2.parseDateParts;
-var formatDateParts3 = dateCore2.formatDateParts;
-var dateFromPartsUTC2 = dateCore2.dateFromPartsUTC;
-var addDatePartsDays3 = dateCore2.addDatePartsDays;
-var addDatePartsMonths2 = dateCore2.addDatePartsMonths;
-var getUsageTimeZoneContext2 = dateCore2.getUsageTimeZoneContext;
-var isUtcTimeZone3 = dateCore2.isUtcTimeZone;
-var getTimeZoneOffsetMinutes2 = dateCore2.getTimeZoneOffsetMinutes;
-var getLocalParts4 = dateCore2.getLocalParts;
-var formatLocalDateKey2 = dateCore2.formatLocalDateKey;
-var localDatePartsToUtc3 = dateCore2.localDatePartsToUtc;
-var normalizeDateRangeLocal2 = dateCore2.normalizeDateRangeLocal;
-var listDateStrings2 = dateCore2.listDateStrings;
-var resolveUsageDateRangeLocal2 = dateCore2.resolveUsageDateRangeLocal;
-var getUsageMaxDays4 = dateCore2.getUsageMaxDays;
-var isWithinInterval2 = dateCore2.isWithinInterval;
-
 // insforge-src/shared/logging-core.mjs
-var CORE_KEY19 = "__vibeusageLoggingCore";
+var CORE_KEY16 = "__vibeusageLoggingCore";
 var envCore4 = globalThis.__vibeusageEnvCore;
 if (!envCore4) throw new Error("env core not initialized");
 function createRequestId() {
@@ -2454,8 +2262,8 @@ function logSlowQuery(logger, fields) {
 function getSlowQueryThresholdMs3() {
   return envCore4.getSlowQueryThresholdMs();
 }
-if (!globalThis[CORE_KEY19]) {
-  Object.defineProperty(globalThis, CORE_KEY19, {
+if (!globalThis[CORE_KEY16]) {
+  Object.defineProperty(globalThis, CORE_KEY16, {
     value: {
       createLogger,
       withRequestLogging,
@@ -2474,6 +2282,241 @@ if (!loggingCore) throw new Error("logging core not initialized");
 var createLogger2 = loggingCore.createLogger;
 var withRequestLogging2 = loggingCore.withRequestLogging;
 var logSlowQuery2 = loggingCore.logSlowQuery;
+
+// insforge-src/shared/usage-filter-core.mjs
+var CORE_KEY17 = "__vibeusageUsageFilterCore";
+var usageModelCore4 = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore4) throw new Error("usage-model core not initialized");
+var { extractDateKey: extractDateKey2, matchesCanonicalModelAtDate: matchesCanonicalModelAtDate2 } = usageModelCore4;
+function shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to }) {
+  if (!hasModelFilter) return true;
+  const dateKey = extractDateKey2(row?.hour_start || row?.day) || to;
+  return matchesCanonicalModelAtDate2({
+    rawModel: row?.model,
+    canonicalModel,
+    dateKey,
+    timeline: aliasTimeline
+  });
+}
+if (!globalThis[CORE_KEY17]) {
+  Object.defineProperty(globalThis, CORE_KEY17, {
+    value: {
+      shouldIncludeUsageRow
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/shared/usage-row-core.mjs
+var CORE_KEY18 = "__vibeusageUsageRowCore";
+var DEFAULT_SOURCE = "codex";
+var DEFAULT_MODEL2 = "unknown";
+var runtimePrimitivesCore6 = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore6) throw new Error("runtime primitives core not initialized");
+var usageModelCore5 = globalThis.__vibeusageUsageModelCore;
+if (!usageModelCore5) throw new Error("usage-model core not initialized");
+var usageMetricsCore2 = globalThis.__vibeusageUsageMetricsCore;
+if (!usageMetricsCore2) throw new Error("usage metrics core not initialized");
+var { extractDateKey: extractDateKey3, normalizeUsageModel: normalizeUsageModel2, normalizeUsageModelKey: normalizeUsageModelKey2 } = usageModelCore5;
+var { resolveBillableTotals: resolveBillableTotals2 } = usageMetricsCore2;
+function resolveHourlyUsageRowState({
+  row,
+  source,
+  effectiveDate,
+  defaultSource = DEFAULT_SOURCE,
+  defaultModel = DEFAULT_MODEL2,
+  allowMissingTimestamp = false,
+  useDefaultSourceForBilling = false
+} = {}) {
+  const ts = row?.hour_start;
+  let date = null;
+  let dateKey = effectiveDate || null;
+  if (ts) {
+    date = new Date(ts);
+    if (!Number.isFinite(date.getTime())) {
+      if (!allowMissingTimestamp) return null;
+      date = null;
+    } else {
+      dateKey = extractDateKey3(ts) || effectiveDate || null;
+    }
+  } else if (!allowMissingTimestamp) {
+    return null;
+  }
+  const sourceKey = runtimePrimitivesCore6.normalizeSource(row?.source) || source || defaultSource;
+  const billingSource = row?.source || source || (useDefaultSourceForBilling ? defaultSource : null);
+  const normalizedModel = normalizeUsageModel2(row?.model) || defaultModel;
+  const usageKey = normalizeUsageModelKey2(normalizedModel) || defaultModel;
+  const { billable, hasStoredBillable } = resolveBillableTotals2({ row, source: billingSource });
+  return {
+    billable,
+    date,
+    dateKey,
+    hasStoredBillable,
+    normalizedModel,
+    sourceKey,
+    timestamp: ts || null,
+    usageKey
+  };
+}
+if (!globalThis[CORE_KEY18]) {
+  Object.defineProperty(globalThis, CORE_KEY18, {
+    value: {
+      resolveHourlyUsageRowState
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/shared/usage-row-collector-core.mjs
+var CORE_KEY19 = "__vibeusageUsageRowCollectorCore";
+var usageFilterCore = globalThis.__vibeusageUsageFilterCore;
+var usageHourlyQueryCore2 = globalThis.__vibeusageUsageHourlyQueryCore;
+var usageRowCore = globalThis.__vibeusageUsageRowCore;
+if (!usageFilterCore) throw new Error("usage filter core not initialized");
+if (!usageHourlyQueryCore2) throw new Error("usage hourly query core not initialized");
+if (!usageRowCore) throw new Error("usage row core not initialized");
+async function collectHourlyUsageRows({
+  edgeClient,
+  userId,
+  source,
+  usageModels,
+  canonicalModel,
+  hasModelFilter = false,
+  aliasTimeline = null,
+  effectiveDate,
+  startIso,
+  endIso,
+  select,
+  pageSize,
+  rowStateOptions,
+  onUsageRow
+} = {}) {
+  if (typeof onUsageRow !== "function") {
+    throw new Error("onUsageRow must be a function");
+  }
+  const { error, rowCount } = await usageHourlyQueryCore2.forEachHourlyUsagePage({
+    edgeClient,
+    userId,
+    source,
+    usageModels,
+    canonicalModel,
+    startIso,
+    endIso,
+    select: select || usageHourlyQueryCore2.DETAILED_HOURLY_USAGE_SELECT,
+    pageSize,
+    onPage: async (rows) => {
+      for (const row of rows) {
+        const usageRow = usageRowCore.resolveHourlyUsageRowState({
+          row,
+          source,
+          effectiveDate,
+          ...rowStateOptions || {}
+        });
+        if (!usageRow) continue;
+        if (!usageFilterCore.shouldIncludeUsageRow({
+          row,
+          canonicalModel,
+          hasModelFilter,
+          aliasTimeline,
+          to: effectiveDate
+        })) {
+          continue;
+        }
+        await onUsageRow({ row, usageRow });
+      }
+    }
+  });
+  return { error, rowCount };
+}
+if (!globalThis[CORE_KEY19]) {
+  Object.defineProperty(globalThis, CORE_KEY19, {
+    value: {
+      collectHourlyUsageRows
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/core/usage-row-collector.js
+var usageRowCollectorCore = globalThis.__vibeusageUsageRowCollectorCore;
+if (!usageRowCollectorCore) throw new Error("usage row collector core not initialized");
+var collectHourlyUsageRows2 = usageRowCollectorCore.collectHourlyUsageRows;
+
+// insforge-src/functions-esm/shared/core/usage-filtered-rows.js
+async function collectFilteredUsageRows({
+  logger,
+  queryLabel,
+  logMeta,
+  edgeClient,
+  userId,
+  source,
+  usageModels,
+  canonicalModel,
+  hasModelFilter,
+  aliasTimeline,
+  effectiveDate,
+  startIso,
+  endIso,
+  rowStateOptions,
+  onUsageRow
+} = {}) {
+  const queryStartMs = Date.now();
+  const { error, rowCount } = await collectHourlyUsageRows2({
+    edgeClient,
+    userId,
+    source,
+    usageModels,
+    canonicalModel,
+    hasModelFilter,
+    aliasTimeline,
+    effectiveDate,
+    startIso,
+    endIso,
+    rowStateOptions,
+    onUsageRow
+  });
+  const queryDurationMs = Date.now() - queryStartMs;
+  logSlowQuery2(logger, {
+    query_label: queryLabel,
+    duration_ms: queryDurationMs,
+    row_count: rowCount,
+    ...logMeta || {}
+  });
+  return { error, rowCount, queryDurationMs };
+}
+
+// insforge-src/functions-esm/shared/date.js
+var dateCore2 = globalThis.__vibeusageDateCore;
+if (!dateCore2) throw new Error("date core not initialized");
+var isDate2 = dateCore2.isDate;
+var toUtcDay2 = dateCore2.toUtcDay;
+var formatDateUTC3 = dateCore2.formatDateUTC;
+var normalizeIso2 = dateCore2.normalizeIso;
+var parseUtcDateString3 = dateCore2.parseUtcDateString;
+var addUtcDays3 = dateCore2.addUtcDays;
+var computeHeatmapWindowUtc2 = dateCore2.computeHeatmapWindowUtc;
+var parseDateParts3 = dateCore2.parseDateParts;
+var formatDateParts3 = dateCore2.formatDateParts;
+var dateFromPartsUTC2 = dateCore2.dateFromPartsUTC;
+var addDatePartsDays3 = dateCore2.addDatePartsDays;
+var addDatePartsMonths2 = dateCore2.addDatePartsMonths;
+var getUsageTimeZoneContext2 = dateCore2.getUsageTimeZoneContext;
+var isUtcTimeZone3 = dateCore2.isUtcTimeZone;
+var getTimeZoneOffsetMinutes2 = dateCore2.getTimeZoneOffsetMinutes;
+var getLocalParts4 = dateCore2.getLocalParts;
+var formatLocalDateKey2 = dateCore2.formatLocalDateKey;
+var localDatePartsToUtc3 = dateCore2.localDatePartsToUtc;
+var normalizeDateRangeLocal2 = dateCore2.normalizeDateRangeLocal;
+var listDateStrings2 = dateCore2.listDateStrings;
+var resolveUsageDateRangeLocal2 = dateCore2.resolveUsageDateRangeLocal;
+var getUsageMaxDays4 = dateCore2.getUsageMaxDays;
+var isWithinInterval2 = dateCore2.isWithinInterval;
 
 // insforge-src/functions-esm/shared/usage-summary-support.js
 var usageModelCore6 = globalThis.__vibeusageUsageModelCore;
@@ -2563,9 +2606,9 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
         const key = formatHourKeyFromValue2(row?.hour);
         const bucket = key ? bucketMap.get(key) : null;
         if (!bucket) continue;
-        const rowCount3 = Number(row?.count_rows);
+        const rowCount = Number(row?.count_rows);
         const billableCount = Number(row?.count_billable_total_tokens);
-        const hasCompleteBillable = Number.isFinite(rowCount3) && Number.isFinite(billableCount) && rowCount3 > 0 && billableCount === rowCount3;
+        const hasCompleteBillable = Number.isFinite(rowCount) && Number.isFinite(billableCount) && rowCount > 0 && billableCount === rowCount;
         const hasStoredBillable = row && Object.prototype.hasOwnProperty.call(row, "sum_billable_total_tokens") && row.sum_billable_total_tokens != null && hasCompleteBillable;
         const { billable } = resolveBillableTotals3({
           row,
@@ -2600,9 +2643,16 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
         aggregateDurationMs
       );
     }
-    const queryStartMs2 = Date.now();
-    let rowCount2 = 0;
-    const { error: error2, rowCount: scannedRows2 } = await collectHourlyUsageRows2({
+    const { error: error2, queryDurationMs: queryDurationMs2 } = await collectFilteredUsageRows({
+      logger,
+      queryLabel: "usage_hourly_raw",
+      logMeta: {
+        range_days: 1,
+        source: source || null,
+        model: canonicalModel || null,
+        tz: tzContext?.timeZone || null,
+        tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null
+      },
       edgeClient: auth.edgeClient,
       userId: auth.userId,
       source,
@@ -2633,18 +2683,6 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
         });
       }
     });
-    rowCount2 += scannedRows2;
-    const queryDurationMs2 = Date.now() - queryStartMs2;
-    logSlowQuery2(logger, {
-      query_label: "usage_hourly_raw",
-      duration_ms: queryDurationMs2,
-      row_count: rowCount2,
-      range_days: 1,
-      source: source || null,
-      model: canonicalModel || null,
-      tz: tzContext?.timeZone || null,
-      tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null
-    });
     if (error2) return respond({ error: error2.message }, 500, queryDurationMs2);
     return respond(
       {
@@ -2656,9 +2694,16 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
       queryDurationMs2
     );
   }
-  const queryStartMs = Date.now();
-  let rowCount = 0;
-  const { error, rowCount: scannedRows } = await collectHourlyUsageRows2({
+  const { error, queryDurationMs } = await collectFilteredUsageRows({
+    logger,
+    queryLabel: "usage_hourly_raw",
+    logMeta: {
+      range_days: 1,
+      source: source || null,
+      model: canonicalModel || null,
+      tz: tzContext?.timeZone || null,
+      tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null
+    },
     edgeClient: auth.edgeClient,
     userId: auth.userId,
     source,
@@ -2688,18 +2733,6 @@ var vibeusage_usage_hourly_default = withRequestLogging2("vibeusage-usage-hourly
         reasoningOutputTokens: row?.reasoning_output_tokens
       });
     }
-  });
-  rowCount += scannedRows;
-  const queryDurationMs = Date.now() - queryStartMs;
-  logSlowQuery2(logger, {
-    query_label: "usage_hourly_raw",
-    duration_ms: queryDurationMs,
-    row_count: rowCount,
-    range_days: 1,
-    source: source || null,
-    model: canonicalModel || null,
-    tz: tzContext?.timeZone || null,
-    tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null
   });
   if (error) return respond({ error: error.message }, 500, queryDurationMs);
   return respond(

@@ -16,7 +16,7 @@ import {
 import {
   resolveUsageFilterRequestSnapshot,
 } from "./shared/core/usage-filter-request.js";
-import { collectHourlyUsageRows } from "./shared/core/usage-row-collector.js";
+import { collectFilteredUsageRows } from "./shared/core/usage-filtered-rows.js";
 import {
   getUsageTimeZoneContext,
   normalizeIso,
@@ -139,9 +139,18 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
       );
     }
 
-    const queryStartMs = Date.now();
-    let rowCount = 0;
-    const { error, rowCount: scannedRows } = await collectHourlyUsageRows({
+    const { error, queryDurationMs } = await collectFilteredUsageRows({
+      logger,
+      queryLabel: "usage_hourly_raw",
+      logMeta: {
+        range_days: 1,
+        source: source || null,
+        model: canonicalModel || null,
+        tz: tzContext?.timeZone || null,
+        tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes)
+          ? tzContext.offsetMinutes
+          : null,
+      },
       edgeClient: auth.edgeClient,
       userId: auth.userId,
       source,
@@ -173,18 +182,6 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
         });
       },
     });
-    rowCount += scannedRows;
-    const queryDurationMs = Date.now() - queryStartMs;
-    logSlowQuery(logger, {
-      query_label: "usage_hourly_raw",
-      duration_ms: queryDurationMs,
-      row_count: rowCount,
-      range_days: 1,
-      source: source || null,
-      model: canonicalModel || null,
-      tz: tzContext?.timeZone || null,
-      tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null,
-    });
 
     if (error) return respond({ error: error.message }, 500, queryDurationMs);
 
@@ -199,9 +196,18 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
     );
   }
 
-  const queryStartMs = Date.now();
-  let rowCount = 0;
-  const { error, rowCount: scannedRows } = await collectHourlyUsageRows({
+  const { error, queryDurationMs } = await collectFilteredUsageRows({
+    logger,
+    queryLabel: "usage_hourly_raw",
+    logMeta: {
+      range_days: 1,
+      source: source || null,
+      model: canonicalModel || null,
+      tz: tzContext?.timeZone || null,
+      tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes)
+        ? tzContext.offsetMinutes
+        : null,
+    },
     edgeClient: auth.edgeClient,
     userId: auth.userId,
     source,
@@ -232,18 +238,6 @@ export default withRequestLogging("vibeusage-usage-hourly", async function (requ
         reasoningOutputTokens: row?.reasoning_output_tokens,
       });
     },
-  });
-  rowCount += scannedRows;
-  const queryDurationMs = Date.now() - queryStartMs;
-  logSlowQuery(logger, {
-    query_label: "usage_hourly_raw",
-    duration_ms: queryDurationMs,
-    row_count: rowCount,
-    range_days: 1,
-    source: source || null,
-    model: canonicalModel || null,
-    tz: tzContext?.timeZone || null,
-    tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null,
   });
 
   if (error) return respond({ error: error.message }, 500, queryDurationMs);
