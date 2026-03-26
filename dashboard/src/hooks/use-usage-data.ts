@@ -260,6 +260,13 @@ export function useUsageData({
         setDaily(filledDaily);
         setSource("cache");
         setFetchedAt(cached.fetchedAt || null);
+      } else {
+        setDaily([]);
+        setSummary(null);
+        setRolling(null);
+        setError(null);
+        setSource("edge");
+        setFetchedAt(null);
       }
     }
     const controller = new AbortController();
