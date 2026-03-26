@@ -9,6 +9,6 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["src"],
+  "include": ["src", "../src/shared/*.cjs.d.ts"],
   "exclude": ["src/**/__tests__/**", "src/test/**"]
 }
