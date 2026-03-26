@@ -184,6 +184,7 @@ test("DashboardPage enables guest data flow when session soft expired", () => {
   const src = read("dashboard/src/pages/DashboardPage.jsx");
   assert.match(src, /const guestAllowed\s*=\s*signedIn\s*&&\s*sessionSoftExpired/);
   assert.match(src, /useUsageData\([\s\S]*guestAllowed/);
+  assert.match(src, /useProjectUsageSummary\([\s\S]*guestAllowed/);
   assert.match(src, /useUsageModelBreakdown\([\s\S]*guestAllowed/);
   assert.match(src, /useTrendData\([\s\S]*guestAllowed/);
   assert.match(src, /useActivityHeatmap\([\s\S]*guestAllowed/);
@@ -191,14 +192,17 @@ test("DashboardPage enables guest data flow when session soft expired", () => {
 
 test("Usage hooks resolve auth tokens per request and allow guest flow", () => {
   const usageSrc = read("dashboard/src/hooks/use-usage-data.ts");
+  const projectUsageSrc = read("dashboard/src/hooks/use-project-usage-summary.ts");
   const trendSrc = read("dashboard/src/hooks/use-trend-data.ts");
   const heatmapSrc = read("dashboard/src/hooks/use-activity-heatmap.ts");
   const breakdownSrc = read("dashboard/src/hooks/use-usage-model-breakdown.ts");
   assert.match(usageSrc, /resolveAuthAccessToken/);
+  assert.match(projectUsageSrc, /resolveAuthAccessToken/);
   assert.match(trendSrc, /resolveAuthAccessToken/);
   assert.match(heatmapSrc, /resolveAuthAccessToken/);
   assert.match(breakdownSrc, /resolveAuthAccessToken/);
   assert.match(usageSrc, /guestAllowed/);
+  assert.match(projectUsageSrc, /guestAllowed/);
   assert.match(trendSrc, /guestAllowed/);
   assert.match(heatmapSrc, /guestAllowed/);
   assert.match(breakdownSrc, /guestAllowed/);

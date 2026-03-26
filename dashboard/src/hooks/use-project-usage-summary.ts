@@ -6,6 +6,7 @@ import { getProjectUsageSummary } from "../lib/vibeusage-api";
 export function useProjectUsageSummary({
   baseUrl,
   accessToken,
+  guestAllowed = false,
   limit = 3,
   from,
   to,
@@ -22,9 +23,11 @@ export function useProjectUsageSummary({
   const refresh = useCallback(async ({ signal }: any = {}) => {
     const resolvedToken = await resolveAuthAccessToken(accessToken);
     if (!resolvedToken && !mockEnabled) {
-      setEntries([]);
-      setError(null);
-      setLoading(false);
+      if (!guestAllowed) {
+        setEntries([]);
+        setError(null);
+        setLoading(false);
+      }
       return;
     }
     if (signal?.aborted) return;
@@ -53,10 +56,10 @@ export function useProjectUsageSummary({
       if (signal?.aborted) return;
       setLoading(false);
     }
-  }, [accessToken, baseUrl, from, limit, mockEnabled, source, timeZone, to, tzOffsetMinutes]);
+  }, [accessToken, baseUrl, from, guestAllowed, limit, mockEnabled, source, timeZone, to, tzOffsetMinutes]);
 
   useEffect(() => {
-    if (!tokenReady && !mockEnabled) {
+    if (!tokenReady && !guestAllowed && !mockEnabled) {
       setEntries([]);
       setError(null);
       setLoading(false);
@@ -67,7 +70,7 @@ export function useProjectUsageSummary({
     return () => {
       controller.abort();
     };
-  }, [mockEnabled, refresh, tokenReady]);
+  }, [guestAllowed, mockEnabled, refresh, tokenReady]);
 
   return { entries, loading, error, refresh };
 }

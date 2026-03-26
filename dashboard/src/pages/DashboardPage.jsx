@@ -503,6 +503,7 @@ export function DashboardPage({
   } = useProjectUsageSummary({
     baseUrl,
     accessToken,
+    guestAllowed,
     limit: projectUsageLimit,
     from,
     to,
