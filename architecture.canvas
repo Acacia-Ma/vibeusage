@@ -1886,7 +1886,7 @@
     {
       "id": "test_ssot-foundations_test_90aa72dd",
       "type": "text",
-      "text": "**ssot-foundations.test**\n`test/ssot-foundations.test.js`\n\nTest module.\n\n包含：\n- ssot-foundations.test (1128 行)\n- read (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**ssot-foundations.test**\n`test/ssot-foundations.test.js`\n\nTest module.\n\n包含：\n- ssot-foundations.test (1132 行)\n- read (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 4060,
       "y": 20196,
       "width": 280,
@@ -2107,7 +2107,7 @@
     {
       "id": "test_usage-pagination-order_test_e45c4df4",
       "type": "text",
-      "text": "**usage-pagination-order.test**\n`test/usage-pagination-order.test.js`\n\nTest module.\n\n包含：\n- usage-pagination-order.test (281 行)\n- readFile (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**usage-pagination-order.test**\n`test/usage-pagination-order.test.js`\n\nTest module.\n\n包含：\n- usage-pagination-order.test (296 行)\n- readFile (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 100,
       "y": 20916,
       "width": 280,
@@ -5642,7 +5642,7 @@
     {
       "id": "undefined_vibeusage-usage-hourly_a06df19a",
       "type": "text",
-      "text": "**vibeusage-usage-hourly**\n`insforge-src/functions-esm/vibeusage-usage-hourly.js`\n\nGeneral module.\n\n包含：\n- vibeusage-usage-hourly (345 行)\n- tryAggregateHourlyTotals (8 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**vibeusage-usage-hourly**\n`insforge-src/functions-esm/vibeusage-usage-hourly.js`\n\nGeneral module.\n\n包含：\n- vibeusage-usage-hourly (262 行)\n- tryAggregateHourlyTotals (8 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 820,
       "y": 7096,
       "width": 280,
@@ -6181,7 +6181,7 @@
     {
       "id": "utils_usage-hourly_66b93178",
       "type": "text",
-      "text": "**usage-hourly**\n`insforge-src/functions-esm/shared/core/usage-hourly.js`\n\nShared utilities.\n\n包含：\n- usage-hourly (14 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**usage-hourly**\n`insforge-src/functions-esm/shared/core/usage-hourly.js`\n\nShared utilities.\n\n包含：\n- usage-hourly (78 行)\n- collectHourlyUsageBuckets (16 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 4060,
       "y": 6016,
       "width": 280,
