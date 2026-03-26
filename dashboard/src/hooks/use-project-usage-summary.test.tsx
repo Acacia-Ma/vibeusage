@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useProjectUsageSummary } from "./use-project-usage-summary";
@@ -128,21 +128,79 @@ describe("useProjectUsageSummary", () => {
 
     await waitFor(() => expect(result.current.entries).toEqual(initialEntries));
 
-    rerender({
-      baseUrl: "https://example.com",
-      accessToken: "token",
-      guestAllowed: false,
-      from: "2026-03-08",
-      to: "2026-03-14",
+    await act(async () => {
+      rerender({
+        baseUrl: "https://example.com",
+        accessToken: "token",
+        guestAllowed: false,
+        from: "2026-03-08",
+        to: "2026-03-14",
+      });
     });
 
     await waitFor(() => expect(result.current.entries).toEqual([]));
     expect(result.current.error).toBeNull();
 
-    if (nextRequest.resolve) {
-      nextRequest.resolve({ entries: nextEntries });
-    }
+    await act(async () => {
+      if (nextRequest.resolve) {
+        nextRequest.resolve({ entries: nextEntries });
+      }
+    });
 
     await waitFor(() => expect(result.current.entries).toEqual(nextEntries));
+  });
+
+  it("enters loading immediately when the requested range changes", async () => {
+    const initialEntries: ProjectUsageEntry[] = [
+      {
+        project_key: "acme/alpha",
+        project_ref: "https://github.com/acme/alpha",
+        total_tokens: "42",
+      },
+    ];
+
+    const pendingToken = {
+      release: null as ((value: string | null) => void) | null,
+    };
+
+    vibeusageApi.getProjectUsageSummary.mockResolvedValueOnce({ entries: initialEntries });
+
+    const { result, rerender } = renderHook((props: HookProps) => useProjectUsageSummary(props), {
+      initialProps: {
+        baseUrl: "https://example.com",
+        accessToken: "token",
+        guestAllowed: false,
+        from: "2026-03-01",
+        to: "2026-03-07",
+      },
+    });
+
+    await waitFor(() => expect(result.current.entries).toEqual(initialEntries));
+
+    authToken.resolveAuthAccessToken.mockImplementationOnce(
+      () =>
+        new Promise<string | null>((resolve) => {
+          pendingToken.release = resolve;
+        }),
+    );
+
+    await act(async () => {
+      rerender({
+        baseUrl: "https://example.com",
+        accessToken: "token",
+        guestAllowed: false,
+        from: "2026-03-08",
+        to: "2026-03-14",
+      });
+    });
+
+    await waitFor(() => expect(result.current.entries).toEqual([]));
+    expect(result.current.loading).toBe(true);
+
+    await act(async () => {
+      if (pendingToken.release) {
+        pendingToken.release("token");
+      }
+    });
   });
 });

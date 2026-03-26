@@ -76,4 +76,11 @@ describe("ProjectUsagePanel", () => {
 
     expect(screen.getByText(/JWSError JWSInvalidSignature/)).toBeInTheDocument();
   });
+
+  it("keeps placeholder cards visible while loading with no entries", () => {
+    const { container } = render(<ProjectUsagePanel entries={[]} loading />);
+
+    expect(container.querySelectorAll('[data-project-card-placeholder="true"]')).toHaveLength(3);
+    expect(screen.queryByText(copy("dashboard.projects.empty"))).not.toBeInTheDocument();
+  });
 });

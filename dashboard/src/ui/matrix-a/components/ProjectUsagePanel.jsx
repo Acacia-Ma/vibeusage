@@ -96,6 +96,7 @@ export function ProjectUsagePanel({
   }, [entries]);
 
   const displayEntries = sortedEntries.slice(0, Math.max(1, limit));
+  const placeholderEntries = Array.from({ length: Math.max(1, resolvedLimit) }, (_, index) => index);
 
   const tokenFormatOptions = {
     thousandSuffix: copy("shared.unit.thousand_abbrev"),
@@ -165,7 +166,14 @@ export function ProjectUsagePanel({
       {displayEntries.length === 0 ? (
         <div className="text-caption text-matrix-muted uppercase tracking-[0.2em]">
           {loading ? (
-            placeholder
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {placeholderEntries.map((index) => (
+                <ProjectUsagePlaceholderCard
+                  key={`placeholder-${index}`}
+                  placeholder={placeholder}
+                />
+              ))}
+            </div>
           ) : error ? (
             <>
               <span>{errorLabel}:</span>{" "}
@@ -307,5 +315,26 @@ function ProjectUsageCard({
         </span>
       </div>
     </a>
+  );
+}
+
+function ProjectUsagePlaceholderCard({ placeholder }) {
+  return (
+    <div
+      className="relative flex h-full min-h-[152px] flex-col gap-3 border border-matrix-ghost bg-matrix-panel px-4 py-5 opacity-60"
+      data-project-card-placeholder="true"
+    >
+      <div className="flex items-start gap-3">
+        <div className="h-10 w-10 rounded-full border border-matrix-ghost bg-matrix-panelStrong" />
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <div className="h-4 w-24 border border-matrix-ghost bg-matrix-panelStrong" />
+          <div className="h-3 w-32 border border-matrix-ghost bg-matrix-panelStrong" />
+        </div>
+      </div>
+      <div className="mt-auto flex items-center justify-between gap-4 text-caption uppercase tracking-[0.2em] text-matrix-muted">
+        <span>{placeholder}</span>
+        <span>{placeholder}</span>
+      </div>
+    </div>
   );
 }

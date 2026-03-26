@@ -66,6 +66,7 @@ export function useProjectUsageSummary({
       return;
     }
     if (tokenReady || !guestAllowed || mockEnabled) {
+      setLoading(true);
       setEntries([]);
       setError(null);
     }
