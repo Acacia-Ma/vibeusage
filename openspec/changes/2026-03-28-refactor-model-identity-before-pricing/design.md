@@ -11,9 +11,13 @@ The runtime pricing path already consumes canonical `model_id` values from the m
 - Do not add new columns to `vibeusage_tracker_hourly`.
 - Do not create self-alias rows for models that are already canonical; raw fallback remains valid.
 - Only write canonical aliases for deterministic patterns:
+  - `anthropic` with explicit `claude-{tier}-{version}` family names
+  - `minimax` with explicit `minimax-m*` family names
   - `qwen` with explicit version + tier (`plus`, `max`, `turbo`, `coder`, `coder-flash`, `coder-plus`, `coder-next`)
   - `deepseek` with explicit `r*`, `v*`, or `chat`
   - `glm` with explicit numeric version and optional `v`, `flash`, or `turbo`
+  - `mimo` with explicit version + tier names
+  - `kimi` shorthand patterns such as `k2p5`
 
 ## Sync flow
 

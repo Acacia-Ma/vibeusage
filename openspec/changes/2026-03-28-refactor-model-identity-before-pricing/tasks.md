@@ -12,5 +12,8 @@
 - [x] 2.2 `node scripts/acceptance/openrouter-pricing-sync.cjs`
 - [x] 2.3 `node scripts/acceptance/pricing-model-alias.cjs`
 - [x] 2.4 `node scripts/acceptance/pricing-resolver.cjs`
-- [x] 2.5 `npm run build:insforge:check`
-- [x] 2.6 `openspec validate 2026-03-28-refactor-model-identity-before-pricing --strict`
+- [x] 2.5 `node --test test/insforge-src-shared.test.js --test-name-pattern "pricing|Pricing|prefixed models without aliases|pricing defaults"`
+- [x] 2.6 `node --test test/edge-functions.test.js --test-name-pattern "vibeusage-usage-summary returns total_cost_usd and pricing metadata|vibeusage-project-usage-summary aggregates project usage|debug query_ms includes pricing resolution time|vibeusage-usage-model-breakdown emits model_id and merges aliases"`
+- [x] 2.7 `node scripts/build-insforge-functions.cjs`
+- [x] 2.8 `npm run build:insforge:check`
+- [x] 2.9 `openspec validate 2026-03-28-refactor-model-identity-before-pricing --strict`

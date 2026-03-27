@@ -57,7 +57,9 @@ tasks:
     owner: codex-main
     touches:
       - insforge-src/functions-esm/vibeusage-pricing-sync.js
+      - insforge-functions/vibeusage-pricing-sync.js
       - scripts/acceptance/openrouter-pricing-sync.cjs
+      - scripts/acceptance/pricing-model-alias.cjs
       - test/pricing-sync-auto-alias.test.js
       - scripts/ops/pricing-alias-diagnostics.sql
       - scripts/ops/pricing-sync-health.sql

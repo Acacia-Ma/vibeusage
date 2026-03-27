@@ -4,7 +4,9 @@ status: done
 owner: codex-main
 touches:
   - insforge-src/functions-esm/vibeusage-pricing-sync.js
+  - insforge-functions/vibeusage-pricing-sync.js
   - scripts/acceptance/openrouter-pricing-sync.cjs
+  - scripts/acceptance/pricing-model-alias.cjs
   - test/pricing-sync-auto-alias.test.js
   - scripts/ops/pricing-alias-diagnostics.sql
   - scripts/ops/pricing-sync-health.sql
@@ -16,6 +18,6 @@ notes:
   - "DECISION: Pricing sync now writes high-confidence canonical aliases into vibeusage_model_aliases before generating pricing aliases."
   - "DECISION: Pricing alias generation now consumes canonical models only; ambiguous names such as kimi-for-coding, gemini-3-pro, and coder-model stay on fallback."
   - "EVIDENCE: Canonical alias automation now covers deterministic anthropic, minimax, qwen, deepseek, glm, kimi shorthand, and mimo families without changing usage runtime contracts."
-  - "EVIDENCE: Local verification passed for pricing-sync auto-alias tests, pricing acceptances, shared pricing tests, edge-function pricing regressions, artifact rebuild, and OpenSpec validation."
+  - "EVIDENCE: Local verification passed for pricing-sync auto-alias tests, pricing acceptances, pricing resolver acceptance, shared pricing tests, edge-function pricing regressions, artifact rebuild, and OpenSpec validation."
 commit_refs:
   - 9d66b797
