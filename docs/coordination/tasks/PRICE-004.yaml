@@ -1,0 +1,19 @@
+id: PRICE-004
+title: Deploy canonical-first pricing sync and run production smoke
+status: done
+owner: codex-main
+touches:
+  - insforge-functions/vibeusage-pricing-sync.js
+  - openspec/changes/2026-03-28-refactor-model-identity-before-pricing/
+  - docs/coordination/index.yaml
+  - docs/coordination/tasks/PRICE-004.yaml
+notes:
+  - "DECISION: Treat production deployment and smoke as a separate execution task for the canonical-first pricing sync change."
+  - "EVIDENCE: Deployed the current insforge-functions/vibeusage-pricing-sync.js artifact to the live vibeusage-pricing-sync function via Insforge2 MCP."
+  - "EVIDENCE: GitHub Actions run 23659989636 completed successfully and returned HTTP 200 with canonical_aliases_generated=48, canonical_aliases_upserted=48, aliases_generated=2, and aliases_upserted=2."
+  - "EVIDENCE: Live function source readback confirms the deployed code now contains canonical-first alias generation and the canonical_aliases_generated response fields."
+  - "NOTE: A follow-up coverage SQL check through Insforge2 MCP timed out at 30s, so this task closes on deployment plus production smoke evidence rather than an inline aggregate query."
+commit_refs:
+  - 9d66b797
+  - 8cc6d470
+  - bf4e63f6
