@@ -19,6 +19,11 @@ const dashboardCache = vi.hoisted(() => ({
   writeDashboardCache: vi.fn(),
 }));
 
+const liveSnapshots = vi.hoisted(() => ({
+  readDashboardLiveSnapshot: vi.fn(() => null as any),
+  writeDashboardLiveSnapshot: vi.fn(),
+}));
+
 const mockData = vi.hoisted(() => ({
   isMockEnabled: vi.fn(() => false),
 }));
@@ -33,6 +38,7 @@ const vibeusageApi = vi.hoisted(() => ({
 
 vi.mock("../lib/auth-token", () => authToken);
 vi.mock("../lib/dashboard-cache", () => dashboardCache);
+vi.mock("../lib/dashboard-live-snapshot", () => liveSnapshots);
 vi.mock("../lib/mock-data", () => mockData);
 vi.mock("../lib/timezone", () => timezone);
 vi.mock("../lib/vibeusage-api", () => vibeusageApi);
@@ -50,6 +56,9 @@ describe("useUsageModelBreakdown", () => {
     dashboardCache.readDashboardCache.mockReset();
     dashboardCache.readDashboardCache.mockReturnValue(null);
     dashboardCache.writeDashboardCache.mockReset();
+    liveSnapshots.readDashboardLiveSnapshot.mockReset();
+    liveSnapshots.readDashboardLiveSnapshot.mockReturnValue(null);
+    liveSnapshots.writeDashboardLiveSnapshot.mockReset();
 
     mockData.isMockEnabled.mockReset();
     mockData.isMockEnabled.mockReturnValue(false);
@@ -147,7 +156,51 @@ describe("useUsageModelBreakdown", () => {
     });
 
     await waitFor(() => expect(vibeusageApi.getUsageModelBreakdown).toHaveBeenCalledTimes(2));
-    expect(result.current.loading).toBe(true);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.refreshing).toBe(true);
     expect(result.current.breakdown).toEqual(previousBreakdown);
+  });
+
+  it("hydrates a resolved model breakdown snapshot immediately while refreshing in the background", async () => {
+    liveSnapshots.readDashboardLiveSnapshot.mockReturnValue({
+      breakdown: { models: [{ label: "snapshot", value: "84" }] },
+    });
+
+    let resolveBreakdown: ((value: any) => void) | null = null;
+    vibeusageApi.getUsageModelBreakdown.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveBreakdown = resolve;
+        }),
+    );
+
+    const { result } = renderHook(() =>
+      useUsageModelBreakdown({
+        baseUrl: "https://example.com",
+        accessToken: "token",
+        guestAllowed: false,
+        from: "2026-03-01",
+        to: "2026-03-07",
+        cacheKey: "user-1",
+        timeZone: "UTC",
+        tzOffsetMinutes: 0,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current.breakdown).toEqual({
+        models: [{ label: "snapshot", value: "84" }],
+      }),
+    );
+    expect(result.current.loading).toBe(false);
+    expect(result.current.refreshing).toBe(true);
+
+    const nextBreakdown = { models: [{ label: "edge", value: "126" }] };
+    await act(async () => {
+      resolveBreakdown?.(nextBreakdown);
+    });
+
+    await waitFor(() => expect(result.current.refreshing).toBe(false));
+    expect(result.current.breakdown).toEqual(nextBreakdown);
   });
 });

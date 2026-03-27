@@ -21,4 +21,24 @@ describe("UsagePanel", () => {
     expect(screen.getByTestId("usage-summary-loading")).toBeInTheDocument();
     expect(screen.queryByText("—")).not.toBeInTheDocument();
   });
+
+  it("keeps the current summary visible while a background refresh is in flight", () => {
+    render(
+      <UsagePanel
+        period="total"
+        periods={["day", "week", "month", "total"]}
+        showSummary
+        useSummaryLayout
+        summaryLabel="TOTAL_TOKENS"
+        summaryValue="84B"
+        summaryAnimate={false}
+        refreshing
+        onRefresh={() => {}}
+      />,
+    );
+
+    expect(screen.queryByTestId("usage-summary-loading")).not.toBeInTheDocument();
+    expect(screen.getByText("84B")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /loading/i })).toBeDisabled();
+  });
 });

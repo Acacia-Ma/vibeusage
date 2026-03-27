@@ -17,6 +17,11 @@ const dashboardCache = vi.hoisted(() => ({
   writeDashboardCache: vi.fn(),
 }));
 
+const liveSnapshots = vi.hoisted(() => ({
+  readDashboardLiveSnapshot: vi.fn(() => null as any),
+  writeDashboardLiveSnapshot: vi.fn(),
+}));
+
 const mockData = vi.hoisted(() => ({
   isMockEnabled: vi.fn(() => false),
 }));
@@ -34,6 +39,7 @@ const vibeusageApi = vi.hoisted(() => ({
 
 vi.mock("../lib/auth-token", () => authToken);
 vi.mock("../lib/dashboard-cache", () => dashboardCache);
+vi.mock("../lib/dashboard-live-snapshot", () => liveSnapshots);
 vi.mock("../lib/mock-data", () => mockData);
 vi.mock("../lib/timezone", () => timezone);
 vi.mock("../lib/vibeusage-api", () => vibeusageApi);
@@ -51,6 +57,9 @@ describe("useTrendData", () => {
     dashboardCache.readDashboardCache.mockReset();
     dashboardCache.readDashboardCache.mockReturnValue(null);
     dashboardCache.writeDashboardCache.mockReset();
+    liveSnapshots.readDashboardLiveSnapshot.mockReset();
+    liveSnapshots.readDashboardLiveSnapshot.mockReturnValue(null);
+    liveSnapshots.writeDashboardLiveSnapshot.mockReset();
 
     mockData.isMockEnabled.mockReset();
     mockData.isMockEnabled.mockReturnValue(false);
@@ -213,7 +222,71 @@ describe("useTrendData", () => {
     });
 
     await waitFor(() => expect(vibeusageApi.getUsageDaily).toHaveBeenCalledTimes(2));
-    expect(result.current.loading).toBe(true);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.refreshing).toBe(true);
     expect(result.current.rows).toEqual(previousRows);
+  });
+
+  it("hydrates a resolved trend snapshot immediately while the next request refreshes", async () => {
+    liveSnapshots.readDashboardLiveSnapshot.mockReturnValue({
+      rows: [{ day: "2026-03-07", total_tokens: "84", billable_total_tokens: "84" }],
+      from: "2026-03-01",
+      to: "2026-03-07",
+      fetchedAt: "2026-03-07T00:00:00.000Z",
+    });
+
+    let resolveDaily: ((value: any) => void) | null = null;
+    vibeusageApi.getUsageDaily.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveDaily = resolve;
+        }),
+    );
+
+    const { result } = renderHook(() =>
+      useTrendData({
+        baseUrl: "https://example.com",
+        accessToken: "token",
+        guestAllowed: false,
+        period: "week",
+        from: "2026-03-01",
+        to: "2026-03-07",
+        cacheKey: "user-1",
+        timeZone: "UTC",
+        tzOffsetMinutes: 0,
+        now: NOW,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current.rows).toEqual([
+        expect.objectContaining({
+          day: "2026-03-07",
+          total_tokens: "84",
+          billable_total_tokens: "84",
+        }),
+      ]),
+    );
+    expect(result.current.loading).toBe(false);
+    expect(result.current.refreshing).toBe(true);
+
+    await act(async () => {
+      resolveDaily?.({
+        from: "2026-03-01",
+        to: "2026-03-07",
+        data: [{ day: "2026-03-06", total_tokens: "126", billable_total_tokens: "126" }],
+      });
+    });
+
+    await waitFor(() => expect(result.current.refreshing).toBe(false));
+    expect(result.current.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          day: "2026-03-06",
+          total_tokens: "126",
+          billable_total_tokens: "126",
+        }),
+      ]),
+    );
   });
 });

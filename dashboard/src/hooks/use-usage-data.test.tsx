@@ -1,5 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react";
-import { act } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useUsageData } from "./use-usage-data";
@@ -14,6 +13,11 @@ const dashboardCache = vi.hoisted(() => ({
   clearDashboardCache: vi.fn(),
   readDashboardCache: vi.fn(() => null as any),
   writeDashboardCache: vi.fn(),
+}));
+
+const liveSnapshots = vi.hoisted(() => ({
+  readDashboardLiveSnapshot: vi.fn(() => null as any),
+  writeDashboardLiveSnapshot: vi.fn(),
 }));
 
 const mockData = vi.hoisted(() => ({
@@ -35,6 +39,7 @@ const vibeusageApi = vi.hoisted(() => ({
 
 vi.mock("../lib/auth-token", () => authToken);
 vi.mock("../lib/dashboard-cache", () => dashboardCache);
+vi.mock("../lib/dashboard-live-snapshot", () => liveSnapshots);
 vi.mock("../lib/mock-data", () => mockData);
 vi.mock("../lib/timezone", () => timezone);
 vi.mock("../lib/vibeusage-api", () => vibeusageApi);
@@ -52,6 +57,10 @@ describe("useUsageData", () => {
     dashboardCache.readDashboardCache.mockReset();
     dashboardCache.readDashboardCache.mockReturnValue(null);
     dashboardCache.writeDashboardCache.mockReset();
+
+    liveSnapshots.readDashboardLiveSnapshot.mockReset();
+    liveSnapshots.readDashboardLiveSnapshot.mockReturnValue(null);
+    liveSnapshots.writeDashboardLiveSnapshot.mockReset();
 
     mockData.isMockEnabled.mockReset();
     mockData.isMockEnabled.mockReturnValue(false);
@@ -71,8 +80,8 @@ describe("useUsageData", () => {
   });
 
   it("updates summary as soon as summary data resolves without waiting for daily rows", async () => {
-    const dailyResolvers: ((value: any) => void)[] = [];
-    const summaryResolvers: ((value: any) => void)[] = [];
+    const dailyResolvers = [] as ((value: any) => void)[];
+    const summaryResolvers = [] as ((value: any) => void)[];
 
     vibeusageApi.getUsageDaily.mockImplementation(
       () =>
@@ -104,12 +113,14 @@ describe("useUsageData", () => {
     await waitFor(() => expect(vibeusageApi.getUsageDaily).toHaveBeenCalled());
     await waitFor(() => expect(vibeusageApi.getUsageSummary).toHaveBeenCalled());
 
-    for (const resolve of summaryResolvers) {
-      resolve({
-        totals: { total_tokens: "42", billable_total_tokens: "42" },
-        rolling: { last_7d: { totals: { billable_total_tokens: "42" } } },
-      });
-    }
+    await act(async () => {
+      for (const resolve of summaryResolvers) {
+        resolve({
+          totals: { total_tokens: "42", billable_total_tokens: "42" },
+          rolling: { last_7d: { totals: { billable_total_tokens: "42" } } },
+        });
+      }
+    });
 
     await waitFor(() =>
       expect(result.current.summary).toEqual({
@@ -117,15 +128,23 @@ describe("useUsageData", () => {
         billable_total_tokens: "42",
       }),
     );
-    expect(result.current.loading).toBe(true);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.refreshing).toBe(true);
 
-    for (const resolve of dailyResolvers) {
-      resolve({
-        data: [{ day: "2026-03-07", total_tokens: "42", billable_total_tokens: "42" }],
-      });
-    }
+    await act(async () => {
+      for (const resolve of dailyResolvers) {
+        resolve({
+          data: [{ day: "2026-03-07", total_tokens: "42", billable_total_tokens: "42" }],
+        });
+      }
+    });
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() =>
+      expect(result.current.summary).toEqual({
+        total_tokens: "42",
+        billable_total_tokens: "42",
+      }),
+    );
   });
 
   it("does not hydrate usage from cache before the edge refresh resolves", async () => {
@@ -138,19 +157,19 @@ describe("useUsageData", () => {
       fetchedAt: "2026-03-07T00:00:00.000Z",
     });
 
-    let resolveDaily: ((value: any) => void) | null = null;
-    let resolveSummary: ((value: any) => void) | null = null;
+    const dailyResolvers = [] as ((value: any) => void)[];
+    const summaryResolvers = [] as ((value: any) => void)[];
 
     vibeusageApi.getUsageDaily.mockImplementation(
       () =>
         new Promise((resolve) => {
-          resolveDaily = resolve;
+          dailyResolvers.push(resolve);
         }),
     );
     vibeusageApi.getUsageSummary.mockImplementation(
       () =>
         new Promise((resolve) => {
-          resolveSummary = resolve;
+          summaryResolvers.push(resolve);
         }),
     );
 
@@ -177,10 +196,12 @@ describe("useUsageData", () => {
     expect(result.current.daily).toEqual([]);
 
     await act(async () => {
-      resolveSummary?.({
-        totals: { total_tokens: "42", billable_total_tokens: "42" },
-        rolling: { last_7d: { totals: { billable_total_tokens: "42" } } },
-      });
+      for (const resolve of summaryResolvers) {
+        resolve({
+          totals: { total_tokens: "42", billable_total_tokens: "42" },
+          rolling: { last_7d: { totals: { billable_total_tokens: "42" } } },
+        });
+      }
     });
 
     await waitFor(() =>
@@ -191,11 +212,80 @@ describe("useUsageData", () => {
     );
 
     await act(async () => {
-      resolveDaily?.({
-        data: [{ day: "2026-03-07", total_tokens: "42", billable_total_tokens: "42" }],
-      });
+      for (const resolve of dailyResolvers) {
+        resolve({
+          data: [{ day: "2026-03-07", total_tokens: "42", billable_total_tokens: "42" }],
+        });
+      }
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
+  });
+
+  it("hydrates a resolved period snapshot immediately before the next backend summary arrives", async () => {
+    liveSnapshots.readDashboardLiveSnapshot.mockReturnValue({
+      summary: { total_tokens: "84", billable_total_tokens: "84" },
+      rolling: { last_7d: { totals: { billable_total_tokens: "84" } } },
+      daily: [{ day: "2026-03-07", total_tokens: "84", billable_total_tokens: "84" }],
+      fetchedAt: "2026-03-07T00:00:00.000Z",
+    });
+
+    const dailyResolvers = [] as ((value: any) => void)[];
+    const summaryResolvers = [] as ((value: any) => void)[];
+
+    vibeusageApi.getUsageDaily.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          dailyResolvers.push(resolve);
+        }),
+    );
+    vibeusageApi.getUsageSummary.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          summaryResolvers.push(resolve);
+        }),
+    );
+
+    const { result } = renderHook(() =>
+      useUsageData({
+        baseUrl: "https://example.com",
+        accessToken: "token",
+        from: "2026-03-01",
+        to: "2026-03-07",
+        includeDaily: true,
+        cacheKey: "user-1",
+        timeZone: "UTC",
+        tzOffsetMinutes: 0,
+        now: new Date("2026-03-07T00:00:00Z"),
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current.summary).toEqual({
+        total_tokens: "84",
+        billable_total_tokens: "84",
+      }),
+    );
+    await waitFor(() => expect(vibeusageApi.getUsageSummary).toHaveBeenCalled());
+    expect(result.current.loading).toBe(false);
+    expect(result.current.refreshing).toBe(true);
+
+    await act(async () => {
+      for (const resolve of summaryResolvers) {
+        resolve({
+          totals: { total_tokens: "126", billable_total_tokens: "126" },
+          rolling: { last_7d: { totals: { billable_total_tokens: "126" } } },
+        });
+      }
+      for (const resolve of dailyResolvers) {
+        resolve({
+          data: [{ day: "2026-03-07", total_tokens: "126", billable_total_tokens: "126" }],
+        });
+      }
+    });
+
+    await waitFor(() =>
+      expect(vibeusageApi.getUsageSummary).toHaveBeenCalled(),
+    );
   });
 });

@@ -39,6 +39,7 @@ export const UsagePanel = React.memo(function UsagePanel({
   useSummaryLayout = false,
   onRefresh,
   loading = false,
+  refreshing = false,
   error,
   rangeLabel,
   rangeTimeZoneLabel,
@@ -150,8 +151,10 @@ export const UsagePanel = React.memo(function UsagePanel({
                 </MatrixButton>
               ) : null}
               {onRefresh ? (
-                <MatrixButton primary disabled={loading} onClick={onRefresh}>
-                  {loading ? copy("usage.button.loading") : copy("usage.button.refresh")}
+                <MatrixButton primary disabled={loading || refreshing} onClick={onRefresh}>
+                  {loading || refreshing
+                    ? copy("usage.button.loading")
+                    : copy("usage.button.refresh")}
                 </MatrixButton>
               ) : null}
             </div>

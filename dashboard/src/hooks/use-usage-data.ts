@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { isAccessTokenReady, resolveAuthAccessToken } from "../lib/auth-token";
 import {
   buildDashboardCacheKey,
@@ -6,6 +6,10 @@ import {
   readDashboardCache,
   writeDashboardCache,
 } from "../lib/dashboard-cache";
+import {
+  readDashboardLiveSnapshot,
+  writeDashboardLiveSnapshot,
+} from "../lib/dashboard-live-snapshot";
 import { formatDateLocal, formatDateUTC } from "../lib/date-range";
 import { isMockEnabled } from "../lib/mock-data";
 import { getLocalDayKey, getTimeZoneCacheKey } from "../lib/timezone";
@@ -29,6 +33,7 @@ export function useUsageData({
   const [source, setSource] = useState<string>("edge");
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mockEnabled = isMockEnabled();
   const tokenReady = isAccessTokenReady(accessToken);
@@ -61,12 +66,35 @@ export function useUsageData({
     clearDashboardCache(storageKey);
   }, [storageKey]);
 
+  const visibleStateRef = useRef(false);
+  useEffect(() => {
+    visibleStateRef.current = Boolean(summary) || Boolean(rolling) || daily.length > 0;
+  }, [daily.length, rolling, summary]);
+
+  const applySnapshot = useCallback((snapshot: any) => {
+    if (!snapshot) return;
+    setDaily(Array.isArray(snapshot.daily) ? snapshot.daily : []);
+    setSummary(snapshot.summary || null);
+    setRolling(snapshot.rolling || null);
+    setFetchedAt(snapshot.fetchedAt || null);
+    setSource("edge");
+  }, []);
+
   const refresh = useCallback(async ({ signal }: any = {}) => {
+    const snapshot = readDashboardLiveSnapshot("usage", storageKey);
+    if (snapshot?.summary || snapshot?.rolling || Array.isArray(snapshot?.daily)) {
+      applySnapshot(snapshot);
+    }
+    const hasVisibleState =
+      Boolean(snapshot?.summary) || Boolean(snapshot?.rolling) || Array.isArray(snapshot?.daily)
+        ? true
+        : visibleStateRef.current;
+    setLoading(!hasVisibleState);
+    setRefreshing(hasVisibleState);
+    setError(null);
     const resolvedToken = await resolveAuthAccessToken(accessToken);
     if (!resolvedToken && !mockEnabled) return;
     if (signal?.aborted) return;
-    setLoading(true);
-    setError(null);
     try {
       let dailyRes = null;
       let summaryRes = null;
@@ -99,6 +127,8 @@ export function useUsageData({
           setSummary(summaryRes?.totals || null);
           setRolling(summaryRes?.rolling || null);
           setSource("edge");
+          setLoading(false);
+          setRefreshing(false);
         }
         dailyRes = await dailyPromise;
         if (signal?.aborted) return;
@@ -149,6 +179,14 @@ export function useUsageData({
       setRolling(nextRolling);
       setSource("edge");
       setFetchedAt(nowIso);
+      setLoading(false);
+      setRefreshing(false);
+      writeDashboardLiveSnapshot("usage", storageKey, {
+        summary: nextSummary,
+        rolling: nextRolling,
+        daily: nextDaily,
+        fetchedAt: nowIso,
+      });
 
       if (nextSummary && cacheAllowed) {
         writeCache({
@@ -195,10 +233,12 @@ export function useUsageData({
         setFetchedAt(null);
       }
     } finally {
+      setRefreshing(false);
       if (signal?.aborted) return;
       setLoading(false);
     }
   }, [
+    applySnapshot,
     accessToken,
     baseUrl,
     from,
@@ -213,6 +253,7 @@ export function useUsageData({
     to,
     tzOffsetMinutes,
     clearCache,
+    storageKey,
     writeCache,
   ]);
 
@@ -223,6 +264,7 @@ export function useUsageData({
       setRolling(null);
       setError(null);
       setLoading(false);
+      setRefreshing(false);
       setSource("edge");
       setFetchedAt(null);
       return;
@@ -256,6 +298,7 @@ export function useUsageData({
     source: normalizedSource,
     fetchedAt,
     loading,
+    refreshing,
     error,
     refresh,
   };

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isAccessTokenReady, resolveAuthAccessToken } from "../lib/auth-token";
 import {
   buildDashboardCacheKey,
@@ -6,6 +6,10 @@ import {
   readDashboardCache,
   writeDashboardCache,
 } from "../lib/dashboard-cache";
+import {
+  readDashboardLiveSnapshot,
+  writeDashboardLiveSnapshot,
+} from "../lib/dashboard-live-snapshot";
 import { formatDateLocal, formatDateUTC } from "../lib/date-range";
 import { isMockEnabled } from "../lib/mock-data";
 import { getLocalDayKey, getTimeZoneCacheKey } from "../lib/timezone";
@@ -32,6 +36,7 @@ export function useTrendData({
   const [source, setSource] = useState<string>("edge");
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mockEnabled = isMockEnabled();
   const tokenReady = isAccessTokenReady(accessToken);
@@ -75,12 +80,31 @@ export function useTrendData({
     clearDashboardCache(storageKey);
   }, [storageKey]);
 
+  const visibleStateRef = useRef(false);
+  useEffect(() => {
+    visibleStateRef.current = rows.length > 0;
+  }, [rows.length]);
+
+  const applySnapshot = useCallback((snapshot: any) => {
+    if (!snapshot) return;
+    setRows(Array.isArray(snapshot.rows) ? snapshot.rows : []);
+    setRange({ from: snapshot.from || from, to: snapshot.to || to });
+    setFetchedAt(snapshot.fetchedAt || null);
+    setSource("edge");
+  }, [from, to]);
+
   const refresh = useCallback(async ({ signal }: any = {}) => {
+    const snapshot = readDashboardLiveSnapshot("trend", storageKey);
+    if (snapshot?.rows) {
+      applySnapshot(snapshot);
+    }
+    const hasVisibleState = Array.isArray(snapshot?.rows) ? true : visibleStateRef.current;
+    setLoading(!hasVisibleState);
+    setRefreshing(hasVisibleState);
+    setError(null);
     const resolvedToken = await resolveAuthAccessToken(accessToken);
     if (!resolvedToken && !mockEnabled) return;
     if (signal?.aborted) return;
-    setLoading(true);
-    setError(null);
     try {
       let response;
       if (mode === "hourly") {
@@ -145,6 +169,12 @@ export function useTrendData({
       setRange({ from: nextFrom, to: nextTo });
       setSource("edge");
       setFetchedAt(nowIso);
+      writeDashboardLiveSnapshot("trend", storageKey, {
+        rows: nextRows,
+        from: nextFrom,
+        to: nextTo,
+        fetchedAt: nowIso,
+      });
 
       if (cacheAllowed) {
         writeCache({
@@ -205,9 +235,11 @@ export function useTrendData({
     } finally {
       if (signal?.aborted) return;
       setLoading(false);
+      setRefreshing(false);
     }
   }, [
     accessToken,
+    applySnapshot,
     baseUrl,
     from,
     mockEnabled,
@@ -221,6 +253,7 @@ export function useTrendData({
     tzOffsetMinutes,
     now,
     clearCache,
+    storageKey,
     writeCache,
   ]);
 
@@ -230,6 +263,7 @@ export function useTrendData({
       setRange({ from, to });
       setError(null);
       setLoading(false);
+      setRefreshing(false);
       setSource("edge");
       setFetchedAt(null);
       return;
@@ -262,6 +296,7 @@ export function useTrendData({
     source: normalizedSource,
     fetchedAt,
     loading,
+    refreshing,
     error,
     refresh,
   };
