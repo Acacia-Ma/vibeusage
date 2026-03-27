@@ -1,7 +1,7 @@
 tasks:
   - id: COORD-001
     title: Validate Agent Foreman coordination flow
-    status: in_progress
+    status: done
     owner: codex-main
     touches:
       - docs/coordination/index.yaml
