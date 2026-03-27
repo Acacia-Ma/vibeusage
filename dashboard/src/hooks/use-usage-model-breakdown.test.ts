@@ -102,4 +102,52 @@ describe("useUsageModelBreakdown", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.breakdown).toEqual(nextBreakdown);
   });
+
+  it("keeps the previous model breakdown visible while a new period refresh is in flight", async () => {
+    const resolvers: Array<(value: any) => void> = [];
+    vibeusageApi.getUsageModelBreakdown.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+
+    const { result, rerender } = renderHook(
+      (props) =>
+        useUsageModelBreakdown({
+          baseUrl: "https://example.com",
+          accessToken: "token",
+          guestAllowed: false,
+          cacheKey: "user-1",
+          timeZone: "UTC",
+          tzOffsetMinutes: 0,
+          ...props,
+        }),
+      {
+        initialProps: {
+          from: "2026-03-01",
+          to: "2026-03-07",
+        },
+      },
+    );
+
+    await waitFor(() => expect(vibeusageApi.getUsageModelBreakdown).toHaveBeenCalledTimes(1));
+
+    const previousBreakdown = { models: [{ label: "edge", value: "42" }] };
+    await act(async () => {
+      resolvers.shift()?.(previousBreakdown);
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.breakdown).toEqual(previousBreakdown);
+
+    rerender({
+      from: "2026-02-01",
+      to: "2026-02-07",
+    });
+
+    await waitFor(() => expect(vibeusageApi.getUsageModelBreakdown).toHaveBeenCalledTimes(2));
+    expect(result.current.loading).toBe(true);
+    expect(result.current.breakdown).toEqual(previousBreakdown);
+  });
 });

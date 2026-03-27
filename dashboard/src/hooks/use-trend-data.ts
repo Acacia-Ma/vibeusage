@@ -191,16 +191,12 @@ export function useTrendData({
           setFetchedAt(cached.fetchedAt || null);
           setError(null);
         } else {
-          setRows([]);
-          setRange({ from, to });
           setSource("edge");
           setFetchedAt(null);
           const err = e as any;
           setError(err?.message || String(err));
         }
       } else {
-        setRows([]);
-        setRange({ from, to });
         setSource("edge");
         setFetchedAt(null);
         const err = e as any;
@@ -240,11 +236,8 @@ export function useTrendData({
     }
     setLoading(true);
     if (!cacheAllowed) clearCache();
-    setRows([]);
-    setRange({ from, to });
     setError(null);
     setSource("edge");
-    setFetchedAt(null);
     const controller = new AbortController();
     refresh({ signal: controller.signal });
     return () => {

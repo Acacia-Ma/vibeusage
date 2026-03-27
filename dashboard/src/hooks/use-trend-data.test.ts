@@ -153,4 +153,67 @@ describe("useTrendData", () => {
       }),
     ]);
   });
+
+  it("keeps the previous trend rows visible while a new period refresh is in flight", async () => {
+    const dailyResolvers: Array<(value: any) => void> = [];
+    vibeusageApi.getUsageDaily.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          dailyResolvers.push(resolve);
+        }),
+    );
+
+    const { result, rerender } = renderHook(
+      (props) =>
+        useTrendData({
+          baseUrl: "https://example.com",
+          accessToken: "token",
+          guestAllowed: false,
+          cacheKey: "user-1",
+          timeZone: "UTC",
+          tzOffsetMinutes: 0,
+          now: NOW,
+          ...props,
+        }),
+      {
+        initialProps: {
+          period: "week",
+          from: "2026-03-01",
+          to: "2026-03-07",
+        },
+      },
+    );
+
+    await waitFor(() => expect(vibeusageApi.getUsageDaily).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      dailyResolvers.shift()?.({
+        from: "2026-03-01",
+        to: "2026-03-07",
+        data: [{ day: "2026-03-07", total_tokens: "42", billable_total_tokens: "42" }],
+      });
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const previousRows = result.current.rows;
+    expect(previousRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          day: "2026-03-07",
+          total_tokens: "42",
+          billable_total_tokens: "42",
+        }),
+      ]),
+    );
+
+    rerender({
+      period: "week",
+      from: "2026-02-01",
+      to: "2026-02-07",
+    });
+
+    await waitFor(() => expect(vibeusageApi.getUsageDaily).toHaveBeenCalledTimes(2));
+    expect(result.current.loading).toBe(true);
+    expect(result.current.rows).toEqual(previousRows);
+  });
 });

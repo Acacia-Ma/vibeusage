@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { BackendStatus } from "../components/BackendStatus.jsx";
-import { useActivityHeatmap } from "../hooks/use-activity-heatmap.js";
+import { useActivityHeatmap } from "../hooks/use-activity-heatmap";
 import { useProjectUsageSummary } from "../hooks/use-project-usage-summary";
-import { useTrendData } from "../hooks/use-trend-data.js";
-import { useUsageData } from "../hooks/use-usage-data.js";
-import { useUsageModelBreakdown } from "../hooks/use-usage-model-breakdown.js";
+import { useRecentUsageData } from "../hooks/use-recent-usage-data";
+import { useTrendData } from "../hooks/use-trend-data";
+import { useUsageData } from "../hooks/use-usage-data";
+import { useUsageModelBreakdown } from "../hooks/use-usage-model-breakdown";
 import {
   isAccessTokenReady,
   normalizeAccessToken,
@@ -14,6 +15,10 @@ import { copy } from "../lib/copy";
 import { getDetailsSortColumns, sortDailyRows } from "../lib/daily";
 import { getRangeForPeriod } from "../lib/date-range";
 import { DETAILS_PAGE_SIZE, paginateRows, trimLeadingZeroMonths } from "../lib/details";
+import {
+  getUsagePanelLoading,
+  selectRollingUsageForDisplay,
+} from "../lib/dashboard-period-bindings";
 import {
   formatCompactNumber,
   formatUsdCurrency,
@@ -462,7 +467,7 @@ export function DashboardPage({
   const {
     daily,
     summary,
-    rolling,
+    rolling: usageRolling,
     source: usageSource,
     loading: usageLoading,
     error: usageError,
@@ -474,6 +479,16 @@ export function DashboardPage({
     from,
     to,
     includeDaily: period !== "total",
+    cacheKey,
+    timeZone,
+    tzOffsetMinutes,
+    now: mockNow,
+  });
+
+  const { rolling: recentRolling, refresh: refreshRecentUsage } = useRecentUsageData({
+    baseUrl,
+    accessToken,
+    guestAllowed,
     cacheKey,
     timeZone,
     tzOffsetMinutes,
@@ -698,12 +713,30 @@ export function DashboardPage({
 
   const refreshAll = useCallback(() => {
     refreshUsage();
+    refreshRecentUsage();
     refreshHeatmap();
     refreshTrend();
     refreshModelBreakdown();
-  }, [refreshHeatmap, refreshModelBreakdown, refreshTrend, refreshUsage]);
+  }, [refreshHeatmap, refreshModelBreakdown, refreshRecentUsage, refreshTrend, refreshUsage]);
 
-  const usageLoadingState = usageLoading || heatmapLoading || trendLoading || modelBreakdownLoading;
+  const usagePanelLoading = useMemo(
+    () =>
+      getUsagePanelLoading({
+        usageLoading,
+        heatmapLoading,
+        trendLoading,
+        modelBreakdownLoading,
+      }),
+    [heatmapLoading, modelBreakdownLoading, trendLoading, usageLoading],
+  );
+  const rollingUsage = useMemo(
+    () =>
+      selectRollingUsageForDisplay({
+        recentRolling,
+        usageRolling,
+      }),
+    [recentRolling, usageRolling],
+  );
   const usageSourceLabel = useMemo(
     () =>
       copy("shared.data_source", {
@@ -1325,7 +1358,7 @@ export function DashboardPage({
       summaryLabel={summaryLabel}
       summaryValue={summaryValue}
       summaryCostValue={summaryCostValue}
-      rollingUsage={rolling}
+      rollingUsage={rollingUsage}
       costInfoEnabled={costInfoEnabled}
       openCostModal={openCostModal}
       allowBreakdownToggle={allowBreakdownToggle}
@@ -1336,7 +1369,7 @@ export function DashboardPage({
       coreIndexCollapseAria={coreIndexCollapseAria}
       coreIndexExpandAria={coreIndexExpandAria}
       refreshAll={refreshAll}
-      usageLoadingState={usageLoadingState}
+      usagePanelLoading={usagePanelLoading}
       usageError={usageError}
       rangeLabel={rangeLabel}
       timeZoneRangeLabel={timeZoneRangeLabel}

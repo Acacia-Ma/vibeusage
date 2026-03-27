@@ -88,7 +88,6 @@ export function useUsageData({
           timeZone,
           tzOffsetMinutes,
           signal,
-          rolling: true,
         });
         const summaryResult = await summaryPromise.then(
           (value) => ({ status: "fulfilled" as const, value }),
@@ -112,7 +111,6 @@ export function useUsageData({
           timeZone,
           tzOffsetMinutes,
           signal,
-          rolling: true,
         });
       }
 
@@ -136,7 +134,6 @@ export function useUsageData({
             timeZone,
             tzOffsetMinutes,
             signal,
-            rolling: true,
           });
           nextSummary = fallback?.totals || null;
           nextRolling = fallback?.rolling || nextRolling;
@@ -188,18 +185,12 @@ export function useUsageData({
         } else {
           const err = e as any;
           setError(err?.message || String(err));
-          setDaily([]);
-          setSummary(null);
-          setRolling(null);
           setSource("edge");
           setFetchedAt(null);
         }
       } else {
         const err = e as any;
         setError(err?.message || String(err));
-        setDaily([]);
-        setSummary(null);
-        setRolling(null);
         setSource("edge");
         setFetchedAt(null);
       }
@@ -238,12 +229,8 @@ export function useUsageData({
     }
     setLoading(true);
     if (!cacheAllowed) clearCache();
-    setDaily([]);
-    setSummary(null);
-    setRolling(null);
     setError(null);
     setSource("edge");
-    setFetchedAt(null);
     const controller = new AbortController();
     refresh({ signal: controller.signal });
     return () => {

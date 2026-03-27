@@ -85,7 +85,7 @@ export function DashboardView(props) {
     coreIndexCollapseAria,
     coreIndexExpandAria,
     refreshAll,
-    usageLoadingState,
+    usagePanelLoading,
     usageError,
     rangeLabel,
     timeZoneRangeLabel,
@@ -384,7 +384,7 @@ export function DashboardView(props) {
                   collapseAriaLabel={allowBreakdownToggle ? coreIndexCollapseAria : undefined}
                   expandAriaLabel={allowBreakdownToggle ? coreIndexExpandAria : undefined}
                   onRefresh={screenshotMode ? null : refreshAll}
-                  loading={usageLoadingState}
+                  loading={usagePanelLoading}
                   error={usageError}
                   rangeLabel={screenshotMode ? null : rangeLabel}
                   rangeTimeZoneLabel={timeZoneRangeLabel}

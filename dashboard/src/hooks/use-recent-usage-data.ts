@@ -7,40 +7,45 @@ import {
   writeDashboardCache,
 } from "../lib/dashboard-cache";
 import { isMockEnabled } from "../lib/mock-data";
-import { getTimeZoneCacheKey } from "../lib/timezone";
-import { getUsageModelBreakdown } from "../lib/vibeusage-api";
+import { getLocalDayKey, getTimeZoneCacheKey } from "../lib/timezone";
+import { getUsageSummary } from "../lib/vibeusage-api";
 
-export function useUsageModelBreakdown({
+export function useRecentUsageData({
   baseUrl,
   accessToken,
   guestAllowed = false,
-  from,
-  to,
   cacheKey,
   timeZone,
   tzOffsetMinutes,
+  now,
 }: any = {}) {
-  const [breakdown, setBreakdown] = useState<any | null>(null);
+  const [rolling, setRolling] = useState<any | null>(null);
   const [source, setSource] = useState<string>("edge");
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mockEnabled = isMockEnabled();
   const tokenReady = isAccessTokenReady(accessToken);
   const cacheAllowed = !guestAllowed;
-
-  const storageKey = useMemo(
+  const anchorDay = useMemo(
     () =>
-      buildDashboardCacheKey({
-        scope: "modelBreakdown",
-        cacheKey,
-        baseUrl,
-        segments: [from, to, getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes })],
+      getLocalDayKey({
+        timeZone,
+        offsetMinutes: tzOffsetMinutes,
+        date: now || new Date(),
       }),
-    [baseUrl, cacheKey, from, timeZone, to, tzOffsetMinutes],
+    [now, timeZone, tzOffsetMinutes],
   );
 
+  const storageKey = buildDashboardCacheKey({
+    scope: "recentUsage",
+    cacheKey,
+    baseUrl,
+    segments: [anchorDay, getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes })],
+  });
+
   const readCache = useCallback(() => {
-    return readDashboardCache(storageKey, (parsed) => Boolean(parsed?.breakdown));
+    return readDashboardCache(storageKey, (parsed) => Boolean(parsed?.rolling));
   }, [storageKey]);
 
   const writeCache = useCallback(
@@ -60,21 +65,27 @@ export function useUsageModelBreakdown({
     if (signal?.aborted) return;
     setLoading(true);
     setError(null);
+    setSource("edge");
     try {
-      const res = await getUsageModelBreakdown({
+      const response = await getUsageSummary({
         baseUrl,
         accessToken: resolvedToken,
-        from,
-        to,
+        from: anchorDay,
+        to: anchorDay,
         timeZone,
         tzOffsetMinutes,
         signal,
+        rolling: true,
       });
       if (signal?.aborted) return;
-      setBreakdown(res || null);
+      const nextRolling = response?.rolling || null;
+      const nowIso = new Date().toISOString();
+      setRolling(nextRolling);
+      setFetchedAt(nowIso);
       setSource("edge");
-      if (res && cacheAllowed) {
-        writeCache({ breakdown: res, fetchedAt: new Date().toISOString() });
+
+      if (nextRolling && cacheAllowed) {
+        writeCache({ rolling: nextRolling, fetchedAt: nowIso });
       } else if (!cacheAllowed) {
         clearCache();
       }
@@ -82,19 +93,22 @@ export function useUsageModelBreakdown({
       if (signal?.aborted || (e as any)?.name === "AbortError") return;
       if (cacheAllowed) {
         const cached = readCache();
-        if (cached?.breakdown) {
-          setBreakdown(cached.breakdown);
+        if (cached?.rolling) {
+          setRolling(cached.rolling);
+          setFetchedAt(cached.fetchedAt || null);
           setSource("cache");
           setError(null);
         } else {
-          setSource("edge");
           const err = e as any;
           setError(err?.message || String(err));
+          setSource("edge");
+          setFetchedAt(null);
         }
       } else {
-        setSource("edge");
         const err = e as any;
         setError(err?.message || String(err));
+        setSource("edge");
+        setFetchedAt(null);
       }
     } finally {
       if (signal?.aborted) return;
@@ -102,52 +116,43 @@ export function useUsageModelBreakdown({
     }
   }, [
     accessToken,
+    anchorDay,
     baseUrl,
-    from,
-    mockEnabled,
-    guestAllowed,
     cacheAllowed,
+    clearCache,
+    mockEnabled,
     readCache,
     timeZone,
-    to,
-    tokenReady,
     tzOffsetMinutes,
-    clearCache,
     writeCache,
   ]);
 
   useEffect(() => {
     if (!tokenReady && !guestAllowed && !mockEnabled) {
-      setBreakdown(null);
-      setSource("edge");
+      setRolling(null);
       setError(null);
       setLoading(false);
+      setSource("edge");
+      setFetchedAt(null);
       return;
     }
     setLoading(true);
     if (!cacheAllowed) clearCache();
-    setSource("edge");
     setError(null);
+    setSource("edge");
     const controller = new AbortController();
     refresh({ signal: controller.signal });
     return () => {
       controller.abort();
     };
-  }, [
-    accessToken,
-    mockEnabled,
-    refresh,
-    tokenReady,
-    guestAllowed,
-    cacheAllowed,
-    clearCache,
-  ]);
+  }, [cacheAllowed, clearCache, guestAllowed, mockEnabled, refresh, tokenReady]);
 
   const normalizedSource = mockEnabled ? "mock" : source;
 
   return {
-    breakdown,
+    rolling,
     source: normalizedSource,
+    fetchedAt,
     loading,
     error,
     refresh,
