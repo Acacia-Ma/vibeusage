@@ -2434,18 +2434,16 @@ function createUsageJsonResponder({ url, logger, extraHeaders } = {}) {
     );
   };
 }
-if (!globalThis[CORE_KEY18]) {
-  Object.defineProperty(globalThis, CORE_KEY18, {
-    value: {
-      createUsageJsonResponder,
-      mergeUsageDebugPayload,
-      resolveUsageResponseBody
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
-  });
-}
+Object.defineProperty(globalThis, CORE_KEY18, {
+  value: {
+    createUsageJsonResponder,
+    mergeUsageDebugPayload,
+    resolveUsageResponseBody
+  },
+  configurable: true,
+  enumerable: false,
+  writable: false
+});
 
 // insforge-src/functions-esm/shared/core/usage-response.js
 var usageResponseCore = globalThis.__vibeusageUsageResponseCore;

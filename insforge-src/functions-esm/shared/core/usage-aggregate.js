@@ -106,6 +106,14 @@ export async function finishAggregateUsageRequest({
   defaultModel = "unknown",
   rollupHit = false,
 } = {}) {
+  const { aggregatePayload } = await resolveAggregateUsagePayload({
+    edgeClient,
+    canonicalModel: requestContext?.canonicalModel,
+    effectiveDate: requestContext?.to,
+    state: aggregateState,
+    hasModelParam: requestContext?.hasModelParam,
+    defaultModel,
+  });
   const queryDurationMs = Date.now() - queryStartMs;
   logSlowQuery(logger, {
     query_label: queryLabel,
@@ -117,15 +125,6 @@ export async function finishAggregateUsageRequest({
     tz: tzContext?.timeZone || null,
     tz_offset_minutes: Number.isFinite(tzContext?.offsetMinutes) ? tzContext.offsetMinutes : null,
     rollup_hit: rollupHit,
-  });
-
-  const { aggregatePayload } = await resolveAggregateUsagePayload({
-    edgeClient,
-    canonicalModel: requestContext?.canonicalModel,
-    effectiveDate: requestContext?.to,
-    state: aggregateState,
-    hasModelParam: requestContext?.hasModelParam,
-    defaultModel,
   });
 
   return {

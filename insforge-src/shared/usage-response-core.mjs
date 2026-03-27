@@ -38,15 +38,13 @@ function createUsageJsonResponder({ url, logger, extraHeaders } = {}) {
   };
 }
 
-if (!globalThis[CORE_KEY]) {
-  Object.defineProperty(globalThis, CORE_KEY, {
-    value: {
-      createUsageJsonResponder,
-      mergeUsageDebugPayload,
-      resolveUsageResponseBody,
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false,
-  });
-}
+Object.defineProperty(globalThis, CORE_KEY, {
+  value: {
+    createUsageJsonResponder,
+    mergeUsageDebugPayload,
+    resolveUsageResponseBody,
+  },
+  configurable: true,
+  enumerable: false,
+  writable: false,
+});

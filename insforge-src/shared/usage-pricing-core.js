@@ -40,7 +40,8 @@ const {
   parsePricingBucketKey,
   resolveDisplayName,
 } = usageMetricsCore;
-const { resolvePricingProfile, computeUsageCost, formatUsdFromMicros } = pricingCore;
+const { resolvePricingProfile, resolvePricingProfilesBatch, computeUsageCost, formatUsdFromMicros } =
+  pricingCore;
 const { formatLocalDateKey, listDateStrings } = dateCore;
 const { resolveHourlyUsageRowState } = usageRowCore;
 
@@ -394,20 +395,9 @@ async function resolveBucketedUsagePricing({
     effectiveDate,
   });
   const timeline = timelineContext.aliasTimeline;
-  const profileCache = new Map();
   let aggregatedCostMicros = 0n;
-
-  const getProfile = async (modelId, dateKey) => {
-    const key = buildPricingBucketKey("profile", modelId || "", dateKey || "");
-    if (profileCache.has(key)) return profileCache.get(key);
-    const profile = await resolvePricingProfile({
-      edgeClient,
-      model: modelId,
-      effectiveDate: dateKey,
-    });
-    profileCache.set(key, profile);
-    return profile;
-  };
+  const bucketEntries = [];
+  const profileRequests = new Map();
 
   for (const [bucketKey, bucketValue] of pricingBuckets.entries()) {
     const bucket =
@@ -418,7 +408,37 @@ async function resolveBucketedUsagePricing({
     if (identity.model_id && identity.model_id !== defaultModel) {
       canonicalModels.add(identity.model_id);
     }
-    const profile = await getProfile(identity.model_id, dateKey);
+    const profileKey = buildPricingBucketKey("profile", identity.model_id || "", dateKey || "");
+    profileRequests.set(profileKey, {
+      key: profileKey,
+      model: identity.model_id,
+      effectiveDate: dateKey,
+    });
+    bucketEntries.push({
+      bucketKey,
+      bucket,
+      bucketTotals,
+      identity,
+      usageKey,
+      dateKey,
+      profileKey,
+    });
+  }
+
+  const profileMap = await resolvePricingProfilesBatch({
+    edgeClient,
+    requests: Array.from(profileRequests.values()),
+  });
+
+  for (const entry of bucketEntries) {
+    const { bucketKey, bucket, bucketTotals, identity, usageKey, dateKey, profileKey } = entry;
+    const profile =
+      profileMap.get(profileKey) ||
+      (await resolvePricingProfile({
+        edgeClient,
+        model: identity.model_id,
+        effectiveDate: dateKey,
+      }));
     const cost = computeUsageCost(bucketTotals, profile);
     aggregatedCostMicros += cost.cost_micros;
     pricingModes.add(cost.pricing_mode);

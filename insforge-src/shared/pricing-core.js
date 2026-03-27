@@ -46,72 +46,170 @@ function getPricingDefaults() {
   return envCore.getPricingDefaults();
 }
 
-async function resolvePricingProfile({ edgeClient, effectiveDate, model, source } = {}) {
+function normalizePricingDateKey(effectiveDate) {
+  return typeof effectiveDate === "string" && effectiveDate.trim()
+    ? effectiveDate.trim()
+    : new Date().toISOString().slice(0, 10);
+}
+
+function sortByEffectiveFromDesc(rows = []) {
+  return rows
+    .filter((row) => row && typeof row === "object")
+    .slice()
+    .sort((left, right) =>
+      String(right?.effective_from || "").localeCompare(String(left?.effective_from || "")),
+    );
+}
+
+function resolvePricingModelAlias({ aliasRows, dateKey, requestedModel } = {}) {
+  const normalizedRequested = normalizeModelValue(requestedModel);
+  if (!normalizedRequested) return null;
+  const sortedAliasRows = sortByEffectiveFromDesc(aliasRows);
+  for (const row of sortedAliasRows) {
+    if (normalizeModelValue(row?.usage_model) !== normalizedRequested) continue;
+    if (String(row?.effective_from || "") > String(dateKey || "")) continue;
+    const aliasModel = normalizeModelValue(row?.pricing_model);
+    if (aliasModel) return aliasModel;
+  }
+  return null;
+}
+
+function matchesPricingProfileModel(profileModel, requestedModel) {
+  const normalizedProfile = normalizeModelValue(profileModel);
+  const normalizedRequested = normalizeModelValue(requestedModel);
+  if (!normalizedRequested) return true;
+  if (!normalizedProfile) return false;
+  if (normalizedProfile === normalizedRequested) return true;
+  if (normalizedRequested.includes("/")) return false;
+  return normalizedProfile.endsWith(`/${normalizedRequested}`);
+}
+
+function resolvePricingProfileRow({ profileRows, dateKey, requestedModel } = {}) {
+  const sortedProfileRows = sortByEffectiveFromDesc(profileRows);
+  for (const row of sortedProfileRows) {
+    if (String(row?.effective_from || "") > String(dateKey || "")) continue;
+    if (!matchesPricingProfileModel(row?.model, requestedModel)) continue;
+    return row;
+  }
+  return null;
+}
+
+async function resolvePricingProfilesBatch({ edgeClient, requests = [], source } = {}) {
   const fallback = getDefaultPricingProfile();
+  const normalizedRequests = Array.isArray(requests)
+    ? requests
+        .map((request, index) => ({
+          key: request?.key || `request:${index}`,
+          model: request?.model,
+          dateKey: normalizePricingDateKey(request?.effectiveDate),
+        }))
+        .filter((request) => request.key)
+    : [];
+  const profiles = new Map();
+  if (normalizedRequests.length === 0) return profiles;
+
   const database = edgeClient?.database;
-  if (!database || typeof database.from !== "function") return fallback;
+  if (!database || typeof database.from !== "function") {
+    for (const request of normalizedRequests) profiles.set(request.key, fallback);
+    return profiles;
+  }
 
   const defaults = getPricingDefaults();
-  const requestedModel = normalizeModelValue(model) || defaults.model;
-  const requestedModelLower = requestedModel ? requestedModel.toLowerCase() : null;
   const requestedSource = normalizeSource(source) || defaults.source;
-  const dateKey =
-    typeof effectiveDate === "string" && effectiveDate.trim()
-      ? effectiveDate.trim()
-      : new Date().toISOString().slice(0, 10);
+  const maxDateKey = normalizedRequests.reduce(
+    (maxValue, request) => (String(request.dateKey) > String(maxValue) ? request.dateKey : maxValue),
+    normalizedRequests[0]?.dateKey || normalizePricingDateKey(),
+  );
 
   try {
-    let resolvedModel = requestedModel;
-    if (requestedModelLower) {
-      const { data: aliasRows, error: aliasError } = await database
-        .from("vibeusage_pricing_model_aliases")
-        .select("pricing_model,effective_from")
-        .eq("active", true)
-        .eq("pricing_source", requestedSource)
-        .eq("usage_model", requestedModelLower)
-        .lte("effective_from", dateKey)
-        .order("effective_from", { ascending: false })
-        .limit(1);
-      if (!aliasError && Array.isArray(aliasRows) && aliasRows.length > 0) {
-        const aliasModel = normalizeModelValue(aliasRows[0]?.pricing_model);
-        if (aliasModel) resolvedModel = aliasModel;
-      }
-    }
-
-    let query = database
-      .from("vibeusage_pricing_profiles")
-      .select(
-        "model,source,effective_from,input_rate_micro_per_million,cached_input_rate_micro_per_million,output_rate_micro_per_million,reasoning_output_rate_micro_per_million",
-      )
+    const aliasResult = await database
+      .from("vibeusage_pricing_model_aliases")
+      .select("usage_model,pricing_model,effective_from")
       .eq("active", true)
-      .eq("source", requestedSource)
-      .lte("effective_from", dateKey);
+      .eq("pricing_source", requestedSource)
+      .lte("effective_from", maxDateKey)
+      .order("effective_from", { ascending: false })
+      .limit(5000);
+    const aliasRows =
+      !aliasResult?.error && Array.isArray(aliasResult?.data) ? aliasResult.data : [];
+    const resolvedRequests = normalizedRequests.map((request) => {
+      const requestedModel = normalizeModelValue(request.model) || defaults.model;
+      const resolvedModel =
+        resolvePricingModelAlias({
+          aliasRows,
+          dateKey: request.dateKey,
+          requestedModel,
+        }) || requestedModel;
+      return {
+        ...request,
+        requestedModel,
+        resolvedModel,
+      };
+    });
+    const profileRowsByModel = new Map();
 
-    if (resolvedModel) {
-      if (resolvedModel.includes("/")) {
-        query = query.eq("model", resolvedModel);
-      } else {
-        query = query.or(`model.eq.${resolvedModel},model.like.%/${resolvedModel}`);
+    for (const resolvedModel of new Set(resolvedRequests.map((request) => request.resolvedModel || ""))) {
+      let query = database
+        .from("vibeusage_pricing_profiles")
+        .select(
+          "model,source,effective_from,input_rate_micro_per_million,cached_input_rate_micro_per_million,output_rate_micro_per_million,reasoning_output_rate_micro_per_million",
+        )
+        .eq("active", true)
+        .eq("source", requestedSource)
+        .lte("effective_from", maxDateKey);
+
+      if (resolvedModel) {
+        if (resolvedModel.includes("/")) {
+          query = query.eq("model", resolvedModel);
+        } else {
+          query = query.or(`model.eq.${resolvedModel},model.like.%/${resolvedModel}`);
+        }
       }
+
+      const profileResult = await query.order("effective_from", { ascending: false }).limit(5000);
+      profileRowsByModel.set(
+        resolvedModel,
+        !profileResult?.error && Array.isArray(profileResult?.data) ? profileResult.data : [],
+      );
     }
 
-    const { data, error } = await query.order("effective_from", { ascending: false }).limit(1);
-    if (error || !Array.isArray(data) || data.length === 0) return fallback;
-    const row = data[0];
-    return normalizeProfile({
-      model: row?.model,
-      source: row?.source,
-      effective_from: row?.effective_from,
-      rates_micro_per_million: {
-        input: row?.input_rate_micro_per_million,
-        cached_input: row?.cached_input_rate_micro_per_million,
-        output: row?.output_rate_micro_per_million,
-        reasoning_output: row?.reasoning_output_rate_micro_per_million,
-      },
-    });
+    for (const request of resolvedRequests) {
+      const row = resolvePricingProfileRow({
+        profileRows: profileRowsByModel.get(request.resolvedModel) || [],
+        dateKey: request.dateKey,
+        requestedModel: request.resolvedModel,
+      });
+      profiles.set(
+        request.key,
+        row
+          ? normalizeProfile({
+              model: row?.model,
+              source: row?.source,
+              effective_from: row?.effective_from,
+              rates_micro_per_million: {
+                input: row?.input_rate_micro_per_million,
+                cached_input: row?.cached_input_rate_micro_per_million,
+                output: row?.output_rate_micro_per_million,
+                reasoning_output: row?.reasoning_output_rate_micro_per_million,
+              },
+            })
+          : fallback,
+      );
+    }
+    return profiles;
   } catch (_error) {
-    return fallback;
+    for (const request of normalizedRequests) profiles.set(request.key, fallback);
+    return profiles;
   }
+}
+
+async function resolvePricingProfile({ edgeClient, effectiveDate, model, source } = {}) {
+  const profiles = await resolvePricingProfilesBatch({
+    edgeClient,
+    source,
+    requests: [{ key: "single", model, effectiveDate }],
+  });
+  return profiles.get("single") || getDefaultPricingProfile();
 }
 
 function computeUsageCost(totals, profile) {
@@ -207,6 +305,7 @@ if (!globalThis[CORE_KEY]) {
     value: {
       getDefaultPricingProfile,
       getPricingDefaults,
+      resolvePricingProfilesBatch,
       resolvePricingProfile,
       computeUsageCost,
       buildPricingMetadata,

@@ -56,10 +56,13 @@ if (!globalThis.crypto) {
   globalThis.crypto = webcrypto;
 }
 
-function createPricingEdgeClient({ aliasRows = [], profileRows = [] } = {}) {
+function createPricingEdgeClient({ aliasRows = [], profileRows = [], onQuery = null } = {}) {
   return {
     database: {
       from: (table) => {
+        if (typeof onQuery === "function") {
+          onQuery({ table, stage: "from" });
+        }
         const rows =
           table === "vibeusage_model_aliases" || table === "vibeusage_pricing_model_aliases"
             ? aliasRows
@@ -124,6 +127,9 @@ function createPricingEdgeClient({ aliasRows = [], profileRows = [] } = {}) {
             return this;
           },
           limit() {
+            if (typeof onQuery === "function") {
+              onQuery({ table, stage: "limit", filters: { ...this.filters } });
+            }
             const data = Array.isArray(this.data) ? this.data : rows;
             return { data, error: null };
           },
@@ -407,6 +413,44 @@ test("usage response helper keeps non-debug responses unchanged", async () => {
 
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { ok: true });
+});
+
+test("usage response core refreshes stale global shape on reload", () => {
+  const coreKey = "__vibeusageUsageResponseCore";
+  const modulePath = require.resolve("../insforge-src/shared/usage-response-core");
+  const previousCore = globalThis[coreKey];
+  const previousCache = require.cache[modulePath];
+
+  Object.defineProperty(globalThis, coreKey, {
+    value: {
+      createUsageJsonResponder: () => null,
+      resolveUsageResponseBody: () => null,
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false,
+  });
+  delete require.cache[modulePath];
+
+  try {
+    require("../insforge-src/shared/usage-response-core");
+    assert.equal(typeof globalThis[coreKey]?.mergeUsageDebugPayload, "function");
+  } finally {
+    delete require.cache[modulePath];
+    if (previousCache) {
+      require.cache[modulePath] = previousCache;
+    }
+    if (previousCore) {
+      Object.defineProperty(globalThis, coreKey, {
+        value: previousCore,
+        configurable: true,
+        enumerable: false,
+        writable: false,
+      });
+    } else {
+      delete globalThis[coreKey];
+    }
+  }
 });
 
 test("usage endpoint helper centralizes preflight and request error responses", async () => {
@@ -805,6 +849,89 @@ test("usage pricing core resolves aggregate pricing summary state", async () => 
   assert.equal(summaryState.totalCostMicros, 2000000n);
   assert.equal(summaryState.summaryPricingMode, "overlap");
   assert.deepEqual(Array.from(summaryState.canonicalModels.values()), ["alpha"]);
+});
+
+test("usage pricing core batches pricing profile lookups across bucket dates", async () => {
+  const queryCounts = {
+    pricingAlias: 0,
+    pricingProfiles: 0,
+  };
+  const edgeClient = createPricingEdgeClient({
+    aliasRows: [],
+    profileRows: [
+      {
+        model: "alpha",
+        source: "openrouter",
+        effective_from: "2025-01-01",
+        active: true,
+        input_rate_micro_per_million: 1000000,
+        cached_input_rate_micro_per_million: 0,
+        output_rate_micro_per_million: 1000000,
+        reasoning_output_rate_micro_per_million: 1000000,
+      },
+    ],
+    onQuery: ({ table, stage }) => {
+      if (stage !== "limit") return;
+      if (table === "vibeusage_pricing_model_aliases") queryCounts.pricingAlias += 1;
+      if (table === "vibeusage_pricing_profiles") queryCounts.pricingProfiles += 1;
+    },
+  });
+
+  const pricingBuckets = new Map([
+    [
+      usageMetricsCore.buildPricingBucketKey("codex", "alpha", "2025-02-15"),
+      {
+        source: "codex",
+        totals: {
+          total_tokens: 1000000n,
+          billable_total_tokens: 1000000n,
+          input_tokens: 1000000n,
+          cached_input_tokens: 0n,
+          output_tokens: 0n,
+          reasoning_output_tokens: 0n,
+        },
+      },
+    ],
+    [
+      usageMetricsCore.buildPricingBucketKey("codex", "alpha", "2025-02-16"),
+      {
+        source: "codex",
+        totals: {
+          total_tokens: 1000000n,
+          billable_total_tokens: 1000000n,
+          input_tokens: 1000000n,
+          cached_input_tokens: 0n,
+          output_tokens: 0n,
+          reasoning_output_tokens: 0n,
+        },
+      },
+    ],
+    [
+      usageMetricsCore.buildPricingBucketKey("codex", "alpha", "2025-02-17"),
+      {
+        source: "codex",
+        totals: {
+          total_tokens: 1000000n,
+          billable_total_tokens: 1000000n,
+          input_tokens: 1000000n,
+          cached_input_tokens: 0n,
+          output_tokens: 0n,
+          reasoning_output_tokens: 0n,
+        },
+      },
+    ],
+  ]);
+
+  const result = await usagePricingCore.resolveBucketedUsagePricing({
+    edgeClient,
+    pricingBuckets,
+    usageModels: ["alpha"],
+    effectiveDate: "2025-02-17",
+  });
+
+  assert.equal(result.totalCostMicros, 3000000n);
+  assert.equal(queryCounts.pricingAlias, 1);
+  assert.equal(queryCounts.pricingProfiles, 1);
 });
 
 test("usage pricing core builds aggregate payload from shared pricing summary", () => {
