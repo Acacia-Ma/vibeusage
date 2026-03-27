@@ -1,6 +1,6 @@
 id: PRICE-003
 title: Introduce canonical model sync before pricing aliases
-status: in_progress
+status: done
 owner: codex-main
 touches:
   - insforge-src/functions-esm/vibeusage-pricing-sync.js
@@ -13,7 +13,9 @@ touches:
   - docs/coordination/index.yaml
   - docs/coordination/tasks/PRICE-003.yaml
 notes:
-  - "DECISION: Runtime usage endpoints already resolve canonical model identity before pricing; this task only adds canonical alias sync and switches pricing sync to consume canonical models."
-  - "DECISION: V1 only auto-normalizes high-confidence qwen, deepseek, and glm families; ambiguous names such as kimi-for-coding and gemini-3-pro stay on fallback."
-  - "NEXT: Write failing tests that require canonical aliases to be written before pricing aliases."
-commit_refs: []
+  - "DECISION: Pricing sync now writes high-confidence canonical aliases into vibeusage_model_aliases before generating pricing aliases."
+  - "DECISION: Pricing alias generation now consumes canonical models only; ambiguous names such as kimi-for-coding, gemini-3-pro, and coder-model stay on fallback."
+  - "EVIDENCE: Canonical alias automation now covers deterministic anthropic, minimax, qwen, deepseek, glm, kimi shorthand, and mimo families without changing usage runtime contracts."
+  - "EVIDENCE: Local verification passed for pricing-sync auto-alias tests, pricing acceptances, shared pricing tests, edge-function pricing regressions, artifact rebuild, and OpenSpec validation."
+commit_refs:
+  - 9d66b797

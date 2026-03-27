@@ -53,7 +53,7 @@ tasks:
     path: docs/coordination/tasks/ARCH-001.yaml
   - id: PRICE-003
     title: Introduce canonical model sync before pricing aliases
-    status: in_progress
+    status: done
     owner: codex-main
     touches:
       - insforge-src/functions-esm/vibeusage-pricing-sync.js
