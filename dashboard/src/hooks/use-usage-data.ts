@@ -237,40 +237,13 @@ export function useUsageData({
       return;
     }
     setLoading(true);
-    if (!cacheAllowed) {
-      clearCache();
-      setDaily([]);
-      setSummary(null);
-      setRolling(null);
-      setError(null);
-      setSource("edge");
-      setFetchedAt(null);
-    } else {
-      const cached = readCache();
-      if (cached?.summary) {
-        setSummary(cached.summary);
-        setRolling(cached.rolling || null);
-        const cachedDaily = Array.isArray(cached.daily) ? cached.daily : [];
-        const filledDaily = includeDaily
-          ? fillDailyGaps(cachedDaily, cached.from || from, cached.to || to, {
-              timeZone,
-              offsetMinutes: tzOffsetMinutes,
-              now,
-            })
-          : cachedDaily;
-        setDaily(filledDaily);
-        setSource("cache");
-        setFetchedAt(cached.fetchedAt || null);
-        setError(null);
-      } else {
-        setDaily([]);
-        setSummary(null);
-        setRolling(null);
-        setError(null);
-        setSource("edge");
-        setFetchedAt(null);
-      }
-    }
+    if (!cacheAllowed) clearCache();
+    setDaily([]);
+    setSummary(null);
+    setRolling(null);
+    setError(null);
+    setSource("edge");
+    setFetchedAt(null);
     const controller = new AbortController();
     refresh({ signal: controller.signal });
     return () => {

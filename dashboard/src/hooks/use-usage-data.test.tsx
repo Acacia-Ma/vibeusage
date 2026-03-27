@@ -1,4 +1,5 @@
 import { renderHook, waitFor } from "@testing-library/react";
+import { act } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useUsageData } from "./use-usage-data";
@@ -11,7 +12,7 @@ const authToken = vi.hoisted(() => ({
 const dashboardCache = vi.hoisted(() => ({
   buildDashboardCacheKey: vi.fn(() => "usage-cache-key"),
   clearDashboardCache: vi.fn(),
-  readDashboardCache: vi.fn(() => null),
+  readDashboardCache: vi.fn<(...args: any[]) => any>(() => null),
   writeDashboardCache: vi.fn(),
 }));
 
@@ -123,5 +124,78 @@ describe("useUsageData", () => {
         data: [{ day: "2026-03-07", total_tokens: "42", billable_total_tokens: "42" }],
       });
     }
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+  });
+
+  it("does not hydrate usage from cache before the edge refresh resolves", async () => {
+    dashboardCache.readDashboardCache.mockReturnValue({
+      summary: { total_tokens: "11", billable_total_tokens: "11" },
+      rolling: { last_7d: { totals: { billable_total_tokens: "11" } } },
+      daily: [{ day: "2026-03-07", total_tokens: "11", billable_total_tokens: "11" }],
+      from: "2026-03-01",
+      to: "2026-03-07",
+      fetchedAt: "2026-03-07T00:00:00.000Z",
+    });
+
+    let resolveDaily: ((value: any) => void) | null = null;
+    let resolveSummary: ((value: any) => void) | null = null;
+
+    vibeusageApi.getUsageDaily.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveDaily = resolve;
+        }),
+    );
+    vibeusageApi.getUsageSummary.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSummary = resolve;
+        }),
+    );
+
+    const { result } = renderHook(() =>
+      useUsageData({
+        baseUrl: "https://example.com",
+        accessToken: "token",
+        from: "2026-03-01",
+        to: "2026-03-07",
+        includeDaily: true,
+        cacheKey: "user-1",
+        timeZone: "UTC",
+        tzOffsetMinutes: 0,
+        now: new Date("2026-03-07T00:00:00Z"),
+      }),
+    );
+
+    await waitFor(() => expect(vibeusageApi.getUsageDaily).toHaveBeenCalled());
+    await waitFor(() => expect(vibeusageApi.getUsageSummary).toHaveBeenCalled());
+
+    expect(result.current.loading).toBe(true);
+    expect(result.current.source).toBe("edge");
+    expect(result.current.summary).toBeNull();
+    expect(result.current.daily).toEqual([]);
+
+    await act(async () => {
+      resolveSummary?.({
+        totals: { total_tokens: "42", billable_total_tokens: "42" },
+        rolling: { last_7d: { totals: { billable_total_tokens: "42" } } },
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.summary).toEqual({
+        total_tokens: "42",
+        billable_total_tokens: "42",
+      }),
+    );
+
+    await act(async () => {
+      resolveDaily?.({
+        data: [{ day: "2026-03-07", total_tokens: "42", billable_total_tokens: "42" }],
+      });
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
   });
 });
