@@ -26,6 +26,7 @@ notes:
   - "DECISION: Keep model_id as the only pricing and aggregation key while adding display_model as a response-only presentation field."
   - "DECISION: Derive display_model by safely stripping a vendor prefix from model_id or model display text when a slash is present."
   - "DECISION: Backend usage responses now emit display_model while preserving model_id as the only pricing and aggregation key."
+  - "FOLLOWUP: Align shared pricing-core test expectations with the new display_model response contract after CI surfaced one stale assertion."
   - "VERIFY: node --test test/model-breakdown.test.js"
   - "VERIFY: node --test test/edge-functions.test.js --test-name-pattern \"display_model|canonical model filter includes alias rows|emits model_id and merges aliases\""
   - "VERIFY: node scripts/build-insforge-functions.cjs"
@@ -33,3 +34,4 @@ notes:
   - "VERIFY: openspec validate 2026-03-28-add-display-model-to-usage-responses --strict"
 commit_refs:
   - 51cfe899
+  - db2141a7

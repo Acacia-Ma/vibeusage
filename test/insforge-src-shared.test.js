@@ -973,6 +973,7 @@ test("usage pricing core builds aggregate payload from shared pricing summary", 
   assert.deepEqual(payload.selection, {
     model_id: "alpha",
     model: "Alpha",
+    display_model: "Alpha",
   });
   assert.deepEqual(payload.summary, {
     totals: {
