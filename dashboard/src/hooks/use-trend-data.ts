@@ -38,6 +38,7 @@ export function useTrendData({
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resolvedStorageKey, setResolvedStorageKey] = useState<string | null>(null);
   const mockEnabled = isMockEnabled();
   const tokenReady = isAccessTokenReady(accessToken);
   const cacheAllowed = !guestAllowed;
@@ -64,6 +65,7 @@ export function useTrendData({
             ]
           : ["daily", from || "", to || "", getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes })],
   });
+  const liveSnapshot = storageKey ? readDashboardLiveSnapshot("trend", storageKey) : null;
 
   const readCache = useCallback(() => {
     return readDashboardCache(storageKey, (parsed) => Array.isArray(parsed?.rows));
@@ -91,7 +93,23 @@ export function useTrendData({
     setRange({ from: snapshot.from || from, to: snapshot.to || to });
     setFetchedAt(snapshot.fetchedAt || null);
     setSource("edge");
-  }, [from, to]);
+    setResolvedStorageKey(storageKey);
+  }, [from, storageKey, to]);
+
+  const snapshotRows = Array.isArray(liveSnapshot?.rows) ? liveSnapshot.rows : [];
+  const hasImmediateSnapshot =
+    resolvedStorageKey !== storageKey &&
+    Boolean(storageKey) &&
+    snapshotRows.length > 0;
+  const visibleRows = hasImmediateSnapshot ? snapshotRows : rows;
+  const visibleRange = hasImmediateSnapshot
+    ? { from: liveSnapshot?.from || from, to: liveSnapshot?.to || to }
+    : range;
+  const visibleFetchedAt = hasImmediateSnapshot ? liveSnapshot?.fetchedAt || null : fetchedAt;
+  const visibleSource = hasImmediateSnapshot ? "edge" : source;
+  const visibleLoading = hasImmediateSnapshot ? false : loading;
+  const visibleRefreshing = hasImmediateSnapshot ? true : refreshing;
+  const visibleError = hasImmediateSnapshot ? null : error;
 
   const refresh = useCallback(async ({ signal }: any = {}) => {
     const snapshot = readDashboardLiveSnapshot("trend", storageKey);
@@ -103,6 +121,12 @@ export function useTrendData({
     setRefreshing(hasVisibleState);
     setError(null);
     const resolvedToken = await resolveAuthAccessToken(accessToken);
+    if (!resolvedToken && !mockEnabled) {
+      if (!signal?.aborted) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
     if (!resolvedToken && !mockEnabled) return;
     if (signal?.aborted) return;
     try {
@@ -169,6 +193,7 @@ export function useTrendData({
       setRange({ from: nextFrom, to: nextTo });
       setSource("edge");
       setFetchedAt(nowIso);
+      setResolvedStorageKey(storageKey);
       writeDashboardLiveSnapshot("trend", storageKey, {
         rows: nextRows,
         from: nextFrom,
@@ -220,6 +245,7 @@ export function useTrendData({
           setSource("cache");
           setFetchedAt(cached.fetchedAt || null);
           setError(null);
+          setResolvedStorageKey(storageKey);
         } else {
           setSource("edge");
           setFetchedAt(null);
@@ -266,6 +292,7 @@ export function useTrendData({
       setRefreshing(false);
       setSource("edge");
       setFetchedAt(null);
+      setResolvedStorageKey(storageKey);
       return;
     }
     setLoading(true);
@@ -287,17 +314,15 @@ export function useTrendData({
     clearCache,
   ]);
 
-  const normalizedSource = mockEnabled ? "mock" : source;
-
   return {
-    rows,
-    from: range.from || from,
-    to: range.to || to,
-    source: normalizedSource,
-    fetchedAt,
-    loading,
-    refreshing,
-    error,
+    rows: visibleRows,
+    from: visibleRange.from || from,
+    to: visibleRange.to || to,
+    source: mockEnabled ? "mock" : visibleSource,
+    fetchedAt: visibleFetchedAt,
+    loading: visibleLoading,
+    refreshing: visibleRefreshing,
+    error: visibleError,
     refresh,
   };
 }

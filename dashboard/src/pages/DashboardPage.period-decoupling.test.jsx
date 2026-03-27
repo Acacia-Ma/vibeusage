@@ -7,6 +7,7 @@ import { DashboardPage } from "./DashboardPage.jsx";
 
 const SKIP_BOOT_LABEL = "Skip boot";
 const SWITCH_TOTAL_LABEL = "Switch total";
+const dashboardViewProps = vi.hoisted(() => ({ current: null }));
 
 const usageDataHook = vi.hoisted(() => ({
   useUsageData: vi.fn(() => ({
@@ -15,6 +16,7 @@ const usageDataHook = vi.hoisted(() => ({
     rolling: null,
     source: "edge",
     loading: false,
+    refreshing: false,
     error: null,
     refresh: vi.fn(),
   })),
@@ -137,11 +139,14 @@ vi.mock("../ui/foundation/MatrixButton.jsx", () => ({
   },
 }));
 vi.mock("../ui/matrix-a/views/DashboardView.jsx", () => ({
-  DashboardView: ({ setSelectedPeriod }) => (
-    <button type="button" onClick={() => setSelectedPeriod("total")}>
-      {SWITCH_TOTAL_LABEL}
-    </button>
-  ),
+  DashboardView: (props) => {
+    dashboardViewProps.current = props;
+    return (
+      <button type="button" onClick={() => props.setSelectedPeriod("total")}>
+        {SWITCH_TOTAL_LABEL}
+      </button>
+    );
+  },
 }));
 
 describe("DashboardPage period decoupling", () => {
@@ -157,6 +162,7 @@ describe("DashboardPage period decoupling", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    dashboardViewProps.current = null;
   });
 
   it("does not wire period range into the recent usage hook when tabs change", async () => {
@@ -188,5 +194,34 @@ describe("DashboardPage period decoupling", () => {
       expect(latestCall).not.toHaveProperty("to");
       expect(latestCall).not.toHaveProperty("period");
     });
+  });
+
+  it("forwards usage refreshing state to the dashboard view", async () => {
+    usageDataHook.useUsageData.mockReturnValue({
+      daily: [],
+      summary: { total_tokens: "42", billable_total_tokens: "42" },
+      rolling: null,
+      source: "edge",
+      loading: false,
+      refreshing: true,
+      error: null,
+      refresh: vi.fn(),
+    });
+
+    render(
+      <DashboardPage
+        baseUrl="https://example.com"
+        auth={{ userId: "user-1" }}
+        currentIdentity={{ displayName: "Victor" }}
+        signedIn
+        sessionSoftExpired={false}
+        signOut={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByText(SKIP_BOOT_LABEL));
+    await waitFor(() => expect(screen.getByText(SWITCH_TOTAL_LABEL)).toBeInTheDocument());
+
+    expect(dashboardViewProps.current?.usagePanelRefreshing).toBe(true);
   });
 });

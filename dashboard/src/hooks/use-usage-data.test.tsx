@@ -222,34 +222,16 @@ describe("useUsageData", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
   });
 
-  it("hydrates a resolved period snapshot immediately before the next backend summary arrives", async () => {
-    liveSnapshots.readDashboardLiveSnapshot.mockReturnValue({
-      summary: { total_tokens: "84", billable_total_tokens: "84" },
-      rolling: { last_7d: { totals: { billable_total_tokens: "84" } } },
-      daily: [{ day: "2026-03-07", total_tokens: "84", billable_total_tokens: "84" }],
-      fetchedAt: "2026-03-07T00:00:00.000Z",
-    });
-
-    const dailyResolvers = [] as ((value: any) => void)[];
-    const summaryResolvers = [] as ((value: any) => void)[];
-
-    vibeusageApi.getUsageDaily.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          dailyResolvers.push(resolve);
-        }),
-    );
-    vibeusageApi.getUsageSummary.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          summaryResolvers.push(resolve);
-        }),
-    );
+  it("clears optimistic loading when access token resolution returns null", async () => {
+    authToken.isAccessTokenReady.mockImplementation(() => true);
+    authToken.resolveAuthAccessToken.mockImplementation(async () => null);
+    const pendingToken = { token: "pending" };
 
     const { result } = renderHook(() =>
       useUsageData({
         baseUrl: "https://example.com",
-        accessToken: "token",
+        accessToken: pendingToken,
+        guestAllowed: true,
         from: "2026-03-01",
         to: "2026-03-07",
         includeDaily: true,
@@ -260,32 +242,10 @@ describe("useUsageData", () => {
       }),
     );
 
-    await waitFor(() =>
-      expect(result.current.summary).toEqual({
-        total_tokens: "84",
-        billable_total_tokens: "84",
-      }),
-    );
-    await waitFor(() => expect(vibeusageApi.getUsageSummary).toHaveBeenCalled());
-    expect(result.current.loading).toBe(false);
-    expect(result.current.refreshing).toBe(true);
-
-    await act(async () => {
-      for (const resolve of summaryResolvers) {
-        resolve({
-          totals: { total_tokens: "126", billable_total_tokens: "126" },
-          rolling: { last_7d: { totals: { billable_total_tokens: "126" } } },
-        });
-      }
-      for (const resolve of dailyResolvers) {
-        resolve({
-          data: [{ day: "2026-03-07", total_tokens: "126", billable_total_tokens: "126" }],
-        });
-      }
-    });
-
-    await waitFor(() =>
-      expect(vibeusageApi.getUsageSummary).toHaveBeenCalled(),
-    );
+    await waitFor(() => expect(authToken.resolveAuthAccessToken).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.refreshing).toBe(false);
+    expect(vibeusageApi.getUsageSummary).not.toHaveBeenCalled();
+    expect(vibeusageApi.getUsageDaily).not.toHaveBeenCalled();
   });
 });

@@ -425,7 +425,7 @@ export function DashboardPage({
   const timeZone = useMemo(() => getBrowserTimeZone(), []);
   const tzOffsetMinutes = useMemo(() => getBrowserTimeZoneOffsetMinutes(), []);
   const mockNow = useMemo(() => getMockNow(), []);
-  const cacheKey = publicMode ? null : auth?.userId || auth?.email || "default";
+  const cacheKey = publicMode ? null : auth?.userId || auth?.email || null;
   const [selectedPeriod, setSelectedPeriod] = useState("week");
   const period = screenshotMode ? "total" : selectedPeriod;
   const range = useMemo(
@@ -469,6 +469,7 @@ export function DashboardPage({
     summary,
     source: usageSource,
     loading: usageLoading,
+    refreshing: usageRefreshing,
     error: usageError,
     refresh: refreshUsage,
   } = useUsageData({
@@ -1358,6 +1359,7 @@ export function DashboardPage({
       coreIndexExpandAria={coreIndexExpandAria}
       refreshAll={refreshAll}
       usagePanelLoading={usagePanelLoading}
+      usagePanelRefreshing={usageRefreshing}
       usageError={usageError}
       rangeLabel={rangeLabel}
       timeZoneRangeLabel={timeZoneRangeLabel}

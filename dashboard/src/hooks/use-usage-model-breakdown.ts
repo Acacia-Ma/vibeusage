@@ -29,6 +29,7 @@ export function useUsageModelBreakdown({
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resolvedStorageKey, setResolvedStorageKey] = useState<string | null>(null);
   const mockEnabled = isMockEnabled();
   const tokenReady = isAccessTokenReady(accessToken);
   const cacheAllowed = !guestAllowed;
@@ -43,6 +44,7 @@ export function useUsageModelBreakdown({
       }),
     [baseUrl, cacheKey, from, timeZone, to, tzOffsetMinutes],
   );
+  const liveSnapshot = storageKey ? readDashboardLiveSnapshot("modelBreakdown", storageKey) : null;
 
   const readCache = useCallback(() => {
     return readDashboardCache(storageKey, (parsed) => Boolean(parsed?.breakdown));
@@ -68,7 +70,16 @@ export function useUsageModelBreakdown({
     if (!snapshot) return;
     setBreakdown(snapshot.breakdown || null);
     setSource("edge");
-  }, []);
+    setResolvedStorageKey(storageKey);
+  }, [storageKey]);
+
+  const hasImmediateSnapshot =
+    resolvedStorageKey !== storageKey && Boolean(storageKey) && Boolean(liveSnapshot?.breakdown);
+  const visibleBreakdown = hasImmediateSnapshot ? liveSnapshot?.breakdown || null : breakdown;
+  const visibleSource = hasImmediateSnapshot ? "edge" : source;
+  const visibleLoading = hasImmediateSnapshot ? false : loading;
+  const visibleRefreshing = hasImmediateSnapshot ? true : refreshing;
+  const visibleError = hasImmediateSnapshot ? null : error;
 
   const refresh = useCallback(async ({ signal }: any = {}) => {
     const snapshot = readDashboardLiveSnapshot("modelBreakdown", storageKey);
@@ -80,6 +91,12 @@ export function useUsageModelBreakdown({
     setRefreshing(hasVisibleState);
     setError(null);
     const resolvedToken = await resolveAuthAccessToken(accessToken);
+    if (!resolvedToken && !mockEnabled) {
+      if (!signal?.aborted) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
     if (!resolvedToken && !mockEnabled) return;
     if (signal?.aborted) return;
     try {
@@ -95,6 +112,7 @@ export function useUsageModelBreakdown({
       if (signal?.aborted) return;
       setBreakdown(res || null);
       setSource("edge");
+      setResolvedStorageKey(storageKey);
       writeDashboardLiveSnapshot("modelBreakdown", storageKey, {
         breakdown: res || null,
       });
@@ -111,6 +129,7 @@ export function useUsageModelBreakdown({
           setBreakdown(cached.breakdown);
           setSource("cache");
           setError(null);
+          setResolvedStorageKey(storageKey);
         } else {
           setSource("edge");
           const err = e as any;
@@ -151,6 +170,7 @@ export function useUsageModelBreakdown({
       setError(null);
       setLoading(false);
       setRefreshing(false);
+      setResolvedStorageKey(storageKey);
       return;
     }
     setLoading(true);
@@ -172,14 +192,12 @@ export function useUsageModelBreakdown({
     clearCache,
   ]);
 
-  const normalizedSource = mockEnabled ? "mock" : source;
-
   return {
-    breakdown,
-    source: normalizedSource,
-    loading,
-    refreshing,
-    error,
+    breakdown: visibleBreakdown,
+    source: mockEnabled ? "mock" : visibleSource,
+    loading: visibleLoading,
+    refreshing: visibleRefreshing,
+    error: visibleError,
     refresh,
   };
 }

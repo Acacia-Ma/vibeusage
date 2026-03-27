@@ -35,6 +35,7 @@ export function useUsageData({
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resolvedStorageKey, setResolvedStorageKey] = useState<string | null>(null);
   const mockEnabled = isMockEnabled();
   const tokenReady = isAccessTokenReady(accessToken);
   const cacheAllowed = !guestAllowed;
@@ -50,6 +51,7 @@ export function useUsageData({
       getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes }),
     ],
   });
+  const liveSnapshot = storageKey ? readDashboardLiveSnapshot("usage", storageKey) : null;
 
   const readCache = useCallback(() => {
     return readDashboardCache(storageKey, (parsed) => Boolean(parsed?.summary));
@@ -78,7 +80,22 @@ export function useUsageData({
     setRolling(snapshot.rolling || null);
     setFetchedAt(snapshot.fetchedAt || null);
     setSource("edge");
-  }, []);
+    setResolvedStorageKey(storageKey);
+  }, [storageKey]);
+
+  const snapshotDaily = Array.isArray(liveSnapshot?.daily) ? liveSnapshot.daily : [];
+  const hasImmediateSnapshot =
+    resolvedStorageKey !== storageKey &&
+    Boolean(storageKey) &&
+    (Boolean(liveSnapshot?.summary) || Boolean(liveSnapshot?.rolling) || snapshotDaily.length > 0);
+  const visibleDaily = hasImmediateSnapshot ? snapshotDaily : daily;
+  const visibleSummary = hasImmediateSnapshot ? liveSnapshot?.summary || null : summary;
+  const visibleRolling = hasImmediateSnapshot ? liveSnapshot?.rolling || null : rolling;
+  const visibleFetchedAt = hasImmediateSnapshot ? liveSnapshot?.fetchedAt || null : fetchedAt;
+  const visibleSource = hasImmediateSnapshot ? "edge" : source;
+  const visibleLoading = hasImmediateSnapshot ? false : loading;
+  const visibleRefreshing = hasImmediateSnapshot ? true : refreshing;
+  const visibleError = hasImmediateSnapshot ? null : error;
 
   const refresh = useCallback(async ({ signal }: any = {}) => {
     const snapshot = readDashboardLiveSnapshot("usage", storageKey);
@@ -93,6 +110,12 @@ export function useUsageData({
     setRefreshing(hasVisibleState);
     setError(null);
     const resolvedToken = await resolveAuthAccessToken(accessToken);
+    if (!resolvedToken && !mockEnabled) {
+      if (!signal?.aborted) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
     if (!resolvedToken && !mockEnabled) return;
     if (signal?.aborted) return;
     try {
@@ -129,6 +152,7 @@ export function useUsageData({
           setSource("edge");
           setLoading(false);
           setRefreshing(false);
+          setResolvedStorageKey(storageKey);
         }
         dailyRes = await dailyPromise;
         if (signal?.aborted) return;
@@ -181,6 +205,7 @@ export function useUsageData({
       setFetchedAt(nowIso);
       setLoading(false);
       setRefreshing(false);
+      setResolvedStorageKey(storageKey);
       writeDashboardLiveSnapshot("usage", storageKey, {
         summary: nextSummary,
         rolling: nextRolling,
@@ -220,6 +245,7 @@ export function useUsageData({
           setSource("cache");
           setFetchedAt(cached.fetchedAt || null);
           setError(null);
+          setResolvedStorageKey(storageKey);
         } else {
           const err = e as any;
           setError(err?.message || String(err));
@@ -267,6 +293,7 @@ export function useUsageData({
       setRefreshing(false);
       setSource("edge");
       setFetchedAt(null);
+      setResolvedStorageKey(storageKey);
       return;
     }
     setLoading(true);
@@ -292,14 +319,14 @@ export function useUsageData({
   const normalizedSource = mockEnabled ? "mock" : source;
 
   return {
-    daily,
-    summary,
-    rolling,
-    source: normalizedSource,
-    fetchedAt,
-    loading,
-    refreshing,
-    error,
+    daily: visibleDaily,
+    summary: visibleSummary,
+    rolling: visibleRolling,
+    source: mockEnabled ? "mock" : visibleSource,
+    fetchedAt: visibleFetchedAt,
+    loading: visibleLoading,
+    refreshing: visibleRefreshing,
+    error: visibleError,
     refresh,
   };
 }
