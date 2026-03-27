@@ -1859,7 +1859,7 @@ module.exports = withRequestLogging("vibeusage-pricing-sync", async function(req
   const effectiveFrom = isDate(payload.effective_from) ? payload.effective_from : formatDateUTC(/* @__PURE__ */ new Date());
   const retentionDays = toPositiveIntOrNull(payload.retention_days);
   const allowModels = normalizeAllowList(payload.allow_models);
-  const pricingSource = normalizeSource(payload.source) || normalizeSource(getEnvValue("VIBESCORE_PRICING_SOURCE")) || "openrouter";
+  const pricingSource = normalizeSource(payload.source) || normalizeSource(getEnvValue("VIBEUSAGE_PRICING_SOURCE")) || "openrouter";
   const openRouterKey = getEnvValue("OPENROUTER_API_KEY");
   if (!openRouterKey) return json({ error: "OPENROUTER_API_KEY missing" }, 500);
   const headers = {
@@ -1952,12 +1952,19 @@ module.exports = withRequestLogging("vibeusage-pricing-sync", async function(req
     serviceClient,
     windowDays: USAGE_MODEL_WINDOW_DAYS
   });
+  const existingAliasRows = await listExistingAliases({
+    serviceClient,
+    usageModels,
+    pricingSource,
+    effectiveFrom
+  });
   const aliasRows = buildAliasRows({
     usageModels,
     pricingModelIds,
     pricingMeta,
     pricingSource,
-    effectiveFrom
+    effectiveFrom,
+    existingAliasMap: buildExistingAliasMap(existingAliasRows)
   });
   let aliasesUpserted = 0;
   for (let i = 0; i < aliasRows.length; i += UPSERT_BATCH_SIZE) {
@@ -2048,19 +2055,38 @@ async function listUsageModels({ serviceClient, windowDays }) {
   if (error) throw new Error(error.message || "Failed to list usage models");
   return Array.from(models.values());
 }
+async function listExistingAliases({
+  serviceClient,
+  usageModels,
+  pricingSource,
+  effectiveFrom
+}) {
+  const normalizedUsageModels = Array.isArray(usageModels) ? usageModels.map((value) => normalizeUsageModel(value)).filter(Boolean) : [];
+  if (!normalizedUsageModels.length) return [];
+  const query = serviceClient?.database?.from?.("vibeusage_pricing_model_aliases")?.select?.("usage_model,pricing_model,pricing_source,effective_from,active");
+  if (!query || typeof query.eq !== "function" || typeof query.in !== "function" || typeof query.lte !== "function" || typeof query.order !== "function" || typeof query.limit !== "function") {
+    return [];
+  }
+  const { data, error } = await query.eq("active", true).eq("pricing_source", pricingSource).in("usage_model", normalizedUsageModels).lte("effective_from", effectiveFrom).order("effective_from", { ascending: false }).limit(5e3);
+  if (error) throw new Error(error.message || "Failed to list existing pricing aliases");
+  return Array.isArray(data) ? data : [];
+}
 function buildAliasRows({
   usageModels,
   pricingModelIds,
   pricingMeta,
   pricingSource,
-  effectiveFrom
+  effectiveFrom,
+  existingAliasMap
 }) {
   const rows = [];
   for (const usageModel of usageModels) {
     if (matchesPricingModel(usageModel, pricingModelIds)) continue;
-    const rule = inferVendorRule(usageModel);
-    if (!rule) continue;
-    const candidate = selectLatestCandidate(pricingMeta, rule);
+    const candidate = selectAliasCandidate({
+      usageModel,
+      pricingMeta,
+      existingAliasMap
+    });
     if (!candidate) continue;
     rows.push({
       usage_model: usageModel,
@@ -2081,43 +2107,198 @@ function matchesPricingModel(usageModel, pricingModelIds) {
   }
   return false;
 }
-function inferVendorRule(usageModel) {
-  if (usageModel.startsWith("claude-")) {
-    return {
-      vendor: "anthropic",
-      family: inferFamily(usageModel, ["opus", "sonnet", "haiku"])
-    };
-  }
-  if (usageModel.startsWith("gpt-")) {
-    return {
-      vendor: "openai",
-      family: inferFamily(usageModel, ["codex"])
-    };
-  }
-  return null;
-}
-function inferFamily(usageModel, families) {
-  for (const family of families) {
-    if (usageModel.includes(family)) return family;
-  }
-  return null;
-}
-function selectLatestCandidate(pricingMeta, rule) {
-  const candidates = pricingMeta.filter((entry) => {
-    const id = String(entry?.id || "").toLowerCase();
-    if (!id.startsWith(`${rule.vendor}/`)) return false;
-    if (rule.family && !id.includes(rule.family)) return false;
-    return true;
-  });
-  if (candidates.length === 0) return null;
-  return candidates.reduce((best, current) => {
-    if (!best) return current;
-    if (current.created !== best.created) return current.created > best.created ? current : best;
-    if (current.context_length !== best.context_length) {
-      return current.context_length > best.context_length ? current : best;
+function buildExistingAliasMap(aliasRows) {
+  const map = /* @__PURE__ */ new Map();
+  for (const row of Array.isArray(aliasRows) ? aliasRows : []) {
+    const usageModel = normalizeUsageModel(row?.usage_model);
+    const pricingModel = normalizeModel(row?.pricing_model);
+    const pricingSource = normalizeSource(row?.pricing_source);
+    if (!usageModel || !pricingModel || !pricingSource) continue;
+    const effectiveFrom = String(row?.effective_from || "");
+    const existing = map.get(usageModel);
+    if (!existing || effectiveFrom > existing.effective_from) {
+      map.set(usageModel, {
+        pricing_model: pricingModel,
+        pricing_source: pricingSource,
+        effective_from: effectiveFrom
+      });
     }
-    return String(current.id).localeCompare(String(best.id)) > 0 ? current : best;
-  }, null);
+  }
+  return map;
+}
+function selectAliasCandidate({ usageModel, pricingMeta, existingAliasMap }) {
+  const usageRule = buildUsageAliasRule(usageModel);
+  if (!usageRule) return null;
+  const existing = existingAliasMap?.get?.(usageRule.usageModel) || null;
+  const candidates = Array.isArray(pricingMeta) ? pricingMeta.filter((entry) => {
+    const candidate2 = buildPricingAliasCandidate(entry?.id);
+    if (!candidate2) return false;
+    return candidate2.vendor === usageRule.vendor && candidate2.aliasKey === usageRule.aliasKey;
+  }) : [];
+  if (candidates.length !== 1) return null;
+  const [candidate] = candidates;
+  if (existing && normalizeModel(existing.pricing_model) && normalizeModel(existing.pricing_model) !== candidate.id) {
+    return null;
+  }
+  return candidate;
+}
+function buildUsageAliasRule(rawUsageModel) {
+  const usageModel = normalizeUsageModel(rawUsageModel);
+  if (!usageModel) return null;
+  const vendor = detectVendorFromPrefix(usageModel) || detectVendorFromFamily(usageModel);
+  if (!vendor) return null;
+  const aliasKey = buildAliasKeyForVendor(usageModel, vendor, { isUsageModel: true });
+  if (!aliasKey) return null;
+  return { usageModel, vendor, aliasKey };
+}
+function buildPricingAliasCandidate(rawModelId) {
+  const id = normalizeModel(rawModelId);
+  if (!id) return null;
+  if (!isEligiblePricingModel(id)) return null;
+  const vendor = detectVendorFromModelId(id);
+  if (!vendor) return null;
+  const aliasKey = buildAliasKeyForVendor(id, vendor, { isUsageModel: false });
+  if (!aliasKey) return null;
+  return { id, vendor, aliasKey };
+}
+function detectVendorFromModelId(modelId) {
+  const normalized = String(modelId || "").trim().toLowerCase();
+  const prefix = normalized.split("/")[0] || "";
+  return normalizeVendor(prefix);
+}
+function detectVendorFromPrefix(usageModel) {
+  const normalized = String(usageModel || "").trim().toLowerCase();
+  const prefix = normalized.split("/")[0] || "";
+  return normalizeVendor(prefix);
+}
+function detectVendorFromFamily(usageModel) {
+  const normalized = String(usageModel || "").trim().toLowerCase();
+  if (normalized.includes("claude")) return "anthropic";
+  if (normalized.includes("gpt")) return "openai";
+  if (normalized.includes("minimax")) return "minimax";
+  if (normalized.includes("gemini")) return "google";
+  if (normalized.includes("deepseek")) return "deepseek";
+  if (normalized.includes("glm")) return "z-ai";
+  if (normalized.includes("kimi") || normalized === "k2p5") return "moonshotai";
+  return null;
+}
+function normalizeVendor(value) {
+  switch (String(value || "").trim().toLowerCase()) {
+    case "anthropic":
+      return "anthropic";
+    case "openai":
+      return "openai";
+    case "google":
+      return "google";
+    case "minimax":
+      return "minimax";
+    case "deepseek":
+      return "deepseek";
+    case "z-ai":
+    case "zai":
+    case "zai-org":
+      return "z-ai";
+    case "moonshotai":
+      return "moonshotai";
+    default:
+      return null;
+  }
+}
+function isEligiblePricingModel(modelId) {
+  const normalized = String(modelId || "").trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized.includes(":free")) return false;
+  if (normalized.includes(":exacto")) return false;
+  if (normalized.includes(":extended")) return false;
+  if (normalized.includes("-customtools")) return false;
+  return true;
+}
+function buildAliasKeyForVendor(modelId, vendor, { isUsageModel } = {}) {
+  switch (vendor) {
+    case "anthropic":
+      return extractAnthropicAliasKey(modelId);
+    case "openai":
+      return extractOpenAiAliasKey(modelId, { isUsageModel });
+    case "minimax":
+      return extractMiniMaxAliasKey(modelId);
+    case "deepseek":
+      return extractDeepSeekAliasKey(modelId);
+    case "google":
+      return extractGeminiAliasKey(modelId);
+    case "z-ai":
+      return extractGlmAliasKey(modelId);
+    case "moonshotai":
+      return extractKimiAliasKey(modelId, { isUsageModel });
+    default:
+      return null;
+  }
+}
+function extractAnthropicAliasKey(modelId) {
+  const normalized = normalizeAliasInput(modelId);
+  const direct = normalized.match(/claude-(opus|sonnet|haiku)-(\d+)(?:[.-](\d+))?/);
+  if (direct) return `claude-${direct[1]}-${formatVersion(direct[2], direct[3])}`;
+  const reversed = normalized.match(/claude-(\d+(?:[.-]\d+)?)-(opus|sonnet|haiku)/);
+  if (reversed) return `claude-${reversed[2]}-${normalizeVersionToken(reversed[1])}`;
+  return null;
+}
+function extractOpenAiAliasKey(modelId, { isUsageModel } = {}) {
+  const normalized = normalizeAliasInput(modelId);
+  const match = normalized.match(/gpt-(\d+(?:[.-]\d+){0,2})(?:-(codex|mini|nano|pro|chat))?/);
+  if (!match) return null;
+  const version = normalizeVersionToken(match[1]);
+  const suffix = match[2] || null;
+  if (suffix) return `gpt-${version}-${suffix}`;
+  if (isUsageModel && normalized.includes("-high")) return null;
+  return `gpt-${version}`;
+}
+function extractMiniMaxAliasKey(modelId) {
+  const normalized = normalizeAliasInput(modelId);
+  const match = normalized.match(/minimax-(m\d+(?:[.-]\d+)?(?:-her)?)/);
+  if (!match) return null;
+  return `minimax-${normalizeVersionToken(match[1])}`;
+}
+function extractDeepSeekAliasKey(modelId) {
+  const normalized = normalizeAliasInput(modelId);
+  if (normalized === "deepseek-chat") return "deepseek-chat";
+  const match = normalized.match(/deepseek-(?:(?:chat|reasoner)-)?((?:r|v)\d+(?:[.-]\d+)?)/);
+  if (!match) return null;
+  return `deepseek-${normalizeVersionToken(match[1])}`;
+}
+function extractGlmAliasKey(modelId) {
+  const normalized = normalizeAliasInput(modelId);
+  const match = normalized.match(/glm-?(\d+(?:[.-]\d+)?)(?:-(flash|turbo))?/);
+  if (!match) return null;
+  const version = normalizeVersionToken(match[1]);
+  const suffix = match[2] || null;
+  return suffix ? `glm-${version}-${suffix}` : `glm-${version}`;
+}
+function extractGeminiAliasKey(modelId) {
+  const normalized = normalizeAliasInput(modelId);
+  const match = normalized.match(/gemini-(\d+(?:[.-]\d+)?)-(pro|flash|flash-lite)(?:-(image))?/);
+  if (!match) return null;
+  const version = normalizeVersionToken(match[1]);
+  const tier = match[2];
+  const image = match[3] ? "-image" : "";
+  return `gemini-${version}-${tier}${image}`;
+}
+function extractKimiAliasKey(modelId, { isUsageModel } = {}) {
+  const normalized = normalizeAliasInput(modelId);
+  if (isUsageModel && normalized === "k2p5") return "kimi-k2.5";
+  const match = normalized.match(/(?:kimi-)?k(\d+)(?:p(\d+)|[.-](\d+))?/);
+  if (!match) return null;
+  const minor = match[2] || match[3] || null;
+  const version = minor ? `${match[1]}.${minor}` : match[1];
+  return `kimi-k${version}`;
+}
+function normalizeAliasInput(value) {
+  return String(value || "").trim().toLowerCase().replace(/^.+\//, "").replace(/[_\s]+/g, "-");
+}
+function formatVersion(major, minor) {
+  return minor == null ? `${major}` : `${major}.${minor}`;
+}
+function normalizeVersionToken(value) {
+  const normalized = String(value || "").trim().toLowerCase().replace(/_/g, "-");
+  return normalized.replace(/(?<=\d)-(?=\d)/g, ".");
 }
 function toRateMicrosPerMillion(value) {
   const scaled = scaleDecimal(value, SCALE_MICROS_PER_MILLION);
@@ -2153,3 +2334,13 @@ function scaleDecimal(value, scale) {
   if (next && Number(next) >= 5) rounded += 1n;
   return rounded;
 }
+module.exports._private = {
+  buildAliasRows,
+  buildExistingAliasMap,
+  buildPricingAliasCandidate,
+  buildUsageAliasRule,
+  detectVendorFromFamily,
+  detectVendorFromPrefix,
+  isEligiblePricingModel,
+  matchesPricingModel
+};

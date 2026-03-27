@@ -1,0 +1,20 @@
+tasks:
+  - id: COORD-001
+    title: Validate Agent Foreman coordination flow
+    status: in_progress
+    owner: codex-main
+    touches:
+      - docs/coordination/index.yaml
+      - docs/coordination/tasks/COORD-001.yaml
+    path: docs/coordination/tasks/COORD-001.yaml
+  - id: PRICE-001
+    title: Deploy pricing alias automation and run production smoke
+    status: in_progress
+    owner: codex-main
+    touches:
+      - insforge-src/functions/vibeusage-pricing-sync.js
+      - insforge-functions/vibeusage-pricing-sync.js
+      - scripts/ops/pricing-sync-health.sql
+      - scripts/ops/pricing-alias-diagnostics.sql
+      - docs/ops/pricing-sync-health.md
+    path: docs/coordination/tasks/PRICE-001.yaml

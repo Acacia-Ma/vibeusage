@@ -1,0 +1,11 @@
+id: COORD-001
+title: Validate Agent Foreman coordination flow
+status: in_progress
+owner: codex-main
+touches:
+  - docs/coordination/index.yaml
+  - docs/coordination/tasks/COORD-001.yaml
+notes:
+  - "DECISION: AGENTS.md is the authoritative coordination entry for vibeusage."
+  - "NEXT: Use docs/coordination/index.yaml as the execution-layer navigation index for future task claims."
+commit_refs: []

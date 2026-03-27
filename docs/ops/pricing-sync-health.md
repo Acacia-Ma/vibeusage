@@ -3,8 +3,8 @@
 ## 环境变量（InsForge 后台）
 
 - `OPENROUTER_API_KEY`
-- `VIBESCORE_PRICING_SOURCE=openrouter`
-- `VIBESCORE_PRICING_MODEL=gpt-5.2-codex`
+- `VIBEUSAGE_PRICING_SOURCE=openrouter`
+- `VIBEUSAGE_PRICING_MODEL=gpt-5.2-codex`
 - Optional: `OPENROUTER_HTTP_REFERER`, `OPENROUTER_APP_TITLE`
 
 ## 手动触发
@@ -30,10 +30,20 @@ curl -s -X POST "$BASE_URL/functions/vibeusage-pricing-sync" \
 
 期望信号：
 
-- `is_fresh = true`（允许 12 小时内更新）
+- `latest_effective_from` 是当天或前一天 UTC，且 `is_fresh = true`
 - 最新 `effective_from` 有大量 `active_rows`
 - 默认模型 `gpt-5.2-codex` 存在（精确或带前缀）
-- `Unmatched usage models` 查询为空（或数量可解释）
+- `fallback_matches` 可解释且整体占比下降
+
+说明：
+
+- 同一天内重复执行 sync 会走 upsert，不保证刷新 `created_at`
+- 因此新鲜度不再用 `created_at` 判定，而是看最新 `effective_from`
+- 如果要看未命中模型详情，执行：
+
+```sql
+-- scripts/ops/pricing-alias-diagnostics.sql
+```
 
 ## 常见错误
 

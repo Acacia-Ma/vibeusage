@@ -8,6 +8,11 @@ class DatabaseStub {
     this._table = null;
     this._select = null;
     this._filters = [];
+    this._updateValues = null;
+    this._eq = [];
+    this._in = null;
+    this._lte = null;
+    this._orders = [];
     this.upserts = [];
     this.aliasUpserts = [];
     this.upsertCalls = 0;
@@ -15,6 +20,7 @@ class DatabaseStub {
     this.retention = null;
     this.aliasRetention = null;
     this.usageRows = [];
+    this.existingAliasRows = [];
   }
 
   from(table) {
@@ -29,8 +35,23 @@ class DatabaseStub {
     return this;
   }
 
+  in(column, value) {
+    this._in = { column, value: Array.isArray(value) ? value.slice() : [value] };
+    return this;
+  }
+
   gte(column, value) {
     this._filters.push({ op: "gte", column, value });
+    return this;
+  }
+
+  lte(column, value) {
+    this._lte = { column, value };
+    return this;
+  }
+
+  order(column, options) {
+    this._orders.push({ column, options: options || null });
     return this;
   }
 
@@ -51,14 +72,14 @@ class DatabaseStub {
   }
 
   eq(column, value) {
-    this._eq = { column, value };
+    this._eq.push({ column, value });
     return this;
   }
 
   lt(column, value) {
     const target = {
       update: this._updateValues,
-      eq: this._eq,
+      eq: this._eq[this._eq.length - 1],
       lt: { column, value },
     };
     if (this._table === "vibeusage_pricing_model_aliases") {
@@ -72,6 +93,28 @@ class DatabaseStub {
   range() {
     if (this._table === "vibeusage_tracker_hourly") {
       return { data: this.usageRows, error: null };
+    }
+    return { data: [], error: null };
+  }
+
+  limit() {
+    if (this._table === "vibeusage_pricing_model_aliases") {
+      let rows = this.existingAliasRows.slice();
+      for (const filter of this._eq) {
+        if (!filter?.column) continue;
+        rows = rows.filter((row) => row[filter.column] === filter.value);
+      }
+      if (this._in?.column === "usage_model") {
+        const allowed = new Set(this._in.value);
+        rows = rows.filter((row) => allowed.has(row.usage_model));
+      }
+      if (this._lte?.column) {
+        rows = rows.filter((row) => String(row[this._lte.column] || "") <= String(this._lte.value));
+      }
+      rows.sort((left, right) =>
+        String(right.effective_from || "").localeCompare(String(left.effective_from || "")),
+      );
+      return { data: rows, error: null };
     }
     return { data: [], error: null };
   }
@@ -113,6 +156,54 @@ function buildOpenRouterPayload() {
         },
       },
       {
+        id: "minimax/minimax-m2.5",
+        created: 9,
+        pricing: {
+          prompt: 0.0000011,
+          completion: 0.0000022,
+        },
+      },
+      {
+        id: "google/gemini-3-pro-preview",
+        created: 11,
+        pricing: {
+          prompt: 0.0000012,
+          completion: 0.0000024,
+        },
+      },
+      {
+        id: "google/gemini-3-pro-image-preview",
+        created: 12,
+        pricing: {
+          prompt: 0.0000012,
+          completion: 0.0000024,
+        },
+      },
+      {
+        id: "z-ai/glm-4.7",
+        created: 13,
+        pricing: {
+          prompt: 0.0000009,
+          completion: 0.0000018,
+        },
+      },
+      {
+        id: "moonshotai/kimi-k2.5",
+        created: 14,
+        pricing: {
+          prompt: 0.0000013,
+          completion: 0.0000026,
+        },
+      },
+      {
+        id: "deepseek/deepseek-chat-v3.1",
+        created: 15,
+        pricing: {
+          prompt: 0.0000011,
+          completion: 0.0000021,
+        },
+      },
+      {
         id: "openai/no-pricing",
       },
     ],
@@ -124,7 +215,7 @@ async function main() {
   process.env.INSFORGE_ANON_KEY = "anon";
   process.env.INSFORGE_SERVICE_ROLE_KEY = "service-role-key";
   process.env.OPENROUTER_API_KEY = "openrouter-key";
-  process.env.VIBESCORE_PRICING_SOURCE = "openrouter";
+  process.env.VIBEUSAGE_PRICING_SOURCE = "openrouter";
 
   global.Deno = {
     env: {
@@ -139,7 +230,22 @@ async function main() {
   db.usageRows = [
     { model: "claude-opus-4-5-20251101" },
     { model: "openai/gpt-4o-mini" },
+    { model: "minimax-m2.5-highspeed" },
+    { model: "gemini-3-pro" },
+    { model: "zai/glm-4.7" },
+    { model: "k2p5" },
+    { model: "deepseek-v3.1" },
+    { model: "coder-model" },
     { model: "unknown" },
+  ];
+  db.existingAliasRows = [
+    {
+      usage_model: "claude-opus-4-5-20251101",
+      pricing_model: "anthropic/claude-opus-4.5",
+      pricing_source: "openrouter",
+      effective_from: "2026-03-26",
+      active: true,
+    },
   ];
   global.createClient = () => createClientStub(db);
 
@@ -169,14 +275,14 @@ async function main() {
 
   assert.equal(res.status, 200);
   assert.equal(body.success, true);
-  assert.equal(body.models_total, 4);
-  assert.equal(body.models_processed, 3);
-  assert.equal(body.rows_upserted, 3);
-  assert.equal(body.usage_models_total, 2);
-  assert.equal(body.aliases_generated, 1);
-  assert.equal(body.aliases_upserted, 1);
+  assert.equal(body.models_total, 10);
+  assert.equal(body.models_processed, 9);
+  assert.equal(body.rows_upserted, 9);
+  assert.equal(body.usage_models_total, 8);
+  assert.equal(body.aliases_generated, 6);
+  assert.equal(body.aliases_upserted, 6);
   assert.equal(db.upsertCalls, 1);
-  assert.equal(db.upserts.length, 3);
+  assert.equal(db.upserts.length, 9);
 
   const first = db.upserts.find((row) => row.model === "anthropic/claude-opus-4.5");
   const second = db.upserts.find((row) => row.model === "openai/gpt-4o-mini");
@@ -195,10 +301,18 @@ async function main() {
   assert.equal(db.retention.eq.value, "openrouter");
   assert.equal(db.retention.update.active, false);
   assert.equal(db.aliasUpsertCalls, 1);
-  assert.equal(db.aliasUpserts.length, 1);
-  assert.equal(db.aliasUpserts[0].usage_model, "claude-opus-4-5-20251101");
-  assert.equal(db.aliasUpserts[0].pricing_model, "anthropic/claude-opus-4.5");
-  assert.equal(db.aliasUpserts[0].pricing_source, "openrouter");
+  assert.equal(db.aliasUpserts.length, 6);
+  assert.deepEqual(
+    db.aliasUpserts.map((row) => ({ usage_model: row.usage_model, pricing_model: row.pricing_model })),
+    [
+      { usage_model: "claude-opus-4-5-20251101", pricing_model: "anthropic/claude-opus-4.5" },
+      { usage_model: "minimax-m2.5-highspeed", pricing_model: "minimax/minimax-m2.5" },
+      { usage_model: "gemini-3-pro", pricing_model: "google/gemini-3-pro-preview" },
+      { usage_model: "zai/glm-4.7", pricing_model: "z-ai/glm-4.7" },
+      { usage_model: "k2p5", pricing_model: "moonshotai/kimi-k2.5" },
+      { usage_model: "deepseek-v3.1", pricing_model: "deepseek/deepseek-chat-v3.1" },
+    ],
+  );
 
   process.stdout.write(
     JSON.stringify(

@@ -70,8 +70,8 @@ function createClientStub() {
 }
 
 async function main() {
-  process.env.VIBESCORE_PRICING_SOURCE = "openrouter";
-  process.env.VIBESCORE_PRICING_MODEL = "gpt-5.2-codex";
+  process.env.VIBEUSAGE_PRICING_SOURCE = "openrouter";
+  process.env.VIBEUSAGE_PRICING_MODEL = "gpt-5.2-codex";
 
   global.Deno = {
     env: {

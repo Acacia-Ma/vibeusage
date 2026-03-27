@@ -1,0 +1,14 @@
+id: PRICE-001
+title: Deploy pricing alias automation and run production smoke
+status: in_progress
+owner: codex-main
+touches:
+  - insforge-src/functions/vibeusage-pricing-sync.js
+  - insforge-functions/vibeusage-pricing-sync.js
+  - scripts/ops/pricing-sync-health.sql
+  - scripts/ops/pricing-alias-diagnostics.sql
+  - docs/ops/pricing-sync-health.md
+notes:
+  - "DECISION: Pricing alias generation is now automated during the pricing sync flow."
+  - "NEXT: Deploy the updated pricing sync function and verify live alias coverage and fallback counts."
+commit_refs: []
