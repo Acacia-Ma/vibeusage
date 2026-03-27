@@ -10,6 +10,8 @@ The runtime pricing path already consumes canonical `model_id` values from the m
 - Keep `vibeusage_pricing_model_aliases` focused on canonical-model-to-pricing-model resolution.
 - Do not add new columns to `vibeusage_tracker_hourly`.
 - Do not create self-alias rows for models that are already canonical; raw fallback remains valid.
+- When a deterministic canonical alias is discovered after raw usage already exists, backfill `effective_from` to the earliest observed usage date inside the sync window instead of the sync run date.
+- Do not backfill through conflicts: if a raw usage model has any historical canonical alias that points to a different canonical model, skip automatic backfill entirely.
 - Only write canonical aliases for deterministic patterns:
   - `anthropic` with explicit `claude-{tier}-{version}` family names
   - `minimax` with explicit `minimax-m*` family names
@@ -23,7 +25,7 @@ The runtime pricing path already consumes canonical `model_id` values from the m
 
 1. List recent raw usage models.
 2. Load existing `vibeusage_model_aliases` rows for those raw models.
-3. Generate and insert only new high-confidence canonical alias rows.
+3. Generate and insert only new high-confidence canonical alias rows, backfilling `effective_from` to the first observed usage date when the alias is deterministic and the only known canonical target.
 4. Resolve each raw usage model to a canonical model using existing + newly generated alias rows.
 5. Generate pricing aliases from canonical models only.
 

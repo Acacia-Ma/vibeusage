@@ -288,18 +288,27 @@ async function main() {
 
   const db = new DatabaseStub();
   db.usageRows = [
-    { model: "claude-opus-4-5-20251101" },
-    { model: "openai/gpt-4o-mini" },
-    { model: "minimax-m2.5-highspeed" },
-    { model: "gemini-3-pro" },
-    { model: "zai/glm-4.7" },
-    { model: "zai-org/glm-4.6" },
-    { model: "k2p5" },
-    { model: "deepseek-v3.1" },
-    { model: "qwen3.5-plus" },
-    { model: "mimo-v2-pro-free" },
-    { model: "coder-model" },
-    { model: "unknown" },
+    { model: "claude-opus-4-5-20251101", hour_start: "2026-03-12T00:00:00.000Z" },
+    { model: "openai/gpt-4o-mini", hour_start: "2026-03-13T00:00:00.000Z" },
+    { model: "minimax-m2.5-highspeed", hour_start: "2026-03-14T00:00:00.000Z" },
+    { model: "gemini-3-pro", hour_start: "2026-03-15T00:00:00.000Z" },
+    { model: "zai/glm-4.7", hour_start: "2026-03-16T00:00:00.000Z" },
+    { model: "zai-org/glm-4.6", hour_start: "2026-03-17T00:00:00.000Z" },
+    { model: "k2p5", hour_start: "2026-03-18T00:00:00.000Z" },
+    { model: "deepseek-v3.1", hour_start: "2026-03-19T00:00:00.000Z" },
+    { model: "qwen3.5-plus", hour_start: "2026-03-20T00:00:00.000Z" },
+    { model: "mimo-v2-pro-free", hour_start: "2026-03-21T00:00:00.000Z" },
+    { model: "coder-model", hour_start: "2026-03-22T00:00:00.000Z" },
+    { model: "unknown", hour_start: "2026-03-23T00:00:00.000Z" },
+  ];
+  db.existingModelAliasRows = [
+    {
+      usage_model: "claude-opus-4-5-20251101",
+      canonical_model: "anthropic/claude-opus-4.5",
+      display_name: "anthropic/claude-opus-4.5",
+      effective_from: "2026-03-27",
+      active: true,
+    },
   ];
   db.existingAliasRows = [
     {
@@ -369,20 +378,45 @@ async function main() {
   assert.equal(db.modelAliasUpserts.length, 8);
   assert.equal(db.aliasUpsertCalls, 1);
   assert.equal(db.aliasUpserts.length, 2);
+  const claudeCanonicalBackfill = db.modelAliasUpserts.find(
+    (row) => row.usage_model === "claude-opus-4-5-20251101",
+  );
+  assert.equal(claudeCanonicalBackfill?.effective_from, "2026-03-12");
   assert.deepEqual(
     db.modelAliasUpserts.map((row) => ({
       usage_model: row.usage_model,
       canonical_model: row.canonical_model,
+      effective_from: row.effective_from,
     })),
     [
-      { usage_model: "claude-opus-4-5-20251101", canonical_model: "anthropic/claude-opus-4.5" },
-      { usage_model: "minimax-m2.5-highspeed", canonical_model: "minimax/minimax-m2.5" },
-      { usage_model: "zai/glm-4.7", canonical_model: "z-ai/glm-4.7" },
-      { usage_model: "zai-org/glm-4.6", canonical_model: "z-ai/glm-4.6" },
-      { usage_model: "k2p5", canonical_model: "moonshotai/kimi-k2.5" },
-      { usage_model: "deepseek-v3.1", canonical_model: "deepseek/deepseek-v3.1" },
-      { usage_model: "qwen3.5-plus", canonical_model: "qwen/qwen3.5-plus" },
-      { usage_model: "mimo-v2-pro-free", canonical_model: "xiaomi/mimo-v2-pro" },
+      {
+        usage_model: "claude-opus-4-5-20251101",
+        canonical_model: "anthropic/claude-opus-4.5",
+        effective_from: "2026-03-12",
+      },
+      {
+        usage_model: "minimax-m2.5-highspeed",
+        canonical_model: "minimax/minimax-m2.5",
+        effective_from: "2026-03-14",
+      },
+      { usage_model: "zai/glm-4.7", canonical_model: "z-ai/glm-4.7", effective_from: "2026-03-16" },
+      { usage_model: "zai-org/glm-4.6", canonical_model: "z-ai/glm-4.6", effective_from: "2026-03-17" },
+      { usage_model: "k2p5", canonical_model: "moonshotai/kimi-k2.5", effective_from: "2026-03-18" },
+      {
+        usage_model: "deepseek-v3.1",
+        canonical_model: "deepseek/deepseek-v3.1",
+        effective_from: "2026-03-19",
+      },
+      {
+        usage_model: "qwen3.5-plus",
+        canonical_model: "qwen/qwen3.5-plus",
+        effective_from: "2026-03-20",
+      },
+      {
+        usage_model: "mimo-v2-pro-free",
+        canonical_model: "xiaomi/mimo-v2-pro",
+        effective_from: "2026-03-21",
+      },
     ],
   );
   assert.deepEqual(

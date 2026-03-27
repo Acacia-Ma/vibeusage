@@ -7,6 +7,7 @@ Pricing sync still derives pricing aliases directly from raw usage model names. 
 ## What Changes
 
 - Add high-confidence canonical model alias generation for recent usage models before pricing alias generation runs.
+- Backfill deterministic canonical aliases to each raw usage model's earliest observed date inside the sync scan window so historical windows collapse to one canonical `model_id`.
 - Make pricing alias generation consume canonical models rather than raw usage models.
 - Split diagnostics into `raw -> canonical` coverage and `canonical -> pricing` coverage so fallback causes stay observable.
 - Keep ambiguous names on fallback; do not expand pricing-side guessing.

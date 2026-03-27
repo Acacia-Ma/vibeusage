@@ -76,6 +76,9 @@ This document is the single source of truth for repository navigation. Use it to
 - Usage summary and breakdown responses may expose both:
   - `model_id` as the canonical pricing and aggregation key
   - `display_model` as a response-only display field derived from `model_id` or `model`
+- `vibeusage-pricing-sync` canonical identity sync rule:
+  - deterministic raw-to-canonical aliases are backfilled to the earliest observed usage date in the scan window
+  - pricing alias generation still consumes canonical models only; the backfill only affects `raw -> canonical`
 - Generated deploy output:
   - `insforge-functions/`
 - Use generated artifacts only for deployment validation, not as authoring sources.

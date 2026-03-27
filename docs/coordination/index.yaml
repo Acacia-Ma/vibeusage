@@ -103,3 +103,17 @@ tasks:
       - docs/coordination/index.yaml
       - docs/coordination/tasks/PRICE-005.yaml
     path: docs/coordination/tasks/PRICE-005.yaml
+  - id: PRICE-006
+    title: Backfill deterministic canonical alias effective dates
+    status: in_progress
+    owner: codex-main
+    touches:
+      - insforge-src/functions-esm/vibeusage-pricing-sync.js
+      - insforge-functions/vibeusage-pricing-sync.js
+      - scripts/acceptance/openrouter-pricing-sync.cjs
+      - test/pricing-sync-auto-alias.test.js
+      - docs/repo-sitemap.md
+      - openspec/changes/2026-03-28-refactor-model-identity-before-pricing/
+      - docs/coordination/index.yaml
+      - docs/coordination/tasks/PRICE-006.yaml
+    path: docs/coordination/tasks/PRICE-006.yaml

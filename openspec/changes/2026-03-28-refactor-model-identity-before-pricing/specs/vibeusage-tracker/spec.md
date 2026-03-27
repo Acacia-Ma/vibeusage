@@ -36,6 +36,13 @@ The pricing sync job SHALL generate canonical aliases for recent raw usage model
 - **WHEN** pricing sync runs
 - **THEN** it SHALL NOT write a canonical alias row automatically
 
+#### Scenario: Deterministic canonical aliases backfill historical effective dates
+
+- **GIVEN** a recent raw usage model `claude-opus-4-6` first appeared before the current sync date
+- **AND** its only known automatic canonical target is `anthropic/claude-opus-4.6`
+- **WHEN** pricing sync runs
+- **THEN** it SHALL write or preserve the canonical alias with `effective_from` set to the earliest observed usage date in the sync window
+
 ### Requirement: Pricing sync writes pricing aliases from canonical models
 
 The pricing sync job SHALL generate pricing aliases from canonical models rather than raw usage model names. If a canonical model is still ambiguous or unmatched, pricing SHALL remain on fallback.

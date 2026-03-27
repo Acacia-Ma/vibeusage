@@ -1863,20 +1863,24 @@ function normalizeContextLength(value) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 async function listUsageModels({ serviceClient, windowDays }) {
-  const models = /* @__PURE__ */ new Set();
+  const models = /* @__PURE__ */ new Map();
   const cutoff = /* @__PURE__ */ new Date();
   cutoff.setUTCDate(cutoff.getUTCDate() - windowDays);
   const since = cutoff.toISOString();
   const { error } = await forEachPage({
     createQuery: () => {
-      let query = serviceClient.database.from("vibeusage_tracker_hourly").select("model").gte("hour_start", since);
+      let query = serviceClient.database.from("vibeusage_tracker_hourly").select("model,hour_start").gte("hour_start", since);
       query = applyCanaryFilter2(query, { source: null, model: null });
       return query.order("hour_start", { ascending: true }).order("user_id", { ascending: true }).order("device_id", { ascending: true }).order("source", { ascending: true }).order("model", { ascending: true });
     },
     onPage: (rows) => {
       for (const row of rows || []) {
         const normalized = normalizeUsageModel2(row?.model);
-        if (normalized && normalized !== "unknown") models.add(normalized);
+        if (!normalized || normalized === "unknown" || models.has(normalized)) continue;
+        models.set(normalized, {
+          usage_model: normalized,
+          first_seen_date: coerceEffectiveDate(row?.hour_start)
+        });
       }
     }
   });
@@ -1889,7 +1893,7 @@ async function listExistingAliases({
   pricingSource,
   effectiveFrom
 }) {
-  const normalizedUsageModels = Array.isArray(usageModels) ? usageModels.map((value) => normalizeUsageModel2(value)).filter(Boolean) : [];
+  const normalizedUsageModels = extractUsageModelIds(usageModels);
   if (!normalizedUsageModels.length) return [];
   const query = serviceClient?.database?.from?.("vibeusage_pricing_model_aliases")?.select?.("usage_model,pricing_model,pricing_source,effective_from,active");
   if (!query || typeof query.eq !== "function" || typeof query.in !== "function" || typeof query.lte !== "function" || typeof query.order !== "function" || typeof query.limit !== "function") {
@@ -1904,7 +1908,7 @@ async function listExistingModelAliases({
   usageModels,
   effectiveFrom
 }) {
-  const normalizedUsageModels = Array.isArray(usageModels) ? usageModels.map((value) => normalizeUsageModel2(value)).filter(Boolean) : [];
+  const normalizedUsageModels = extractUsageModelIds(usageModels);
   if (!normalizedUsageModels.length) return [];
   const query = serviceClient?.database?.from?.("vibeusage_model_aliases")?.select?.("usage_model,canonical_model,display_name,effective_from,active");
   if (!query || typeof query.eq !== "function" || typeof query.in !== "function" || typeof query.lte !== "function" || typeof query.order !== "function" || typeof query.limit !== "function") {
@@ -1916,9 +1920,13 @@ async function listExistingModelAliases({
 }
 function buildCanonicalAliasRows({ usageModels, effectiveFrom, existingAliasMap }) {
   const rows = [];
-  for (const usageModel of usageModels) {
+  for (const usageEntry of Array.isArray(usageModels) ? usageModels : []) {
+    const usageModel = extractUsageModelId(usageEntry);
+    const targetEffectiveFrom = coerceEffectiveDate(usageEntry?.first_seen_date) || coerceEffectiveDate(effectiveFrom);
+    if (!usageModel || !targetEffectiveFrom) continue;
     const candidate = selectCanonicalModelCandidate({
       usageModel,
+      targetEffectiveFrom,
       existingAliasMap
     });
     if (!candidate) continue;
@@ -1926,7 +1934,7 @@ function buildCanonicalAliasRows({ usageModels, effectiveFrom, existingAliasMap 
       usage_model: usageModel,
       canonical_model: candidate.id,
       display_name: candidate.id,
-      effective_from: effectiveFrom,
+      effective_from: targetEffectiveFrom,
       active: true
     });
   }
@@ -1940,21 +1948,30 @@ function buildExistingModelAliasMap(aliasRows) {
     if (!usageModel || !canonicalModel) continue;
     const displayName = normalizeModel2(row?.display_name) || canonicalModel;
     const effectiveFrom = String(row?.effective_from || "");
-    const existing = map.get(usageModel);
-    if (!existing || effectiveFrom > existing.effective_from) {
-      map.set(usageModel, {
-        canonical_model: canonicalModel,
-        display_name: displayName,
-        effective_from: effectiveFrom
-      });
+    const existing = map.get(usageModel) || {
+      canonical_model: null,
+      display_name: null,
+      effective_from: "",
+      history: []
+    };
+    existing.history.push({
+      canonical_model: canonicalModel,
+      display_name: displayName,
+      effective_from: effectiveFrom
+    });
+    if (!existing.canonical_model || effectiveFrom > existing.effective_from) {
+      existing.canonical_model = canonicalModel;
+      existing.display_name = displayName;
+      existing.effective_from = effectiveFrom;
     }
+    map.set(usageModel, existing);
   }
   return map;
 }
 function resolveCanonicalUsageModels({ usageModels, canonicalIdentityMap }) {
   const resolved = /* @__PURE__ */ new Set();
   for (const usageModel of Array.isArray(usageModels) ? usageModels : []) {
-    const normalized = normalizeUsageModel2(usageModel);
+    const normalized = extractUsageModelId(usageModel);
     if (!normalized) continue;
     const existing = canonicalIdentityMap?.get?.(normalized) || null;
     const canonicalModel = normalizeModel2(existing?.canonical_model);
@@ -2017,16 +2034,43 @@ function buildExistingAliasMap(aliasRows) {
   }
   return map;
 }
-function selectCanonicalModelCandidate({ usageModel, existingAliasMap }) {
+function selectCanonicalModelCandidate({ usageModel, targetEffectiveFrom, existingAliasMap }) {
   const usageRule = buildUsageAliasRule(usageModel);
   if (!usageRule) return null;
   const canonicalModel = buildCanonicalModelId(usageRule);
   if (!canonicalModel || canonicalModel === usageRule.usageModel) return null;
+  if (!coerceEffectiveDate(targetEffectiveFrom)) return null;
   const existing = existingAliasMap?.get?.(usageRule.usageModel) || null;
-  const normalizedCanonical = normalizeModel2(existing?.canonical_model);
-  if (normalizedCanonical === canonicalModel) return null;
-  if (normalizedCanonical && normalizedCanonical !== canonicalModel) return null;
+  const history = Array.isArray(existing?.history) ? existing.history : [];
+  let hasSameCanonical = false;
+  for (const row of history) {
+    const normalizedCanonical = normalizeModel2(row?.canonical_model);
+    const effectiveFrom = coerceEffectiveDate(row?.effective_from);
+    if (!normalizedCanonical) continue;
+    if (normalizedCanonical !== canonicalModel) return null;
+    hasSameCanonical = true;
+    if (effectiveFrom && effectiveFrom <= targetEffectiveFrom) return null;
+  }
+  if (!hasSameCanonical && normalizeModel2(existing?.canonical_model) && normalizeModel2(existing?.canonical_model) !== canonicalModel) {
+    return null;
+  }
   return { id: canonicalModel };
+}
+function extractUsageModelIds(usageModels) {
+  return Array.isArray(usageModels) ? usageModels.map((value) => extractUsageModelId(value)).filter(Boolean) : [];
+}
+function extractUsageModelId(value) {
+  if (value && typeof value === "object") {
+    return normalizeUsageModel2(value.usage_model);
+  }
+  return normalizeUsageModel2(value);
+}
+function coerceEffectiveDate(value) {
+  if (!value) return null;
+  if (isDate2(value)) return value;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return formatDateUTC2(date);
 }
 function selectAliasCandidate({ usageModel, pricingMeta, existingAliasMap }) {
   const usageRule = buildUsageAliasRule(usageModel);
