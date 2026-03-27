@@ -20,24 +20,24 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 <!-- OPENSPEC:END -->
 
-# Canvas 规则
+# 仓库站点地图规则
 
-- 每次创建/修改/删除前必须先查阅 `architecture.canvas`，确认受影响的节点。
-- 制定计划前必须先更新 Canvas：运行 `node scripts/ops/architecture-canvas.cjs`；若脚本不可用，手动更新并保持节点格式与已有节点一致。
-- 全流程结束后必须再次更新 Canvas，保证节点格式与现有节点保持同步。
-- 渐进式披露：阅读架构时先运行 `node scripts/ops/architecture-canvas.cjs --list-modules` 获取模块，再用 `--focus <module> --out architecture.focus.canvas` 生成聚焦画布；阅读时只打开 `architecture.focus.canvas`，需要全量时再查看 `architecture.canvas`。
-- 渐进式披露粒度：小改动聚焦单模块；中等改动在同模块内扩展相邻模块（必要时多次 `--focus`）；跨模块/数据流改动先逐步扩展，只有依赖仍不清楚时才打开全量 `architecture.canvas`。
+- 非 trivial 变更前先阅读 `docs/repo-sitemap.md`，用它确定当前模块边界、入口文件与首读路径。
+- 当变更影响模块边界、跨模块数据流、公共接口、或首选入口文件时，必须同步更新 `docs/repo-sitemap.md`。
+- 渐进式披露：先读站点地图里的顶层目录和目标模块小节，只在依赖仍不清楚时再扩大阅读范围。
+- 小改动聚焦单模块；中等改动扩展到相邻模块；跨模块/数据流改动沿着站点地图列出的路径逐步展开。
 
-## Canvas 执行边界（强制 vs 可选）
+## 站点地图执行边界（强制 vs 可选）
 
-**强制（必须读 + 更新 Canvas）**
+**强制（必须读 + 更新站点地图）**
 
 - 架构变更或系统边界调整
 - 数据流/存储/同步路径变化
 - 公共接口或契约改变（API、事件、数据模型）
 - 跨模块耦合关系调整
+- 模块首选入口文件或作者路径变化
 
-**可选（允许跳过 Canvas 读/更）**
+**可选（允许跳过站点地图更新）**
 
 - 局部 bugfix（不影响模块边界/数据流）
 - 纯文案/样式/格式类改动
@@ -46,12 +46,12 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 **最小摩擦执行规则**
 
 1. 变更前判断是否触发“强制”条件
-2. 触发则执行 Canvas 读 + 更新；不触发可跳过
-3. 提交信息或 PR 描述可附一句：`Canvas: updated` 或 `Canvas: not required`
+2. 触发则先读并在结束后更新 `docs/repo-sitemap.md`；不触发可跳过
+3. 提交信息或 PR 描述可附一句：`Repo sitemap: updated` 或 `Repo sitemap: not required`
 
 ## SQLite 使用习惯（渐进式披露）
 
-- 定位顺序：先用 Canvas 缩小范围（模块/路径前缀），再用 SQLite 精确查询。
+- 定位顺序：先用 `docs/repo-sitemap.md` 缩小范围（模块/路径前缀），再用 SQLite 精确查询。
 - 查询原则：只输出最小结果集（几十/几百行以内），禁止全量导出。
 - 模板优先：使用 `docs/graph/sql-templates.md` 的固定 SQL，避免手写出错。
 - 目标定位：SQLite 仅负责“符号级事实定位”，输出结果再交给 AI。
@@ -73,7 +73,7 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 # PR 预检与风险层门禁
 
-- PR 模板必须填写 `Affected Modules / Dependency Notes` 与 `Codex Context`，跨模块变更需附 Canvas evidence（聚焦画布或更新说明）。
+- PR 模板必须填写 `Affected Modules / Dependency Notes` 与 `Codex Context`，跨模块变更需附 repo sitemap evidence（更新说明或受影响小节）。
 - 若 Risk Layer Trigger 勾选任一项，必须补全 Addendum（Rules/Invariants、Boundary Matrix ≥ 3、Evidence）。
 - CI 会执行 `node scripts/ops/pr-risk-layer-gate.cjs`；本地可用 `--body-file` 预检。
 - 详细流程见 `docs/ops/pr-review-preflight.md`。

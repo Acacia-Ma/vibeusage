@@ -374,17 +374,11 @@ This project uses **OpenSpec** for spec-driven development. Before making signif
 
 See [CLAUDE.md](CLAUDE.md) for detailed guidelines.
 
-### Architecture Validation
+### Repository Navigation
 
 ```bash
-# Validate Copy Registry
-npm run validate:copy
-
-# Generate architecture canvas
-npm run architecture:canvas
-
-# Generate focused canvas for a module
-npm run architecture:canvas:focus -- src
+# Read the repository sitemap first
+cat docs/repo-sitemap.md
 ```
 
 ## 🗺️ Roadmap

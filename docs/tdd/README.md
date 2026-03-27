@@ -5,26 +5,26 @@
 - Keep behavior changes test-driven and verifiable.
 - Reduce architectural blind spots before writing tests or code.
 
-## Progressive Disclosure (Architecture Canvas)
+## Progressive Disclosure (Repository Sitemap)
 
-Use the focused canvas to avoid loading the full graph.
+Use the repo sitemap to narrow the read scope before opening code.
 
-1. List modules
-   - `node scripts/ops/architecture-canvas.cjs --list-modules`
-2. Focus the target module
-   - `node scripts/ops/architecture-canvas.cjs --focus <module> --out architecture.focus.canvas`
-3. Read the focused canvas
-   - Only open `architecture.focus.canvas`. Open `architecture.canvas` only when explicitly required.
+1. Read the top-level map
+   - `docs/repo-sitemap.md`
+2. Open the target module section
+   - Follow the listed entry files for that area
+3. Expand only when necessary
+   - Read adjacent modules only if the sitemap says the flow crosses boundaries
 
 ## Granularity Guidelines
 
 - Small changes (single function or localized edits):
-  - Focus the primary module only.
+  - Read the primary module section only.
 - Medium changes (multiple files within a module):
-  - Focus the module, then re-focus adjacent modules as needed.
+  - Read the module section, then expand to adjacent sections as needed.
 - Large changes (cross-module data flow or interfaces):
-  - Expand focus step-by-step along the flow.
-  - Open the full canvas only when dependencies remain unclear.
+  - Expand step-by-step along the sitemap path.
+  - Update the sitemap if the flow or preferred entry files changed.
 
 ## TDD Cycle
 

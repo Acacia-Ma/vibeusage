@@ -33,3 +33,21 @@ tasks:
       - test/usage-pagination-order.test.js
       - openspec/changes/2026-03-28-refactor-pricing-sync-esm/tasks.md
     path: docs/coordination/tasks/PRICE-002.yaml
+  - id: ARCH-001
+    title: Replace architecture canvas workflow with repo sitemap
+    status: done
+    owner: codex-main
+    touches:
+      - AGENTS.md
+      - README.md
+      - package.json
+      - docs/tdd/README.md
+      - docs/repo-sitemap.md
+      - docs/architecture-canvas.md
+      - scripts/ops/architecture-canvas.cjs
+      - test/architecture-canvas.test.js
+      - architecture.canvas
+      - docs/coordination/index.yaml
+      - docs/coordination/tasks/ARCH-001.yaml
+      - openspec/changes/2026-03-28-replace-canvas-with-repo-sitemap/
+    path: docs/coordination/tasks/ARCH-001.yaml

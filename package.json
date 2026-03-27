@@ -19,9 +19,6 @@
     "access": "public"
   },
   "scripts": {
-    "architecture:canvas": "node scripts/ops/architecture-canvas.cjs",
-    "architecture:canvas:focus": "node scripts/ops/architecture-canvas.cjs --focus",
-    "architecture:canvas:list-modules": "node scripts/ops/architecture-canvas.cjs --list-modules",
     "build:insforge": "node scripts/build-insforge-functions.cjs",
     "build:insforge:check": "node scripts/build-insforge-functions.cjs --check",
     "ci:local": "npm test && npm run validate:copy && npm run validate:ui-hardcode && npm run validate:guardrails && node --test test/architecture-guardrails.test.js && npm run build:insforge:check && npm --prefix dashboard run build",
