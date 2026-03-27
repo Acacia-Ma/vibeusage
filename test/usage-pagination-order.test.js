@@ -290,6 +290,6 @@ test("usage pagination uses deterministic ordering", () => {
     0,
   );
   assert.ok(
-    normalize(readFile("insforge-src/functions/vibeusage-pricing-sync.js")).includes(adminOrder),
+    normalize(readFile("insforge-src/functions-esm/vibeusage-pricing-sync.js")).includes(adminOrder),
   );
 });

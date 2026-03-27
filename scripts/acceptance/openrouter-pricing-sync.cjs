@@ -2,6 +2,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { loadEdgeFunction } = require("../lib/load-edge-function.cjs");
 
 class DatabaseStub {
   constructor() {
@@ -285,7 +286,7 @@ async function main() {
     });
   };
 
-  const sync = require("../../insforge-src/functions/vibeusage-pricing-sync.js");
+  const sync = await loadEdgeFunction("vibeusage-pricing-sync");
 
   const req = new Request("http://local/functions/vibeusage-pricing-sync", {
     method: "POST",

@@ -3,7 +3,7 @@ title: Deploy pricing alias automation and run production smoke
 status: done
 owner: codex-main
 touches:
-  - insforge-src/functions/vibeusage-pricing-sync.js
+  - insforge-src/functions-esm/vibeusage-pricing-sync.js
   - insforge-functions/vibeusage-pricing-sync.js
   - scripts/ops/pricing-sync-health.sql
   - scripts/ops/pricing-alias-diagnostics.sql

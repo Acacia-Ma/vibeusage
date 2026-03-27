@@ -10,6 +10,7 @@ const FUNCTION_SLUGS = [
   "vibeusage-public-view-issue",
   "vibeusage-public-view-revoke",
   "vibeusage-public-view-status",
+  "vibeusage-pricing-sync",
   "vibeusage-usage-daily",
   "vibeusage-link-code-init",
   "vibeusage-public-visibility",

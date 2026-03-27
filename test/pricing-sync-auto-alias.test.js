@@ -1,14 +1,19 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 
-const pricingSync = require("../insforge-src/functions/vibeusage-pricing-sync.js");
+async function loadPrivate() {
+  const mod = await import(
+    pathToFileURL(
+      path.join(__dirname, "..", "insforge-src", "functions-esm", "vibeusage-pricing-sync.js"),
+    ).href
+  );
+  return mod._private;
+}
 
-const {
-  buildAliasRows,
-  buildExistingAliasMap,
-} = pricingSync._private;
-
-test("buildAliasRows creates alias for a single high-confidence family match", () => {
+test("buildAliasRows creates alias for a single high-confidence family match", async () => {
+  const { buildAliasRows, buildExistingAliasMap } = await loadPrivate();
   const existingAliasMap = buildExistingAliasMap([]);
   const rows = buildAliasRows({
     usageModels: ["minimax-m2.5-highspeed"],
@@ -34,7 +39,8 @@ test("buildAliasRows creates alias for a single high-confidence family match", (
   ]);
 });
 
-test("buildAliasRows skips ambiguous family matches", () => {
+test("buildAliasRows skips ambiguous family matches", async () => {
+  const { buildAliasRows, buildExistingAliasMap } = await loadPrivate();
   const rows = buildAliasRows({
     usageModels: ["gpt-5.4-high"],
     pricingModelIds: new Set(),
@@ -51,7 +57,8 @@ test("buildAliasRows skips ambiguous family matches", () => {
   assert.deepEqual(rows, []);
 });
 
-test("buildAliasRows skips unrecognized vendors", () => {
+test("buildAliasRows skips unrecognized vendors", async () => {
+  const { buildAliasRows, buildExistingAliasMap } = await loadPrivate();
   const rows = buildAliasRows({
     usageModels: ["coder-model"],
     pricingModelIds: new Set(),
@@ -64,7 +71,8 @@ test("buildAliasRows skips unrecognized vendors", () => {
   assert.deepEqual(rows, []);
 });
 
-test("buildAliasRows keeps existing conflicting aliases untouched", () => {
+test("buildAliasRows keeps existing conflicting aliases untouched", async () => {
+  const { buildAliasRows, buildExistingAliasMap } = await loadPrivate();
   const rows = buildAliasRows({
     usageModels: ["minimax-m2.5-highspeed"],
     pricingModelIds: new Set(),
@@ -85,7 +93,8 @@ test("buildAliasRows keeps existing conflicting aliases untouched", () => {
   assert.deepEqual(rows, []);
 });
 
-test("buildAliasRows creates alias for kimi shorthand usage models", () => {
+test("buildAliasRows creates alias for kimi shorthand usage models", async () => {
+  const { buildAliasRows, buildExistingAliasMap } = await loadPrivate();
   const rows = buildAliasRows({
     usageModels: ["k2p5"],
     pricingModelIds: new Set(["moonshotai/kimi-k2.5"]),
@@ -109,7 +118,8 @@ test("buildAliasRows creates alias for kimi shorthand usage models", () => {
   ]);
 });
 
-test("buildAliasRows creates alias for deepseek family matches", () => {
+test("buildAliasRows creates alias for deepseek family matches", async () => {
+  const { buildAliasRows, buildExistingAliasMap } = await loadPrivate();
   const rows = buildAliasRows({
     usageModels: ["deepseek-v3.1"],
     pricingModelIds: new Set(["deepseek/deepseek-chat-v3.1"]),
@@ -133,7 +143,8 @@ test("buildAliasRows creates alias for deepseek family matches", () => {
   ]);
 });
 
-test("buildAliasRows keeps glm vision variants from colliding with plain glm aliases", () => {
+test("buildAliasRows keeps glm vision variants from colliding with plain glm aliases", async () => {
+  const { buildAliasRows, buildExistingAliasMap } = await loadPrivate();
   const rows = buildAliasRows({
     usageModels: ["zai-org/glm-4.6"],
     pricingModelIds: new Set(["z-ai/glm-4.6", "z-ai/glm-4.6v"]),
@@ -157,7 +168,8 @@ test("buildAliasRows keeps glm vision variants from colliding with plain glm ali
   ]);
 });
 
-test("buildAliasRows creates alias for mimo free usage models", () => {
+test("buildAliasRows creates alias for mimo free usage models", async () => {
+  const { buildAliasRows, buildExistingAliasMap } = await loadPrivate();
   const rows = buildAliasRows({
     usageModels: ["mimo-v2-pro-free"],
     pricingModelIds: new Set(["xiaomi/mimo-v2-pro"]),
@@ -181,7 +193,8 @@ test("buildAliasRows creates alias for mimo free usage models", () => {
   ]);
 });
 
-test("buildAliasRows keeps preview-only gemini models on fallback", () => {
+test("buildAliasRows keeps preview-only gemini models on fallback", async () => {
+  const { buildAliasRows, buildExistingAliasMap } = await loadPrivate();
   const rows = buildAliasRows({
     usageModels: ["gemini-3-pro"],
     pricingModelIds: new Set(["google/gemini-3-pro-preview"]),

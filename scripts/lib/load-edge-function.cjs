@@ -17,6 +17,7 @@ const MIGRATED_FUNCTION_SOURCES = new Map([
   ["vibeusage-public-view-profile", "insforge-src/functions-esm/vibeusage-public-view-profile.js"],
   ["vibeusage-public-view-revoke", "insforge-src/functions-esm/vibeusage-public-view-revoke.js"],
   ["vibeusage-public-view-status", "insforge-src/functions-esm/vibeusage-public-view-status.js"],
+  ["vibeusage-pricing-sync", "insforge-src/functions-esm/vibeusage-pricing-sync.js"],
   ["vibeusage-usage-daily", "insforge-src/functions-esm/vibeusage-usage-daily.js"],
   ["vibeusage-usage-hourly", "insforge-src/functions-esm/vibeusage-usage-hourly.js"],
   ["vibeusage-usage-monthly", "insforge-src/functions-esm/vibeusage-usage-monthly.js"],

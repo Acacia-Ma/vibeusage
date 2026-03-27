@@ -2,18 +2,17 @@
 // Fetches OpenRouter Models API pricing and upserts into vibeusage_pricing_profiles.
 // Auth: Authorization: Bearer <service_role_key>
 
-"use strict";
-
-const { handleOptions, json, readJson, requireMethod } = require("../shared/http");
-const { getBearerToken } = require("../shared/auth");
-const { getAnonKey, getBaseUrl, getServiceRoleKey } = require("../shared/env");
-const { formatDateUTC, isDate } = require("../shared/date");
-const { toPositiveIntOrNull } = require("../shared/numbers");
-const { normalizeSource } = require("../shared/source");
-const { normalizeModel, normalizeUsageModel } = require("../shared/model");
-const { applyCanaryFilter } = require("../shared/canary");
-const { forEachPage } = require("../shared/pagination");
-const { withRequestLogging } = require("../shared/logging");
+import { getBearerToken } from "./shared/auth.js";
+import { applyCanaryFilter } from "./shared/canary.js";
+import { formatDateUTC, isDate } from "./shared/date.js";
+import { getAnonKey, getBaseUrl, getServiceRoleKey } from "./shared/env.js";
+import { handleOptions, json, readJson, requireMethod } from "./shared/http.js";
+import { createEdgeClient } from "./shared/insforge-client.js";
+import { withRequestLogging } from "./shared/logging.js";
+import { normalizeModel, normalizeUsageModel } from "./shared/model.js";
+import { toPositiveIntOrNull } from "./shared/numbers.js";
+import { forEachPage } from "./shared/pagination.js";
+import { normalizeSource } from "./shared/source.js";
 
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
 const MAX_RATE_MICROS_PER_MILLION = 2147483647n;
@@ -21,7 +20,7 @@ const SCALE_MICROS_PER_MILLION = 12; // USD per token -> micro USD per million t
 const UPSERT_BATCH_SIZE = 500;
 const USAGE_MODEL_WINDOW_DAYS = 30;
 
-module.exports = withRequestLogging("vibeusage-pricing-sync", async function (request, logger) {
+const handler = withRequestLogging("vibeusage-pricing-sync", async function (request, logger) {
   const opt = handleOptions(request);
   if (opt) return opt;
 
@@ -142,7 +141,7 @@ module.exports = withRequestLogging("vibeusage-pricing-sync", async function (re
 
   const baseUrl = getBaseUrl();
   const anonKey = getAnonKey();
-  const serviceClient = createClient({
+  const serviceClient = await createEdgeClient({
     baseUrl,
     anonKey: anonKey || serviceRoleKey,
     edgeFunctionToken: serviceRoleKey,
@@ -674,7 +673,7 @@ function scaleDecimal(value, scale) {
   return rounded;
 }
 
-module.exports._private = {
+export const _private = {
   buildAliasRows,
   buildExistingAliasMap,
   buildPricingAliasCandidate,
@@ -684,3 +683,5 @@ module.exports._private = {
   isEligiblePricingModel,
   matchesPricingModel,
 };
+
+export default handler;
