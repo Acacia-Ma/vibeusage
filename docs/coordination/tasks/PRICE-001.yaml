@@ -10,5 +10,7 @@ touches:
   - docs/ops/pricing-sync-health.md
 notes:
   - "DECISION: Pricing alias generation is now automated during the pricing sync flow."
-  - "NEXT: Deploy the updated pricing sync function and verify live alias coverage and fallback counts."
+  - "DECISION: Live function deployment succeeded using an ESM deploy artifact because the current CJS deploy format fails Insforge2 type checks."
+  - "BLOCKED: Real smoke against the live endpoint returned Unauthorized with the local service-role credential, so live alias counts are not yet verified."
+  - "NEXT: Resolve the live auth mismatch, then rerun the pricing sync smoke and verify aliases_generated and aliases_upserted."
 commit_refs: []
