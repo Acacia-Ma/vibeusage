@@ -1,0 +1,19 @@
+id: PRICE-003
+title: Introduce canonical model sync before pricing aliases
+status: in_progress
+owner: codex-main
+touches:
+  - insforge-src/functions-esm/vibeusage-pricing-sync.js
+  - scripts/acceptance/openrouter-pricing-sync.cjs
+  - test/pricing-sync-auto-alias.test.js
+  - scripts/ops/pricing-alias-diagnostics.sql
+  - scripts/ops/pricing-sync-health.sql
+  - docs/ops/pricing-sync-health.md
+  - openspec/changes/2026-03-28-refactor-model-identity-before-pricing/
+  - docs/coordination/index.yaml
+  - docs/coordination/tasks/PRICE-003.yaml
+notes:
+  - "DECISION: Runtime usage endpoints already resolve canonical model identity before pricing; this task only adds canonical alias sync and switches pricing sync to consume canonical models."
+  - "DECISION: V1 only auto-normalizes high-confidence qwen, deepseek, and glm families; ambiguous names such as kimi-for-coding and gemini-3-pro stay on fallback."
+  - "NEXT: Write failing tests that require canonical aliases to be written before pricing aliases."
+commit_refs: []

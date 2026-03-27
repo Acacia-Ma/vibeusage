@@ -33,12 +33,17 @@ curl -s -X POST "$BASE_URL/functions/vibeusage-pricing-sync" \
 - `latest_effective_from` 是当天或前一天 UTC，且 `is_fresh = true`
 - 最新 `effective_from` 有大量 `active_rows`
 - 默认模型 `gpt-5.2-codex` 存在（精确或带前缀）
+- `canonical_alias_matches` 与 `raw_passthrough_matches` 可解释
 - `fallback_matches` 可解释且整体占比下降
 
 说明：
 
 - 同一天内重复执行 sync 会走 upsert，不保证刷新 `created_at`
 - 因此新鲜度不再用 `created_at` 判定，而是看最新 `effective_from`
+- `pricing-sync-health.sql` 现在会把覆盖拆成两层：
+  - `raw -> canonical`
+  - `canonical -> pricing`
+- 如果 fallback 仍存在，要先看是“没有 canonical alias”，还是“canonical 已有但没有 pricing alias”
 - 如果要看未命中模型详情，执行：
 
 ```sql

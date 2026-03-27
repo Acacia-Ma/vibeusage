@@ -15,12 +15,16 @@ class DatabaseStub {
     this._lte = null;
     this._orders = [];
     this.upserts = [];
+    this.modelAliasUpserts = [];
     this.aliasUpserts = [];
     this.upsertCalls = 0;
+    this.modelAliasUpsertCalls = 0;
     this.aliasUpsertCalls = 0;
     this.retention = null;
+    this.modelAliasRetention = null;
     this.aliasRetention = null;
     this.usageRows = [];
+    this.existingModelAliasRows = [];
     this.existingAliasRows = [];
   }
 
@@ -60,6 +64,9 @@ class DatabaseStub {
     if (this._table === "vibeusage_pricing_profiles") {
       this.upserts.push(...rows);
       this.upsertCalls += 1;
+    } else if (this._table === "vibeusage_model_aliases") {
+      this.modelAliasUpserts.push(...rows);
+      this.modelAliasUpsertCalls += 1;
     } else if (this._table === "vibeusage_pricing_model_aliases") {
       this.aliasUpserts.push(...rows);
       this.aliasUpsertCalls += 1;
@@ -83,7 +90,9 @@ class DatabaseStub {
       eq: this._eq[this._eq.length - 1],
       lt: { column, value },
     };
-    if (this._table === "vibeusage_pricing_model_aliases") {
+    if (this._table === "vibeusage_model_aliases") {
+      this.modelAliasRetention = target;
+    } else if (this._table === "vibeusage_pricing_model_aliases") {
       this.aliasRetention = target;
     } else {
       this.retention = target;
@@ -99,6 +108,24 @@ class DatabaseStub {
   }
 
   limit() {
+    if (this._table === "vibeusage_model_aliases") {
+      let rows = this.existingModelAliasRows.slice();
+      for (const filter of this._eq) {
+        if (!filter?.column) continue;
+        rows = rows.filter((row) => row[filter.column] === filter.value);
+      }
+      if (this._in?.column === "usage_model") {
+        const allowed = new Set(this._in.value);
+        rows = rows.filter((row) => allowed.has(row.usage_model));
+      }
+      if (this._lte?.column) {
+        rows = rows.filter((row) => String(row[this._lte.column] || "") <= String(this._lte.value));
+      }
+      rows.sort((left, right) =>
+        String(right.effective_from || "").localeCompare(String(left.effective_from || "")),
+      );
+      return { data: rows, error: null };
+    }
     if (this._table === "vibeusage_pricing_model_aliases") {
       let rows = this.existingAliasRows.slice();
       for (const filter of this._eq) {
@@ -213,6 +240,14 @@ function buildOpenRouterPayload() {
         },
       },
       {
+        id: "qwen/qwen3.5-plus-02-15",
+        created: 14,
+        pricing: {
+          prompt: 0.0000014,
+          completion: 0.0000028,
+        },
+      },
+      {
         id: "deepseek/deepseek-chat-v3.1",
         created: 15,
         pricing: {
@@ -261,6 +296,7 @@ async function main() {
     { model: "zai-org/glm-4.6" },
     { model: "k2p5" },
     { model: "deepseek-v3.1" },
+    { model: "qwen3.5-plus" },
     { model: "mimo-v2-pro-free" },
     { model: "coder-model" },
     { model: "unknown" },
@@ -302,14 +338,16 @@ async function main() {
 
   assert.equal(res.status, 200);
   assert.equal(body.success, true);
-  assert.equal(body.models_total, 13);
-  assert.equal(body.models_processed, 12);
-  assert.equal(body.rows_upserted, 12);
-  assert.equal(body.usage_models_total, 10);
-  assert.equal(body.aliases_generated, 7);
-  assert.equal(body.aliases_upserted, 7);
+  assert.equal(body.models_total, 14);
+  assert.equal(body.models_processed, 13);
+  assert.equal(body.rows_upserted, 13);
+  assert.equal(body.usage_models_total, 11);
+  assert.equal(body.canonical_aliases_generated, 8);
+  assert.equal(body.canonical_aliases_upserted, 8);
+  assert.equal(body.aliases_generated, 2);
+  assert.equal(body.aliases_upserted, 2);
   assert.equal(db.upsertCalls, 1);
-  assert.equal(db.upserts.length, 12);
+  assert.equal(db.upserts.length, 13);
 
   const first = db.upserts.find((row) => row.model === "anthropic/claude-opus-4.5");
   const second = db.upserts.find((row) => row.model === "openai/gpt-4o-mini");
@@ -327,18 +365,31 @@ async function main() {
   assert.equal(db.retention.eq.column, "source");
   assert.equal(db.retention.eq.value, "openrouter");
   assert.equal(db.retention.update.active, false);
+  assert.equal(db.modelAliasUpsertCalls, 1);
+  assert.equal(db.modelAliasUpserts.length, 8);
   assert.equal(db.aliasUpsertCalls, 1);
-  assert.equal(db.aliasUpserts.length, 7);
+  assert.equal(db.aliasUpserts.length, 2);
+  assert.deepEqual(
+    db.modelAliasUpserts.map((row) => ({
+      usage_model: row.usage_model,
+      canonical_model: row.canonical_model,
+    })),
+    [
+      { usage_model: "claude-opus-4-5-20251101", canonical_model: "anthropic/claude-opus-4.5" },
+      { usage_model: "minimax-m2.5-highspeed", canonical_model: "minimax/minimax-m2.5" },
+      { usage_model: "zai/glm-4.7", canonical_model: "z-ai/glm-4.7" },
+      { usage_model: "zai-org/glm-4.6", canonical_model: "z-ai/glm-4.6" },
+      { usage_model: "k2p5", canonical_model: "moonshotai/kimi-k2.5" },
+      { usage_model: "deepseek-v3.1", canonical_model: "deepseek/deepseek-v3.1" },
+      { usage_model: "qwen3.5-plus", canonical_model: "qwen/qwen3.5-plus" },
+      { usage_model: "mimo-v2-pro-free", canonical_model: "xiaomi/mimo-v2-pro" },
+    ],
+  );
   assert.deepEqual(
     db.aliasUpserts.map((row) => ({ usage_model: row.usage_model, pricing_model: row.pricing_model })),
     [
-      { usage_model: "claude-opus-4-5-20251101", pricing_model: "anthropic/claude-opus-4.5" },
-      { usage_model: "minimax-m2.5-highspeed", pricing_model: "minimax/minimax-m2.5" },
-      { usage_model: "zai/glm-4.7", pricing_model: "z-ai/glm-4.7" },
-      { usage_model: "zai-org/glm-4.6", pricing_model: "z-ai/glm-4.6" },
-      { usage_model: "k2p5", pricing_model: "moonshotai/kimi-k2.5" },
-      { usage_model: "deepseek-v3.1", pricing_model: "deepseek/deepseek-chat-v3.1" },
-      { usage_model: "mimo-v2-pro-free", pricing_model: "xiaomi/mimo-v2-pro" },
+      { usage_model: "deepseek/deepseek-v3.1", pricing_model: "deepseek/deepseek-chat-v3.1" },
+      { usage_model: "qwen/qwen3.5-plus", pricing_model: "qwen/qwen3.5-plus-02-15" },
     ],
   );
 
@@ -347,6 +398,7 @@ async function main() {
       {
         ok: true,
         upserts: db.upserts.length,
+        canonical_alias_upserts: db.modelAliasUpserts.length,
         alias_upserts: db.aliasUpserts.length,
         retention: db.retention,
       },

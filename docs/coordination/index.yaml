@@ -51,3 +51,18 @@ tasks:
       - docs/coordination/tasks/ARCH-001.yaml
       - openspec/changes/2026-03-28-replace-canvas-with-repo-sitemap/
     path: docs/coordination/tasks/ARCH-001.yaml
+  - id: PRICE-003
+    title: Introduce canonical model sync before pricing aliases
+    status: in_progress
+    owner: codex-main
+    touches:
+      - insforge-src/functions-esm/vibeusage-pricing-sync.js
+      - scripts/acceptance/openrouter-pricing-sync.cjs
+      - test/pricing-sync-auto-alias.test.js
+      - scripts/ops/pricing-alias-diagnostics.sql
+      - scripts/ops/pricing-sync-health.sql
+      - docs/ops/pricing-sync-health.md
+      - openspec/changes/2026-03-28-refactor-model-identity-before-pricing/
+      - docs/coordination/index.yaml
+      - docs/coordination/tasks/PRICE-003.yaml
+    path: docs/coordination/tasks/PRICE-003.yaml

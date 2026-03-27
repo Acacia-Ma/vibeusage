@@ -1,6 +1,7 @@
--- Pricing alias coverage diagnostics for OpenRouter-backed cost resolution.
--- Use this to understand how many recent usage models resolve directly, via alias,
--- or fall back to the default pricing profile.
+-- Canonical model + pricing coverage diagnostics for OpenRouter-backed cost resolution.
+-- Use this to understand whether fallback is caused by:
+-- 1) missing raw -> canonical normalization, or
+-- 2) missing canonical -> pricing resolution.
 
 with usage_models as (
   select
@@ -15,47 +16,87 @@ with usage_models as (
     and hour_start >= now() - interval '30 days'
   group by 1
 ),
+model_alias_rows as (
+  select
+    lower(trim(usage_model)) as usage_model,
+    lower(trim(canonical_model)) as canonical_model,
+    effective_from,
+    row_number() over (
+      partition by lower(trim(usage_model))
+      order by effective_from desc
+    ) as rn
+  from vibeusage_model_aliases
+  where active = true
+    and effective_from < current_date + interval '1 day'
+),
+model_aliases as (
+  select usage_model, canonical_model
+  from model_alias_rows
+  where rn = 1
+),
 pricing_models as (
   select distinct lower(trim(model)) as model
   from vibeusage_pricing_profiles
   where source = 'openrouter'
     and active = true
 ),
-alias_models as (
-  select distinct lower(trim(usage_model)) as usage_model
+pricing_alias_rows as (
+  select
+    lower(trim(usage_model)) as usage_model,
+    lower(trim(pricing_model)) as pricing_model,
+    effective_from,
+    row_number() over (
+      partition by lower(trim(usage_model))
+      order by effective_from desc
+    ) as rn
   from vibeusage_pricing_model_aliases
   where pricing_source = 'openrouter'
     and active = true
+    and effective_from <= current_date
 ),
-classified as (
+pricing_aliases as (
+  select usage_model, pricing_model
+  from pricing_alias_rows
+  where rn = 1
+),
+resolved as (
   select
     u.usage_model,
     u.row_count,
     u.total_tokens,
     u.billable_tokens,
+    coalesce(m.canonical_model, u.usage_model) as canonical_model,
+    case
+      when m.canonical_model is not null then 'canonical_alias'
+      else 'raw'
+    end as canonical_stage,
     case
       when exists (
         select 1
         from pricing_models p
-        where p.model = u.usage_model
-           or p.model like '%/' || u.usage_model
-           or u.usage_model like '%/' || p.model
+        where p.model = coalesce(m.canonical_model, u.usage_model)
+           or p.model like '%/' || coalesce(m.canonical_model, u.usage_model)
+           or coalesce(m.canonical_model, u.usage_model) like '%/' || p.model
       ) then 'direct'
       when exists (
         select 1
-        from alias_models a
-        where a.usage_model = u.usage_model
+        from pricing_aliases a
+        where a.usage_model = coalesce(m.canonical_model, u.usage_model)
       ) then 'alias'
       else 'fallback'
-    end as match_type
+    end as pricing_stage
   from usage_models u
+  left join model_aliases m on m.usage_model = u.usage_model
 )
-select match_type, count(*) as model_count
-from classified
-group by match_type
-order by match_type;
+select
+  canonical_stage,
+  pricing_stage,
+  count(*) as model_count
+from resolved
+group by canonical_stage, pricing_stage
+order by canonical_stage, pricing_stage;
 
--- Top unmatched models by recent billable volume.
+-- Top raw usage models still missing canonical normalization.
 with usage_models as (
   select
     lower(trim(model)) as usage_model,
@@ -69,17 +110,22 @@ with usage_models as (
     and hour_start >= now() - interval '30 days'
   group by 1
 ),
-pricing_models as (
-  select distinct lower(trim(model)) as model
-  from vibeusage_pricing_profiles
-  where source = 'openrouter'
-    and active = true
+model_alias_rows as (
+  select
+    lower(trim(usage_model)) as usage_model,
+    effective_from,
+    row_number() over (
+      partition by lower(trim(usage_model))
+      order by effective_from desc
+    ) as rn
+  from vibeusage_model_aliases
+  where active = true
+    and effective_from < current_date + interval '1 day'
 ),
-alias_models as (
-  select distinct lower(trim(usage_model)) as usage_model
-  from vibeusage_pricing_model_aliases
-  where pricing_source = 'openrouter'
-    and active = true
+model_aliases as (
+  select usage_model
+  from model_alias_rows
+  where rn = 1
 )
 select
   u.usage_model,
@@ -87,17 +133,94 @@ select
   u.total_tokens,
   u.billable_tokens
 from usage_models u
+left join model_aliases m on m.usage_model = u.usage_model
+where m.usage_model is null
+order by u.billable_tokens desc, u.row_count desc, u.usage_model asc
+limit 20;
+
+-- Top canonical models still missing pricing resolution.
+with usage_models as (
+  select
+    lower(trim(model)) as usage_model,
+    count(*) as row_count,
+    sum(coalesce(total_tokens, 0))::bigint as total_tokens,
+    sum(coalesce(billable_total_tokens, coalesce(total_tokens, 0)))::bigint as billable_tokens
+  from vibeusage_tracker_hourly
+  where model is not null
+    and trim(model) <> ''
+    and lower(trim(model)) <> 'unknown'
+    and hour_start >= now() - interval '30 days'
+  group by 1
+),
+model_alias_rows as (
+  select
+    lower(trim(usage_model)) as usage_model,
+    lower(trim(canonical_model)) as canonical_model,
+    effective_from,
+    row_number() over (
+      partition by lower(trim(usage_model))
+      order by effective_from desc
+    ) as rn
+  from vibeusage_model_aliases
+  where active = true
+    and effective_from < current_date + interval '1 day'
+),
+model_aliases as (
+  select usage_model, canonical_model
+  from model_alias_rows
+  where rn = 1
+),
+pricing_models as (
+  select distinct lower(trim(model)) as model
+  from vibeusage_pricing_profiles
+  where source = 'openrouter'
+    and active = true
+),
+pricing_alias_rows as (
+  select
+    lower(trim(usage_model)) as usage_model,
+    effective_from,
+    row_number() over (
+      partition by lower(trim(usage_model))
+      order by effective_from desc
+    ) as rn
+  from vibeusage_pricing_model_aliases
+  where pricing_source = 'openrouter'
+    and active = true
+    and effective_from <= current_date
+),
+pricing_aliases as (
+  select usage_model
+  from pricing_alias_rows
+  where rn = 1
+),
+resolved as (
+  select
+    coalesce(m.canonical_model, u.usage_model) as canonical_model,
+    sum(u.row_count)::bigint as row_count,
+    sum(u.total_tokens)::bigint as total_tokens,
+    sum(u.billable_tokens)::bigint as billable_tokens
+  from usage_models u
+  left join model_aliases m on m.usage_model = u.usage_model
+  group by 1
+)
+select
+  r.canonical_model,
+  r.row_count,
+  r.total_tokens,
+  r.billable_tokens
+from resolved r
 where not exists (
     select 1
     from pricing_models p
-    where p.model = u.usage_model
-       or p.model like '%/' || u.usage_model
-       or u.usage_model like '%/' || p.model
+    where p.model = r.canonical_model
+       or p.model like '%/' || r.canonical_model
+       or r.canonical_model like '%/' || p.model
   )
   and not exists (
     select 1
-    from alias_models a
-    where a.usage_model = u.usage_model
+    from pricing_aliases a
+    where a.usage_model = r.canonical_model
   )
-order by u.billable_tokens desc, u.row_count desc, u.usage_model asc
+order by r.billable_tokens desc, r.row_count desc, r.canonical_model asc
 limit 20;

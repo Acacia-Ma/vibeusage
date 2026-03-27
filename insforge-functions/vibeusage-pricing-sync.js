@@ -1753,14 +1753,39 @@ var handler = withRequestLogging2("vibeusage-pricing-sync", async function(reque
     serviceClient,
     windowDays: USAGE_MODEL_WINDOW_DAYS
   });
-  const existingAliasRows = await listExistingAliases({
+  const existingModelAliasRows = await listExistingModelAliases({
     serviceClient,
     usageModels,
+    effectiveFrom
+  });
+  const canonicalAliasRows = buildCanonicalAliasRows({
+    usageModels,
+    effectiveFrom,
+    existingAliasMap: buildExistingModelAliasMap(existingModelAliasRows)
+  });
+  let canonicalAliasesUpserted = 0;
+  for (let i = 0; i < canonicalAliasRows.length; i += UPSERT_BATCH_SIZE) {
+    const batch = canonicalAliasRows.slice(i, i + UPSERT_BATCH_SIZE);
+    const { error } = await serviceClient.database.from("vibeusage_model_aliases").upsert(batch);
+    if (error) return json2({ error: error.message }, 500);
+    canonicalAliasesUpserted += batch.length;
+  }
+  const canonicalIdentityMap = buildExistingModelAliasMap([
+    ...existingModelAliasRows,
+    ...canonicalAliasRows
+  ]);
+  const canonicalUsageModels = resolveCanonicalUsageModels({
+    usageModels,
+    canonicalIdentityMap
+  });
+  const existingAliasRows = await listExistingAliases({
+    serviceClient,
+    usageModels: canonicalUsageModels,
     pricingSource,
     effectiveFrom
   });
   const aliasRows = buildAliasRows({
-    usageModels,
+    usageModels: canonicalUsageModels,
     pricingModelIds,
     pricingMeta,
     pricingSource,
@@ -1795,6 +1820,8 @@ var handler = withRequestLogging2("vibeusage-pricing-sync", async function(reque
       models_skipped: skipped,
       rows_upserted: upserted,
       usage_models_total: usageModels.length,
+      canonical_aliases_generated: canonicalAliasRows.length,
+      canonical_aliases_upserted: canonicalAliasesUpserted,
       aliases_generated: aliasRows.length,
       aliases_upserted: aliasesUpserted,
       retention
@@ -1872,6 +1899,69 @@ async function listExistingAliases({
   if (error) throw new Error(error.message || "Failed to list existing pricing aliases");
   return Array.isArray(data) ? data : [];
 }
+async function listExistingModelAliases({
+  serviceClient,
+  usageModels,
+  effectiveFrom
+}) {
+  const normalizedUsageModels = Array.isArray(usageModels) ? usageModels.map((value) => normalizeUsageModel2(value)).filter(Boolean) : [];
+  if (!normalizedUsageModels.length) return [];
+  const query = serviceClient?.database?.from?.("vibeusage_model_aliases")?.select?.("usage_model,canonical_model,display_name,effective_from,active");
+  if (!query || typeof query.eq !== "function" || typeof query.in !== "function" || typeof query.lte !== "function" || typeof query.order !== "function" || typeof query.limit !== "function") {
+    return [];
+  }
+  const { data, error } = await query.eq("active", true).in("usage_model", normalizedUsageModels).lte("effective_from", effectiveFrom).order("effective_from", { ascending: false }).limit(5e3);
+  if (error) throw new Error(error.message || "Failed to list existing model aliases");
+  return Array.isArray(data) ? data : [];
+}
+function buildCanonicalAliasRows({ usageModels, effectiveFrom, existingAliasMap }) {
+  const rows = [];
+  for (const usageModel of usageModels) {
+    const candidate = selectCanonicalModelCandidate({
+      usageModel,
+      existingAliasMap
+    });
+    if (!candidate) continue;
+    rows.push({
+      usage_model: usageModel,
+      canonical_model: candidate.id,
+      display_name: candidate.id,
+      effective_from: effectiveFrom,
+      active: true
+    });
+  }
+  return rows;
+}
+function buildExistingModelAliasMap(aliasRows) {
+  const map = /* @__PURE__ */ new Map();
+  for (const row of Array.isArray(aliasRows) ? aliasRows : []) {
+    const usageModel = normalizeUsageModel2(row?.usage_model);
+    const canonicalModel = normalizeModel2(row?.canonical_model);
+    if (!usageModel || !canonicalModel) continue;
+    const displayName = normalizeModel2(row?.display_name) || canonicalModel;
+    const effectiveFrom = String(row?.effective_from || "");
+    const existing = map.get(usageModel);
+    if (!existing || effectiveFrom > existing.effective_from) {
+      map.set(usageModel, {
+        canonical_model: canonicalModel,
+        display_name: displayName,
+        effective_from: effectiveFrom
+      });
+    }
+  }
+  return map;
+}
+function resolveCanonicalUsageModels({ usageModels, canonicalIdentityMap }) {
+  const resolved = /* @__PURE__ */ new Set();
+  for (const usageModel of Array.isArray(usageModels) ? usageModels : []) {
+    const normalized = normalizeUsageModel2(usageModel);
+    if (!normalized) continue;
+    const existing = canonicalIdentityMap?.get?.(normalized) || null;
+    const canonicalModel = normalizeModel2(existing?.canonical_model);
+    resolved.add(canonicalModel || normalized);
+  }
+  return Array.from(resolved.values());
+}
 function buildAliasRows({
   usageModels,
   pricingModelIds,
@@ -1927,6 +2017,17 @@ function buildExistingAliasMap(aliasRows) {
   }
   return map;
 }
+function selectCanonicalModelCandidate({ usageModel, existingAliasMap }) {
+  const usageRule = buildUsageAliasRule(usageModel);
+  if (!usageRule) return null;
+  const canonicalModel = buildCanonicalModelId(usageRule);
+  if (!canonicalModel || canonicalModel === usageRule.usageModel) return null;
+  const existing = existingAliasMap?.get?.(usageRule.usageModel) || null;
+  const normalizedCanonical = normalizeModel2(existing?.canonical_model);
+  if (normalizedCanonical === canonicalModel) return null;
+  if (normalizedCanonical && normalizedCanonical !== canonicalModel) return null;
+  return { id: canonicalModel };
+}
 function selectAliasCandidate({ usageModel, pricingMeta, existingAliasMap }) {
   const usageRule = buildUsageAliasRule(usageModel);
   if (!usageRule) return null;
@@ -1980,6 +2081,7 @@ function detectVendorFromFamily(usageModel) {
   if (normalized.includes("gemini")) return "google";
   if (normalized.includes("deepseek")) return "deepseek";
   if (normalized.includes("mimo")) return "xiaomi";
+  if (normalized.includes("qwen")) return "qwen";
   if (normalized.includes("glm")) return "z-ai";
   if (normalized.includes("kimi") || normalized === "k2p5") return "moonshotai";
   return null;
@@ -1998,6 +2100,8 @@ function normalizeVendor(value) {
       return "deepseek";
     case "xiaomi":
       return "xiaomi";
+    case "qwen":
+      return "qwen";
     case "z-ai":
     case "zai":
     case "zai-org":
@@ -2029,12 +2133,31 @@ function buildAliasKeyForVendor(modelId, vendor, { isUsageModel } = {}) {
       return extractDeepSeekAliasKey(modelId);
     case "google":
       return extractGeminiAliasKey(modelId);
+    case "qwen":
+      return extractQwenAliasKey(modelId);
     case "z-ai":
       return extractGlmAliasKey(modelId);
     case "xiaomi":
       return extractMimoAliasKey(modelId);
     case "moonshotai":
       return extractKimiAliasKey(modelId, { isUsageModel });
+    default:
+      return null;
+  }
+}
+function buildCanonicalModelId(usageRule) {
+  const aliasKey = String(usageRule?.aliasKey || "").trim().toLowerCase();
+  switch (usageRule?.vendor) {
+    case "anthropic":
+    case "minimax":
+    case "moonshotai":
+    case "xiaomi":
+    case "qwen":
+    case "z-ai":
+      return `${usageRule.vendor}/${aliasKey}`;
+    case "deepseek":
+      if (aliasKey === "deepseek-chat") return "deepseek/deepseek-chat";
+      return `deepseek/${aliasKey}`;
     default:
       return null;
   }
@@ -2090,6 +2213,16 @@ function extractGeminiAliasKey(modelId) {
   const image = match[3] ? "-image" : "";
   const preview = match[4] ? `-${match[4]}` : "";
   return `gemini-${version}-${tier}${image}${preview}`;
+}
+function extractQwenAliasKey(modelId) {
+  const normalized = normalizeAliasInput(modelId);
+  const match = normalized.match(
+    /^qwen(\d+(?:[.-]\d+)?)-(plus|max|turbo|coder(?:-(?:flash|plus|next))?)(?:-(\d{2}-\d{2}|\d{4}-\d{2}-\d{2}))?$/
+  );
+  if (!match) return null;
+  const version = normalizeVersionToken(match[1]);
+  const tier = match[2];
+  return `qwen${version}-${tier}`;
 }
 function extractMimoAliasKey(modelId) {
   const normalized = normalizeAliasInput(modelId);
@@ -2151,7 +2284,10 @@ function scaleDecimal(value, scale) {
   return rounded;
 }
 var _private = {
+  buildCanonicalAliasRows,
+  buildCanonicalModelId,
   buildAliasRows,
+  buildExistingModelAliasMap,
   buildExistingAliasMap,
   buildPricingAliasCandidate,
   buildUsageAliasRule,

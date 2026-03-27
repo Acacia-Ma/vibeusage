@@ -2,10 +2,12 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { resolveModelIdentity } = require("../../insforge-src/shared/model-identity");
 
 class DatabaseStub {
   constructor() {
     this._table = null;
+    this._filters = {};
   }
 
   from(table) {
@@ -17,7 +19,13 @@ class DatabaseStub {
     return this;
   }
 
-  eq() {
+  eq(field, value) {
+    this._filters[field] = value;
+    return this;
+  }
+
+  in(field, value) {
+    this._filters[field] = Array.isArray(value) ? value.slice() : [value];
     return this;
   }
 
@@ -25,16 +33,48 @@ class DatabaseStub {
     return this;
   }
 
-  order() {
+  lt() {
     return this;
   }
 
-  limit() {
-    if (this._table === "vibeusage_pricing_model_aliases") {
+  order() {
+    if (this._table === "vibeusage_model_aliases") {
       return {
         data: [
           {
             usage_model: "claude-opus-4-5-20251101",
+            canonical_model: "anthropic/claude-opus-4.5",
+            display_name: "anthropic/claude-opus-4.5",
+            effective_from: "2025-12-20",
+            active: true,
+          },
+        ],
+        error: null,
+      };
+    }
+    return this;
+  }
+
+  limit() {
+    if (this._table === "vibeusage_model_aliases") {
+      return {
+        data: [
+          {
+            usage_model: "claude-opus-4-5-20251101",
+            canonical_model: "anthropic/claude-opus-4.5",
+            display_name: "anthropic/claude-opus-4.5",
+            effective_from: "2025-12-20",
+            active: true,
+          },
+        ],
+        error: null,
+      };
+    }
+    if (this._table === "vibeusage_pricing_model_aliases") {
+      return {
+        data: [
+          {
+            usage_model: "anthropic/claude-opus-4.5",
             pricing_model: "anthropic/claude-opus-4.5",
             pricing_source: "openrouter",
             effective_from: "2025-12-20",
@@ -83,13 +123,20 @@ async function main() {
   };
 
   const { resolvePricingProfile } = require("../../insforge-src/shared/pricing");
+  const identityMap = await resolveModelIdentity({
+    edgeClient: createClientStub(),
+    usageModels: ["claude-opus-4-5-20251101"],
+    effectiveDate: "2025-12-25",
+  });
+  const identity = identityMap.get("claude-opus-4-5-20251101");
 
   const profile = await resolvePricingProfile({
     edgeClient: createClientStub(),
-    model: "claude-opus-4-5-20251101",
+    model: identity?.model_id,
     effectiveDate: "2025-12-25",
   });
 
+  assert.equal(identity?.model_id, "anthropic/claude-opus-4.5");
   assert.equal(profile.model, "anthropic/claude-opus-4.5");
   assert.equal(profile.source, "openrouter");
   assert.equal(profile.effective_from, "2025-12-20");
