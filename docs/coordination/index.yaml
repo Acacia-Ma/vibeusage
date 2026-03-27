@@ -9,7 +9,7 @@ tasks:
     path: docs/coordination/tasks/COORD-001.yaml
   - id: PRICE-001
     title: Deploy pricing alias automation and run production smoke
-    status: in_progress
+    status: done
     owner: codex-main
     touches:
       - insforge-src/functions/vibeusage-pricing-sync.js
