@@ -6749,7 +6749,7 @@
     {
       "id": "frontend_DashboardView_7e0fcfdf",
       "type": "text",
-      "text": "**DashboardView**\n`dashboard/src/ui/matrix-a/views/DashboardView.jsx`\n\nUI component layer.\n\n包含：\n- DashboardView (516 行)\n- DashboardView (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**DashboardView**\n`dashboard/src/ui/matrix-a/views/DashboardView.jsx`\n\nUI component layer.\n\n包含：\n- DashboardView (518 行)\n- DashboardView (1 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 2620,
       "y": 4232,
       "width": 280,
@@ -7579,7 +7579,7 @@
     {
       "id": "frontend_DashboardPage_9ebda834",
       "type": "text",
-      "text": "**DashboardPage**\n`dashboard/src/pages/DashboardPage.jsx`\n\nUI component layer.\n\n包含：\n- DashboardPage (1387 行)\n- hasUsageValue (2 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**DashboardPage**\n`dashboard/src/pages/DashboardPage.jsx`\n\nUI component layer.\n\n包含：\n- DashboardPage (1389 行)\n- hasUsageValue (2 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 4060,
       "y": 2432,
       "width": 280,
@@ -7596,7 +7596,7 @@
     {
       "id": "test_DashboardPage_period-decoupling_test_f4881ace",
       "type": "text",
-      "text": "**DashboardPage.period-decoupling.test**\n`dashboard/src/pages/DashboardPage.period-decoupling.test.jsx`\n\nTest module.\n\n包含：\n- DashboardPage.period-decoupling.test (193 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**DashboardPage.period-decoupling.test**\n`dashboard/src/pages/DashboardPage.period-decoupling.test.jsx`\n\nTest module.\n\n包含：\n- DashboardPage.period-decoupling.test (228 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 100,
       "y": 2792,
       "width": 280,
@@ -8696,7 +8696,7 @@
     {
       "id": "undefined_use-trend-data_96a4250f",
       "type": "text",
-      "text": "**use-trend-data**\n`dashboard/src/hooks/use-trend-data.ts`\n\nGeneral module.\n\n包含：\n- use-trend-data (524 行)\n- useTrendData (12 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**use-trend-data**\n`dashboard/src/hooks/use-trend-data.ts`\n\nGeneral module.\n\n包含：\n- use-trend-data (549 行)\n- useTrendData (12 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 1540,
       "y": 992,
       "width": 280,
@@ -8712,7 +8712,7 @@
     {
       "id": "test_use-usage-data_test_9095dd43",
       "type": "text",
-      "text": "**use-usage-data.test**\n`dashboard/src/hooks/use-usage-data.test.tsx`\n\nTest module.\n\n包含：\n- use-usage-data.test (292 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**use-usage-data.test**\n`dashboard/src/hooks/use-usage-data.test.tsx`\n\nTest module.\n\n包含：\n- use-usage-data.test (252 行)\n- exports (0 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 1900,
       "y": 992,
       "width": 280,
@@ -8729,7 +8729,7 @@
     {
       "id": "undefined_use-usage-data_a20b2043",
       "type": "text",
-      "text": "**use-usage-data**\n`dashboard/src/hooks/use-usage-data.ts`\n\nGeneral module.\n\n包含：\n- use-usage-data (371 行)\n- useUsageData (11 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**use-usage-data**\n`dashboard/src/hooks/use-usage-data.ts`\n\nGeneral module.\n\n包含：\n- use-usage-data (398 行)\n- useUsageData (11 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 2260,
       "y": 992,
       "width": 280,
@@ -8762,7 +8762,7 @@
     {
       "id": "undefined_use-usage-model-breakdown_f5d4627c",
       "type": "text",
-      "text": "**use-usage-model-breakdown**\n`dashboard/src/hooks/use-usage-model-breakdown.ts`\n\nGeneral module.\n\n包含：\n- use-usage-model-breakdown (186 行)\n- useUsageModelBreakdown (9 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
+      "text": "**use-usage-model-breakdown**\n`dashboard/src/hooks/use-usage-model-breakdown.ts`\n\nGeneral module.\n\n包含：\n- use-usage-model-breakdown (204 行)\n- useUsageModelBreakdown (9 个参数)\n\n依赖：0 个模块\n被依赖：0 次",
       "x": 2980,
       "y": 992,
       "width": 280,
