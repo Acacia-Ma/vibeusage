@@ -17,6 +17,7 @@ type HookProps = {
   baseUrl: string;
   accessToken: string | null;
   guestAllowed: boolean;
+  allTime?: boolean;
   from?: string;
   to?: string;
 };
@@ -202,5 +203,52 @@ describe("useProjectUsageSummary", () => {
         pendingToken.release("token");
       }
     });
+  });
+
+  it("does not refetch all-time project usage when the visible period range changes", async () => {
+    const initialEntries: ProjectUsageEntry[] = [
+      {
+        project_key: "acme/alpha",
+        project_ref: "https://github.com/acme/alpha",
+        total_tokens: "42",
+      },
+    ];
+
+    vibeusageApi.getProjectUsageSummary.mockResolvedValueOnce({ entries: initialEntries });
+
+    const { result, rerender } = renderHook((props: HookProps) => useProjectUsageSummary(props), {
+      initialProps: {
+        baseUrl: "https://example.com",
+        accessToken: "token",
+        guestAllowed: false,
+        allTime: true,
+        from: "2026-03-01",
+        to: "2026-03-07",
+      },
+    });
+
+    await waitFor(() => expect(result.current.entries).toEqual(initialEntries));
+    expect(vibeusageApi.getProjectUsageSummary).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      rerender({
+        baseUrl: "https://example.com",
+        accessToken: "token",
+        guestAllowed: false,
+        allTime: true,
+        from: "2026-03-08",
+        to: "2026-03-14",
+      });
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.entries).toEqual(initialEntries);
+    expect(vibeusageApi.getProjectUsageSummary).toHaveBeenCalledTimes(1);
+    expect(vibeusageApi.getProjectUsageSummary).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: undefined,
+        to: undefined,
+      }),
+    );
   });
 });

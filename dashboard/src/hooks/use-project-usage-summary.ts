@@ -8,6 +8,7 @@ export function useProjectUsageSummary({
   accessToken,
   guestAllowed = false,
   limit = 3,
+  allTime = false,
   from,
   to,
   source,
@@ -19,6 +20,8 @@ export function useProjectUsageSummary({
   const [error, setError] = useState<string | null>(null);
   const mockEnabled = isMockEnabled();
   const tokenReady = isAccessTokenReady(accessToken);
+  const requestFrom = allTime ? undefined : from;
+  const requestTo = allTime ? undefined : to;
 
   const refresh = useCallback(async ({ signal }: any = {}) => {
     const resolvedToken = await resolveAuthAccessToken(accessToken);
@@ -38,8 +41,8 @@ export function useProjectUsageSummary({
         baseUrl,
         accessToken: resolvedToken,
         limit,
-        from,
-        to,
+        from: requestFrom,
+        to: requestTo,
         source,
         timeZone,
         tzOffsetMinutes,
@@ -56,7 +59,18 @@ export function useProjectUsageSummary({
       if (signal?.aborted) return;
       setLoading(false);
     }
-  }, [accessToken, baseUrl, from, guestAllowed, limit, mockEnabled, source, timeZone, to, tzOffsetMinutes]);
+  }, [
+    accessToken,
+    baseUrl,
+    guestAllowed,
+    limit,
+    mockEnabled,
+    requestFrom,
+    requestTo,
+    source,
+    timeZone,
+    tzOffsetMinutes,
+  ]);
 
   useEffect(() => {
     if (!tokenReady && !guestAllowed && !mockEnabled) {

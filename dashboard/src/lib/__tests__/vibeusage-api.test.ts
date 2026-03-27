@@ -294,4 +294,33 @@ describe("error normalization", () => {
     expect(authClient.auth.getCurrentSession).toHaveBeenCalledTimes(1);
     expect(authStorage.markSessionSoftExpired).toHaveBeenCalledWith(jwtToken);
   });
+
+  it("retries transient rate-limit GET errors", async () => {
+    http.get
+      .mockRejectedValueOnce({
+        name: "InsForgeError",
+        message: "",
+        error: "Too many requests from this IP",
+        statusCode: 500,
+      })
+      .mockResolvedValueOnce({
+        totals: { total_tokens: "42" },
+        rolling: null,
+      });
+
+    await expect(
+      api.getUsageSummary({
+        baseUrl: "https://example.com",
+        accessToken: jwtToken,
+        from: "2026-01-01",
+        to: "2026-01-02",
+      }),
+    ).resolves.toEqual({
+      totals: { total_tokens: "42" },
+      rolling: null,
+    });
+
+    expect(http.get).toHaveBeenCalledTimes(2);
+    expect(authStorage.markSessionSoftExpired).not.toHaveBeenCalled();
+  });
 });

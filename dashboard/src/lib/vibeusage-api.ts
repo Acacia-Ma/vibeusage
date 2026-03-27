@@ -1055,13 +1055,14 @@ function isSessionAuthFailure({ status, message, error }: AnyRecord = {}) {
 }
 
 function isRetryableStatus(status: any) {
-  return status === 502 || status === 503 || status === 504;
+  return status === 429 || status === 502 || status === 503 || status === 504;
 }
 
 function isRetryableMessage(message: any) {
   const s = String(message || "").toLowerCase();
   if (!s) return false;
   if (isBackendRuntimeDownMessage(s)) return true;
+  if (s.includes("too many requests") || s.includes("rate limit")) return true;
   if (s.includes("econnreset") || s.includes("econnrefused")) return true;
   if (s.includes("etimedout") || s.includes("timeout")) return true;
   if (s.includes("networkerror") || s.includes("failed to fetch")) return true;

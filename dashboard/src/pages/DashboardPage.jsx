@@ -505,6 +505,7 @@ export function DashboardPage({
     accessToken,
     guestAllowed,
     limit: projectUsageLimit,
+    allTime: true,
     from,
     to,
     timeZone,
