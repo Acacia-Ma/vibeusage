@@ -19,5 +19,7 @@ notes:
   - "DECISION: Pricing alias generation now consumes canonical models only; ambiguous names such as kimi-for-coding, gemini-3-pro, and coder-model stay on fallback."
   - "EVIDENCE: Canonical alias automation now covers deterministic anthropic, minimax, qwen, deepseek, glm, kimi shorthand, and mimo families without changing usage runtime contracts."
   - "EVIDENCE: Local verification passed for pricing-sync auto-alias tests, pricing acceptances, pricing resolver acceptance, shared pricing tests, edge-function pricing regressions, artifact rebuild, and OpenSpec validation."
+  - "FOLLOW-UP: Documentation and coordination metadata were aligned with the implemented deterministic family coverage and verification ledger."
 commit_refs:
   - 9d66b797
+  - 8cc6d470
