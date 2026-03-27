@@ -96,7 +96,29 @@ export function ProjectUsagePanel({
   }, [entries]);
 
   const displayEntries = sortedEntries.slice(0, Math.max(1, limit));
-  const placeholderEntries = Array.from({ length: Math.max(1, resolvedLimit) }, (_, index) => index);
+  const placeholderEntries = Array.from({ length: Math.max(1, resolvedLimit) }, (_, index) => {
+    return index;
+  });
+  let emptyStateContent = emptyLabel;
+  if (loading) {
+    emptyStateContent = (
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+        {placeholderEntries.map((index) => (
+          <ProjectUsagePlaceholderCard
+            key={`placeholder-${index}`}
+            placeholder={placeholder}
+          />
+        ))}
+      </div>
+    );
+  } else if (error) {
+    emptyStateContent = (
+      <>
+        <span>{errorLabel}:</span>{" "}
+        <span className="normal-case tracking-normal">{error}</span>
+      </>
+    );
+  }
 
   const tokenFormatOptions = {
     thousandSuffix: copy("shared.unit.thousand_abbrev"),
@@ -165,23 +187,7 @@ export function ProjectUsagePanel({
 
       {displayEntries.length === 0 ? (
         <div className="text-caption text-matrix-muted uppercase tracking-[0.2em]">
-          {loading ? (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {placeholderEntries.map((index) => (
-                <ProjectUsagePlaceholderCard
-                  key={`placeholder-${index}`}
-                  placeholder={placeholder}
-                />
-              ))}
-            </div>
-          ) : error ? (
-            <>
-              <span>{errorLabel}:</span>{" "}
-              <span className="normal-case tracking-normal">{error}</span>
-            </>
-          ) : (
-            emptyLabel
-          )}
+          {emptyStateContent}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">

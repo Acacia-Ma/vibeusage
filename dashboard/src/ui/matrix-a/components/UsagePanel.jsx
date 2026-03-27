@@ -56,6 +56,34 @@ export const UsagePanel = React.memo(function UsagePanel({
   const costLabelText = typeof costInfoIcon === "string" ? costInfoIcon : "";
   const costLabelMatch = costLabelText.match(/^\[\s*(.+?)\s*\]$/);
   const costLabelCore = costLabelMatch ? costLabelMatch[1] : null;
+  let summaryDisplay = summaryValue;
+  if (showSummaryLoadingPlaceholder) {
+    summaryDisplay = (
+      <span
+        className="inline-flex h-12 w-24 items-center justify-center border border-matrix-ghost bg-matrix-panelStrong md:h-20 md:w-40"
+        data-testid="usage-summary-loading"
+        aria-label={copy("usage.button.loading")}
+      >
+        <span className="sr-only">{copy("usage.button.loading")}</span>
+        <span className="h-3 w-12 bg-matrix-bright/70 md:h-4 md:w-20" />
+      </span>
+    );
+  } else if (summaryValue && summaryValue !== "—") {
+    summaryDisplay = (
+      <span className="relative inline-block leading-none">
+        {summaryAnimate ? (
+          <ScrambleText
+            text={summaryValue}
+            durationMs={summaryScrambleDurationMs}
+            startScrambled
+            respectReducedMotion
+          />
+        ) : (
+          summaryValue
+        )}
+      </span>
+    );
+  }
   const breakdownRows =
     breakdown && breakdown.length
       ? breakdown
@@ -142,31 +170,7 @@ export const UsagePanel = React.memo(function UsagePanel({
           <div className="text-center relative">
             <div className="text-heading text-matrix-muted mb-2">{summaryLabel}</div>
             <div className="text-5xl md:text-8xl font-black text-white tracking-[-0.06em] tabular-nums leading-none glow-text select-none -translate-y-[5px]">
-              {showSummaryLoadingPlaceholder ? (
-                <span
-                  className="inline-flex h-12 w-24 items-center justify-center border border-matrix-ghost bg-matrix-panelStrong md:h-20 md:w-40"
-                  data-testid="usage-summary-loading"
-                  aria-label={copy("usage.button.loading")}
-                >
-                  <span className="sr-only">{copy("usage.button.loading")}</span>
-                  <span className="h-3 w-12 bg-matrix-bright/70 md:h-4 md:w-20" />
-                </span>
-              ) : summaryValue && summaryValue !== "—" ? (
-                <span className="relative inline-block leading-none">
-                  {summaryAnimate ? (
-                    <ScrambleText
-                      text={summaryValue}
-                      durationMs={summaryScrambleDurationMs}
-                      startScrambled
-                      respectReducedMotion
-                    />
-                  ) : (
-                    summaryValue
-                  )}
-                </span>
-              ) : (
-                summaryValue
-              )}
+              {summaryDisplay}
             </div>
             {summaryCostValue ? (
               <div className="flex items-center justify-center gap-3 mt-4 md:mt-6">

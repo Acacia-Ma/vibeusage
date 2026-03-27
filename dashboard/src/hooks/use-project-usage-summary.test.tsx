@@ -13,6 +13,8 @@ type ProjectUsageSummaryResponse = {
   entries: ProjectUsageEntry[];
 };
 
+const emptySummaryResponse: ProjectUsageSummaryResponse = { entries: [] };
+
 type HookProps = {
   baseUrl: string;
   accessToken: string | null;
@@ -32,9 +34,7 @@ const mockData = vi.hoisted(() => ({
 }));
 
 const vibeusageApi = vi.hoisted(() => ({
-  getProjectUsageSummary: vi.fn<(...args: any[]) => Promise<ProjectUsageSummaryResponse>>(
-    async () => ({ entries: [] }),
-  ),
+  getProjectUsageSummary: vi.fn(async () => emptySummaryResponse),
 }));
 
 vi.mock("../lib/auth-token", () => authToken);
@@ -50,7 +50,7 @@ describe("useProjectUsageSummary", () => {
     mockData.isMockEnabled.mockReset();
     mockData.isMockEnabled.mockReturnValue(false);
     vibeusageApi.getProjectUsageSummary.mockReset();
-    vibeusageApi.getProjectUsageSummary.mockResolvedValue({ entries: [] });
+    vibeusageApi.getProjectUsageSummary.mockResolvedValue(emptySummaryResponse);
   });
 
   it("preserves loaded entries when guest mode takes over after token loss", async () => {
@@ -112,7 +112,7 @@ describe("useProjectUsageSummary", () => {
       .mockResolvedValueOnce({ entries: initialEntries })
       .mockImplementationOnce(
         () =>
-          new Promise<ProjectUsageSummaryResponse>((resolve) => {
+          new Promise((resolve: (value: ProjectUsageSummaryResponse) => void) => {
             nextRequest.resolve = resolve;
           }),
       );
@@ -180,7 +180,7 @@ describe("useProjectUsageSummary", () => {
 
     authToken.resolveAuthAccessToken.mockImplementationOnce(
       () =>
-        new Promise<string | null>((resolve) => {
+        new Promise((resolve: (value: string | null) => void) => {
           pendingToken.release = resolve;
         }),
     );

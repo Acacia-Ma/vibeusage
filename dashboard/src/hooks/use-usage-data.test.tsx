@@ -12,7 +12,7 @@ const authToken = vi.hoisted(() => ({
 const dashboardCache = vi.hoisted(() => ({
   buildDashboardCacheKey: vi.fn(() => "usage-cache-key"),
   clearDashboardCache: vi.fn(),
-  readDashboardCache: vi.fn<(...args: any[]) => any>(() => null),
+  readDashboardCache: vi.fn(() => null as any),
   writeDashboardCache: vi.fn(),
 }));
 
@@ -71,8 +71,8 @@ describe("useUsageData", () => {
   });
 
   it("updates summary as soon as summary data resolves without waiting for daily rows", async () => {
-    const dailyResolvers: Array<(value: any) => void> = [];
-    const summaryResolvers: Array<(value: any) => void> = [];
+    const dailyResolvers: ((value: any) => void)[] = [];
+    const summaryResolvers: ((value: any) => void)[] = [];
 
     vibeusageApi.getUsageDaily.mockImplementation(
       () =>
