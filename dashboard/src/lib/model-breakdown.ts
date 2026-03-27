@@ -16,6 +16,7 @@ function resolveModelId(model: any) {
 }
 
 function resolveModelName(model: any, fallback: any) {
+  if (model?.display_model) return String(model.display_model);
   if (model?.model) return String(model.model);
   return fallback;
 }

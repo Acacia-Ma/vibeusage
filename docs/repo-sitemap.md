@@ -58,6 +58,9 @@ This document is the single source of truth for repository navigation. Use it to
   - `dashboard/src/content/copy.csv`
 - Public web assets:
   - `dashboard/public/`
+- Model display rule:
+  - Usage dashboards should prefer backend-provided `display_model` for presentation.
+  - `model_id` remains the only canonical key for filtering, pricing, and aggregation.
 
 ### Edge Functions
 
@@ -65,6 +68,14 @@ This document is the single source of truth for repository navigation. Use it to
   - `insforge-src/functions-esm/`
 - Shared helpers for ESM functions:
   - `insforge-src/functions-esm/shared/`
+- Usage response contract hotspots:
+  - `insforge-src/shared/usage-pricing-core.js`
+  - `insforge-src/shared/usage-pricing-core.mjs`
+  - `insforge-src/shared/usage-metrics-core.js`
+  - `insforge-src/shared/usage-metrics-core.mjs`
+- Usage summary and breakdown responses may expose both:
+  - `model_id` as the canonical pricing and aggregation key
+  - `display_model` as a response-only display field derived from `model_id` or `model`
 - Generated deploy output:
   - `insforge-functions/`
 - Use generated artifacts only for deployment validation, not as authoring sources.

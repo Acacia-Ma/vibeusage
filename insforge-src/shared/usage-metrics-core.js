@@ -89,6 +89,14 @@ function resolveDisplayName(identityMap, modelId) {
   return modelId;
 }
 
+function deriveDisplayModel(value) {
+  if (value == null) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  const parts = text.split("/").filter(Boolean);
+  return parts.length > 1 ? parts[parts.length - 1] : text;
+}
+
 function buildPricingBucketKey(sourceKey, usageKey, dateKey) {
   return JSON.stringify([sourceKey || "", usageKey || "", dateKey || ""]);
 }
@@ -139,21 +147,26 @@ function buildUsageBucketPayload(bucket, extra) {
   );
 }
 
-if (!globalThis[CORE_KEY]) {
+const coreValue = {
+  createTotals,
+  addRowTotals,
+  computeBillableTotalTokens,
+  resolveBillableTotals,
+  applyTotalsAndBillable,
+  getSourceEntry,
+  resolveDisplayName,
+  deriveDisplayModel,
+  buildPricingBucketKey,
+  parsePricingBucketKey,
+  buildUsageTotalsPayload,
+  buildUsageBucketPayload,
+};
+
+if (globalThis[CORE_KEY] && typeof globalThis[CORE_KEY] === "object") {
+  Object.assign(globalThis[CORE_KEY], coreValue);
+} else {
   Object.defineProperty(globalThis, CORE_KEY, {
-    value: {
-      createTotals,
-      addRowTotals,
-      computeBillableTotalTokens,
-      resolveBillableTotals,
-      applyTotalsAndBillable,
-      getSourceEntry,
-      resolveDisplayName,
-      buildPricingBucketKey,
-      parsePricingBucketKey,
-      buildUsageTotalsPayload,
-      buildUsageBucketPayload,
-    },
+    value: coreValue,
     configurable: true,
     enumerable: false,
     writable: false,

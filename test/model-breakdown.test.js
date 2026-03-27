@@ -64,6 +64,34 @@ test("buildFleetData returns model ids for stable keys", async () => {
   assert.equal(fleetData[0].models[0].id, "gpt-4o");
 });
 
+test("buildFleetData prefers display_model over vendor-prefixed model names", async () => {
+  const mod = await loadDashboardModule("dashboard/src/lib/model-breakdown.ts");
+  const buildFleetData = mod.buildFleetData;
+
+  const modelBreakdown = {
+    pricing: { pricing_mode: "list" },
+    sources: [
+      {
+        source: "claude",
+        totals: { total_tokens: 1200, total_cost_usd: 1.2 },
+        models: [
+          {
+            model: "anthropic/claude-sonnet-4.6",
+            display_model: "claude-sonnet-4.6",
+            model_id: "anthropic/claude-sonnet-4.6",
+            totals: { total_tokens: 1200 },
+          },
+        ],
+      },
+    ],
+  };
+
+  const fleetData = buildFleetData(modelBreakdown);
+
+  assert.equal(fleetData[0].models[0].name, "claude-sonnet-4.6");
+  assert.equal(fleetData[0].models[0].id, "anthropic/claude-sonnet-4.6");
+});
+
 test("buildTopModels aggregates by canonical model_id across sources", async () => {
   const mod = await loadDashboardModule("dashboard/src/lib/model-breakdown.ts");
   const buildTopModels = mod.buildTopModels;
@@ -130,4 +158,30 @@ test("buildTopModels computes percent using billable tokens across all models", 
   assert.equal(topModels.length, 1);
   assert.equal(topModels[0].id, "gpt-4o");
   assert.equal(topModels[0].percent, "80.0");
+});
+
+test("buildTopModels prefers display_model for presentation", async () => {
+  const mod = await loadDashboardModule("dashboard/src/lib/model-breakdown.ts");
+  const buildTopModels = mod.buildTopModels;
+
+  const modelBreakdown = {
+    sources: [
+      {
+        source: "claude",
+        models: [
+          {
+            model: "anthropic/claude-sonnet-4.6",
+            display_model: "claude-sonnet-4.6",
+            model_id: "anthropic/claude-sonnet-4.6",
+            totals: { billable_total_tokens: 80 },
+          },
+        ],
+      },
+    ],
+  };
+
+  const topModels = buildTopModels(modelBreakdown, { limit: 1 });
+
+  assert.equal(topModels[0].name, "claude-sonnet-4.6");
+  assert.equal(topModels[0].id, "anthropic/claude-sonnet-4.6");
 });

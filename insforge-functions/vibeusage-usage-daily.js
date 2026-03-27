@@ -597,6 +597,13 @@ function resolveDisplayName(identityMap, modelId) {
   }
   return modelId;
 }
+function deriveDisplayModel(value) {
+  if (value == null) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  const parts = text.split("/").filter(Boolean);
+  return parts.length > 1 ? parts[parts.length - 1] : text;
+}
 function buildPricingBucketKey(sourceKey, usageKey, dateKey) {
   return JSON.stringify([sourceKey || "", usageKey || "", dateKey || ""]);
 }
@@ -644,21 +651,25 @@ function buildUsageBucketPayload(bucket, extra) {
     extra
   );
 }
-if (!globalThis[CORE_KEY4]) {
+var coreValue = {
+  createTotals,
+  addRowTotals,
+  computeBillableTotalTokens,
+  resolveBillableTotals,
+  applyTotalsAndBillable,
+  getSourceEntry,
+  resolveDisplayName,
+  deriveDisplayModel,
+  buildPricingBucketKey,
+  parsePricingBucketKey,
+  buildUsageTotalsPayload,
+  buildUsageBucketPayload
+};
+if (globalThis[CORE_KEY4] && typeof globalThis[CORE_KEY4] === "object") {
+  Object.assign(globalThis[CORE_KEY4], coreValue);
+} else {
   Object.defineProperty(globalThis, CORE_KEY4, {
-    value: {
-      createTotals,
-      addRowTotals,
-      computeBillableTotalTokens,
-      resolveBillableTotals,
-      applyTotalsAndBillable,
-      getSourceEntry,
-      resolveDisplayName,
-      buildPricingBucketKey,
-      parsePricingBucketKey,
-      buildUsageTotalsPayload,
-      buildUsageBucketPayload
-    },
+    value: coreValue,
     configurable: true,
     enumerable: false,
     writable: false
@@ -1355,6 +1366,7 @@ var {
   buildPricingBucketKey: buildPricingBucketKey2,
   buildUsageTotalsPayload: buildUsageTotalsPayload2,
   createTotals: createTotals2,
+  deriveDisplayModel: deriveDisplayModel2,
   getSourceEntry: getSourceEntry2,
   parsePricingBucketKey: parsePricingBucketKey2,
   resolveDisplayName: resolveDisplayName2
@@ -1507,10 +1519,12 @@ function buildAggregateUsagePayload({
 } = {}) {
   const resolvedTotals = totals || createTotals2();
   const impliedModelId = pricingSummary?.impliedModelId || null;
+  const impliedModel = hasModelParam && impliedModelId ? pricingSummary?.impliedModelDisplay || impliedModelId : null;
   return {
     selection: {
       model_id: hasModelParam ? impliedModelId : null,
-      model: hasModelParam && impliedModelId ? pricingSummary?.impliedModelDisplay || impliedModelId : null
+      model: impliedModel,
+      display_model: deriveDisplayModel2(impliedModel)
     },
     summary: {
       totals: buildUsageTotalsPayload2(resolvedTotals, {
@@ -1578,6 +1592,7 @@ function getModelBreakdownCanonicalEntry(sourceEntry, identity, defaultModel = D
   const entry = {
     model_id: key,
     model: identity?.model || key,
+    display_model: deriveDisplayModel2(identity?.model || key),
     totals: createTotals2()
   };
   models.set(key, entry);
@@ -1625,6 +1640,7 @@ function formatModelBreakdownEntry(entry, pricingProfile) {
   const { cost_micros: _ignored, ...rest } = entry || {};
   return {
     ...rest,
+    display_model: deriveDisplayModel2(entry?.display_model || entry?.model || entry?.model_id),
     totals: buildUsageTotalsPayload2(totals, {
       total_cost_usd: formatUsdFromMicros2(costMicros)
     })

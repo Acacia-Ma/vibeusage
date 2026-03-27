@@ -5059,6 +5059,76 @@ test("vibeusage-usage-summary canonical model filter includes alias rows", () =>
     assert.ok(filterCalls.some((entry) => entry.value?.includes?.("model.ilike.gpt-4o-mini")));
     assert.equal(body.model_id, "gpt-4o");
     assert.equal(body.model, "GPT-4o");
+    assert.equal(body.display_model, "GPT-4o");
+  }));
+
+test("vibeusage-usage-summary returns display_model for vendor-prefixed canonical models", () =>
+  withRollupEnabled(async () => {
+    const fn = await loadEdgeFunction("vibeusage-usage-summary");
+
+    const userId = "91919191-9191-9191-9191-919191919191";
+    const userJwt = createUserJwt(userId);
+
+    const hourlyRows = [
+      {
+        hour_start: "2025-01-01T00:00:00.000Z",
+        source: "claude",
+        model: "anthropic/claude-sonnet-4.6",
+        total_tokens: 50,
+        input_tokens: 30,
+        cached_input_tokens: 0,
+        output_tokens: 20,
+        reasoning_output_tokens: 0,
+      },
+    ];
+
+    const aliasRows = [
+      {
+        usage_model: "anthropic/claude-sonnet-4.6",
+        canonical_model: "anthropic/claude-sonnet-4.6",
+        display_name: "anthropic/claude-sonnet-4.6",
+        effective_from: "2025-01-01",
+        active: true,
+      },
+    ];
+
+    globalThis.createClient = (args) => {
+      if (args && args.edgeFunctionToken === userJwt) {
+        return {
+          auth: {
+            getCurrentUser: async () => ({ data: { user: { id: userId } }, error: null }),
+          },
+          database: {
+            from: (table) => {
+              if (table === "vibeusage_tracker_hourly") {
+                const query = createQueryMock({ rows: hourlyRows });
+                return { select: () => query };
+              }
+              if (table === "vibeusage_model_aliases") {
+                return createQueryMock({ rows: aliasRows });
+              }
+              throw new Error(`Unexpected table ${table}`);
+            },
+          },
+        };
+      }
+      throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
+    };
+
+    const req = new Request(
+      "http://localhost/functions/vibeusage-usage-summary?from=2025-01-01&to=2025-01-01&model=anthropic/claude-sonnet-4.6",
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${userJwt}` },
+      },
+    );
+
+    const res = await fn(req);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.model_id, "anthropic/claude-sonnet-4.6");
+    assert.equal(body.model, "anthropic/claude-sonnet-4.6");
+    assert.equal(body.display_model, "claude-sonnet-4.6");
   }));
 
 test("vibeusage-usage-summary honors alias effective_from across range", () =>
@@ -6845,6 +6915,82 @@ test("vibeusage-usage-model-breakdown emits model_id and merges aliases", async 
   assert.ok(models.some((entry) => entry.model_id === "gpt-4o"));
   assert.ok(models.every((entry) => entry.model_id !== "gpt-4o-mini"));
   assert.ok(models.some((entry) => entry.model === "GPT-4o"));
+  assert.ok(models.some((entry) => entry.display_model === "GPT-4o"));
+});
+
+test("vibeusage-usage-model-breakdown strips vendor prefix into display_model", async () => {
+  const fn = await loadEdgeFunction("vibeusage-usage-model-breakdown");
+
+  const userId = "92929292-9292-9292-9292-929292929292";
+  const userJwt = createUserJwt(userId);
+
+  const hourlyRows = [
+    {
+      source: "claude",
+      model: "anthropic/claude-sonnet-4.6",
+      total_tokens: 100,
+      input_tokens: 60,
+      cached_input_tokens: 0,
+      output_tokens: 40,
+      reasoning_output_tokens: 0,
+    },
+  ];
+
+  const aliasRows = [
+    {
+      usage_model: "anthropic/claude-sonnet-4.6",
+      canonical_model: "anthropic/claude-sonnet-4.6",
+      display_name: "anthropic/claude-sonnet-4.6",
+      effective_from: "2025-01-01",
+      active: true,
+    },
+  ];
+
+  globalThis.createClient = (args) => {
+    if (args && args.edgeFunctionToken === userJwt) {
+      return {
+        auth: {
+          getCurrentUser: async () => ({ data: { user: { id: userId } }, error: null }),
+        },
+        database: {
+          from: (table) => {
+            if (table === "vibeusage_tracker_hourly") {
+              return createQueryMock({ rows: hourlyRows });
+            }
+            if (table === "vibeusage_model_aliases") {
+              return createQueryMock({ rows: aliasRows });
+            }
+            if (table === "vibeusage_pricing_profiles") {
+              const query = createQueryMock({ rows: [] });
+              query.or = () => query;
+              query.limit = async () => ({ data: [], error: null });
+              return query;
+            }
+            if (table === "vibeusage_pricing_model_aliases") {
+              return createQueryMock({ rows: [] });
+            }
+            throw new Error(`Unexpected table ${table}`);
+          },
+        },
+      };
+    }
+    throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
+  };
+
+  const req = new Request(
+    "http://localhost/functions/vibeusage-usage-model-breakdown?from=2025-01-01&to=2025-01-01",
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${userJwt}` },
+    },
+  );
+
+  const res = await fn(req);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  const model = body.sources.flatMap((source) => source?.models || []).find((entry) => entry.model_id === "anthropic/claude-sonnet-4.6");
+  assert.equal(model?.model, "anthropic/claude-sonnet-4.6");
+  assert.equal(model?.display_model, "claude-sonnet-4.6");
 });
 
 test("vibeusage-usage-model-breakdown honors alias effective_from across range", async () => {

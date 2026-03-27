@@ -923,7 +923,11 @@ export function DashboardPage({
         if (!Number.isFinite(tokens) || tokens <= 0) continue;
         if (tokens > topModelTokens) {
           topModelTokens = tokens;
-          modelName = model?.model ? String(model.model) : placeholderShort;
+          modelName = model?.display_model
+            ? String(model.display_model)
+            : model?.model
+              ? String(model.model)
+              : placeholderShort;
         }
       }
       if (topModelTokens > 0) {

@@ -36,6 +36,7 @@ const {
   buildPricingBucketKey,
   buildUsageTotalsPayload,
   createTotals,
+  deriveDisplayModel,
   getSourceEntry,
   parsePricingBucketKey,
   resolveDisplayName,
@@ -209,13 +210,14 @@ function buildAggregateUsagePayload({
 } = {}) {
   const resolvedTotals = totals || createTotals();
   const impliedModelId = pricingSummary?.impliedModelId || null;
+  const impliedModel = hasModelParam && impliedModelId
+    ? pricingSummary?.impliedModelDisplay || impliedModelId
+    : null;
   return {
     selection: {
       model_id: hasModelParam ? impliedModelId : null,
-      model:
-        hasModelParam && impliedModelId
-          ? pricingSummary?.impliedModelDisplay || impliedModelId
-          : null,
+      model: impliedModel,
+      display_model: deriveDisplayModel(impliedModel),
     },
     summary: {
       totals: buildUsageTotalsPayload(resolvedTotals, {
@@ -290,6 +292,7 @@ function getModelBreakdownCanonicalEntry(sourceEntry, identity, defaultModel = D
   const entry = {
     model_id: key,
     model: identity?.model || key,
+    display_model: deriveDisplayModel(identity?.model || key),
     totals: createTotals(),
   };
   models.set(key, entry);
@@ -342,6 +345,7 @@ function formatModelBreakdownEntry(entry, pricingProfile) {
   const { cost_micros: _ignored, ...rest } = entry || {};
   return {
     ...rest,
+    display_model: deriveDisplayModel(entry?.display_model || entry?.model || entry?.model_id),
     totals: buildUsageTotalsPayload(totals, {
       total_cost_usd: formatUsdFromMicros(costMicros),
     }),

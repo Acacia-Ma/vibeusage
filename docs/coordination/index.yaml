@@ -78,3 +78,28 @@ tasks:
       - docs/coordination/index.yaml
       - docs/coordination/tasks/PRICE-004.yaml
     path: docs/coordination/tasks/PRICE-004.yaml
+  - id: PRICE-005
+    title: Add display_model to usage responses
+    status: in_progress
+    owner: codex-main
+    touches:
+      - insforge-src/shared/usage-metrics-core.js
+      - insforge-src/shared/usage-metrics-core.mjs
+      - insforge-src/shared/usage-pricing-core.js
+      - insforge-src/shared/usage-pricing-core.mjs
+      - insforge-functions/vibeusage-usage-summary.js
+      - insforge-functions/vibeusage-usage-model-breakdown.js
+      - insforge-functions/vibeusage-usage-daily.js
+      - insforge-functions/vibeusage-usage-hourly.js
+      - insforge-functions/vibeusage-usage-monthly.js
+      - insforge-functions/vibeusage-usage-heatmap.js
+      - insforge-functions/vibeusage-ingest.js
+      - dashboard/src/lib/model-breakdown.ts
+      - dashboard/src/pages/DashboardPage.jsx
+      - docs/repo-sitemap.md
+      - test/edge-functions.test.js
+      - test/model-breakdown.test.js
+      - openspec/changes/2026-03-28-add-display-model-to-usage-responses/
+      - docs/coordination/index.yaml
+      - docs/coordination/tasks/PRICE-005.yaml
+    path: docs/coordination/tasks/PRICE-005.yaml
