@@ -3,7 +3,7 @@ import {
   finishAggregateUsageRequest,
   startAggregateUsageRequest,
 } from "./shared/core/usage-aggregate.js";
-import { buildSlowQueryDebugPayload, isDebugEnabled } from "./shared/debug.js";
+import { mergeUsageDebugPayload } from "./shared/core/usage-response.js";
 import {
   prepareUsageEndpoint,
   requireUsageAccess,
@@ -151,17 +151,19 @@ export default withRequestLogging("vibeusage-usage-summary", async function (req
     ...aggregatePayload.summary,
   };
   if (rollingPayload) responsePayload.rolling = rollingPayload;
-  if (isDebugEnabled(url)) {
-    responsePayload.debug = {
-      ...buildSlowQueryDebugPayload({
-        logger,
-        durationMs: queryDurationMs,
-        status: 200,
-      }),
-      rollup_enabled: Boolean(rollupDebug?.enabled),
-      rollup_hit: Boolean(rollupHit),
-      rollup_fallback_reason: rollupDebug?.fallbackReason ?? null,
-    };
-  }
-  return respond(responsePayload, 200, queryDurationMs);
+  return respond(
+    mergeUsageDebugPayload(responsePayload, {
+      url,
+      logger,
+      durationMs: queryDurationMs,
+      status: 200,
+      debugFields: {
+        rollup_enabled: Boolean(rollupDebug?.enabled),
+        rollup_hit: Boolean(rollupHit),
+        rollup_fallback_reason: rollupDebug?.fallbackReason ?? null,
+      },
+    }),
+    200,
+    queryDurationMs,
+  );
 });

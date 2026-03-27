@@ -2720,15 +2720,111 @@ if (!globalThis[CORE_KEY19]) {
   });
 }
 
-// insforge-src/functions-esm/shared/debug.js
+// insforge-src/shared/http-core.mjs
+var CORE_KEY20 = "__vibeusageHttpCore";
+var corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey"
+};
+function handleOptions(request) {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+  return null;
+}
+function json(body, status = 200, extraHeaders = null) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      ...extraHeaders || {}
+    }
+  });
+}
+function requireMethod(request, method) {
+  if (request.method !== method) return json({ error: "Method not allowed" }, 405);
+  return null;
+}
+async function readJson(request) {
+  if (!request.headers.get("Content-Type")?.includes("application/json")) {
+    return { error: "Content-Type must be application/json", status: 415, data: null };
+  }
+  try {
+    const data = await request.json();
+    return { error: null, status: 200, data };
+  } catch (_error) {
+    return { error: "Invalid JSON", status: 400, data: null };
+  }
+}
+if (!globalThis[CORE_KEY20]) {
+  Object.defineProperty(globalThis, CORE_KEY20, {
+    value: {
+      corsHeaders,
+      handleOptions,
+      json,
+      requireMethod,
+      readJson
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/shared/usage-response-core.mjs
+var CORE_KEY21 = "__vibeusageUsageResponseCore";
 var debugCore = globalThis.__vibeusageDebugCore;
+var httpCore = globalThis.__vibeusageHttpCore;
 if (!debugCore) throw new Error("debug core not initialized");
-var isDebugEnabled2 = debugCore.isDebugEnabled;
-var buildSlowQueryDebugPayload2 = debugCore.buildSlowQueryDebugPayload;
-var withSlowQueryDebugPayload2 = debugCore.withSlowQueryDebugPayload;
+if (!httpCore) throw new Error("http core not initialized");
+function mergeUsageDebugPayload(body, { url, logger, durationMs, status, debugFields } = {}) {
+  if (!debugCore.isDebugEnabled(url)) return body;
+  const resolvedBody = debugCore.withSlowQueryDebugPayload(body, { logger, durationMs, status });
+  if (!debugFields || typeof debugFields !== "object" || Array.isArray(debugFields)) return resolvedBody;
+  return {
+    ...resolvedBody,
+    debug: {
+      ...resolvedBody?.debug && typeof resolvedBody.debug === "object" ? resolvedBody.debug : {},
+      ...debugFields
+    }
+  };
+}
+function resolveUsageResponseBody(body, { url, logger, durationMs, status } = {}) {
+  return mergeUsageDebugPayload(body, { url, logger, durationMs, status });
+}
+function createUsageJsonResponder({ url, logger, extraHeaders } = {}) {
+  return function respond(body, status = 200, durationMs = 0) {
+    return httpCore.json(
+      resolveUsageResponseBody(body, { url, logger, durationMs, status }),
+      status,
+      extraHeaders || null
+    );
+  };
+}
+if (!globalThis[CORE_KEY21]) {
+  Object.defineProperty(globalThis, CORE_KEY21, {
+    value: {
+      createUsageJsonResponder,
+      mergeUsageDebugPayload,
+      resolveUsageResponseBody
+    },
+    configurable: true,
+    enumerable: false,
+    writable: false
+  });
+}
+
+// insforge-src/functions-esm/shared/core/usage-response.js
+var usageResponseCore = globalThis.__vibeusageUsageResponseCore;
+if (!usageResponseCore) throw new Error("usage response core not initialized");
+var createUsageJsonResponder2 = usageResponseCore.createUsageJsonResponder;
+var mergeUsageDebugPayload2 = usageResponseCore.mergeUsageDebugPayload;
+var resolveUsageResponseBody2 = usageResponseCore.resolveUsageResponseBody;
 
 // insforge-src/shared/auth-core.mjs
-var CORE_KEY20 = "__vibeusageAuthCore";
+var CORE_KEY22 = "__vibeusageAuthCore";
 function getBearerToken(headerValue) {
   if (!headerValue) return null;
   const prefix = "Bearer ";
@@ -2987,8 +3083,8 @@ async function getAccessContext({
     accessType: "public"
   };
 }
-if (!globalThis[CORE_KEY20]) {
-  Object.defineProperty(globalThis, CORE_KEY20, {
+if (!globalThis[CORE_KEY22]) {
+  Object.defineProperty(globalThis, CORE_KEY22, {
     value: {
       getBearerToken,
       isProjectAdminBearer,
@@ -3030,7 +3126,7 @@ async function createEdgeClient(options) {
 }
 
 // insforge-src/shared/public-sharing-core.mjs
-var CORE_KEY21 = "__vibeusagePublicSharingCore";
+var CORE_KEY23 = "__vibeusagePublicSharingCore";
 var PUBLIC_USER_TOKEN_RE = /^pv1-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 function buildPublicShareToken(userId) {
   if (typeof userId !== "string") return "";
@@ -3181,8 +3277,8 @@ async function disablePublicVisibility({ edgeClient, userId, nowIso }) {
   const { error } = await edgeClient.database.from("vibeusage_public_views").update({ revoked_at: updatedAt, updated_at: updatedAt }).eq("user_id", userId);
   if (error) throw new Error(error.message || "Failed to revoke public visibility row");
 }
-if (!globalThis[CORE_KEY21]) {
-  Object.defineProperty(globalThis, CORE_KEY21, {
+if (!globalThis[CORE_KEY23]) {
+  Object.defineProperty(globalThis, CORE_KEY23, {
     value: {
       buildPublicShareToken,
       isPublicShareToken,
@@ -3231,96 +3327,6 @@ var getAccessContext2 = ({ baseUrl, bearer, allowPublic = false }) => authCore.g
   isPublicShareToken: isPublicShareToken2,
   resolvePublicView: resolvePublicView2
 });
-
-// insforge-src/shared/http-core.mjs
-var CORE_KEY22 = "__vibeusageHttpCore";
-var corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey"
-};
-function handleOptions(request) {
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders });
-  }
-  return null;
-}
-function json(body, status = 200, extraHeaders = null) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      ...corsHeaders,
-      "Content-Type": "application/json",
-      ...extraHeaders || {}
-    }
-  });
-}
-function requireMethod(request, method) {
-  if (request.method !== method) return json({ error: "Method not allowed" }, 405);
-  return null;
-}
-async function readJson(request) {
-  if (!request.headers.get("Content-Type")?.includes("application/json")) {
-    return { error: "Content-Type must be application/json", status: 415, data: null };
-  }
-  try {
-    const data = await request.json();
-    return { error: null, status: 200, data };
-  } catch (_error) {
-    return { error: "Invalid JSON", status: 400, data: null };
-  }
-}
-if (!globalThis[CORE_KEY22]) {
-  Object.defineProperty(globalThis, CORE_KEY22, {
-    value: {
-      corsHeaders,
-      handleOptions,
-      json,
-      requireMethod,
-      readJson
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
-  });
-}
-
-// insforge-src/shared/usage-response-core.mjs
-var CORE_KEY23 = "__vibeusageUsageResponseCore";
-var debugCore2 = globalThis.__vibeusageDebugCore;
-var httpCore = globalThis.__vibeusageHttpCore;
-if (!debugCore2) throw new Error("debug core not initialized");
-if (!httpCore) throw new Error("http core not initialized");
-function resolveUsageResponseBody(body, { url, logger, durationMs, status } = {}) {
-  if (!debugCore2.isDebugEnabled(url)) return body;
-  return debugCore2.withSlowQueryDebugPayload(body, { logger, durationMs, status });
-}
-function createUsageJsonResponder({ url, logger, extraHeaders } = {}) {
-  return function respond(body, status = 200, durationMs = 0) {
-    return httpCore.json(
-      resolveUsageResponseBody(body, { url, logger, durationMs, status }),
-      status,
-      extraHeaders || null
-    );
-  };
-}
-if (!globalThis[CORE_KEY23]) {
-  Object.defineProperty(globalThis, CORE_KEY23, {
-    value: {
-      createUsageJsonResponder,
-      resolveUsageResponseBody
-    },
-    configurable: true,
-    enumerable: false,
-    writable: false
-  });
-}
-
-// insforge-src/functions-esm/shared/core/usage-response.js
-var usageResponseCore = globalThis.__vibeusageUsageResponseCore;
-if (!usageResponseCore) throw new Error("usage response core not initialized");
-var createUsageJsonResponder2 = usageResponseCore.createUsageJsonResponder;
-var resolveUsageResponseBody2 = usageResponseCore.resolveUsageResponseBody;
 
 // insforge-src/functions-esm/shared/http.js
 var httpCore2 = globalThis.__vibeusageHttpCore;
@@ -3519,19 +3525,21 @@ var vibeusage_usage_summary_default = withRequestLogging2("vibeusage-usage-summa
     ...aggregatePayload.summary
   };
   if (rollingPayload) responsePayload.rolling = rollingPayload;
-  if (isDebugEnabled2(url)) {
-    responsePayload.debug = {
-      ...buildSlowQueryDebugPayload2({
-        logger,
-        durationMs: queryDurationMs,
-        status: 200
-      }),
-      rollup_enabled: Boolean(rollupDebug?.enabled),
-      rollup_hit: Boolean(rollupHit),
-      rollup_fallback_reason: rollupDebug?.fallbackReason ?? null
-    };
-  }
-  return respond(responsePayload, 200, queryDurationMs);
+  return respond(
+    mergeUsageDebugPayload2(responsePayload, {
+      url,
+      logger,
+      durationMs: queryDurationMs,
+      status: 200,
+      debugFields: {
+        rollup_enabled: Boolean(rollupDebug?.enabled),
+        rollup_hit: Boolean(rollupHit),
+        rollup_fallback_reason: rollupDebug?.fallbackReason ?? null
+      }
+    }),
+    200,
+    queryDurationMs
+  );
 });
 export {
   vibeusage_usage_summary_default as default
