@@ -1,6 +1,6 @@
 id: PRICE-005
 title: Add display_model to usage responses
-status: in_progress
+status: done
 owner: codex-main
 touches:
   - insforge-src/shared/usage-metrics-core.js
@@ -31,4 +31,5 @@ notes:
   - "VERIFY: node scripts/build-insforge-functions.cjs"
   - "VERIFY: npm run build:insforge:check"
   - "VERIFY: openspec validate 2026-03-28-add-display-model-to-usage-responses --strict"
-commit_refs: []
+commit_refs:
+  - 51cfe899

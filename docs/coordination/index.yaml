@@ -80,7 +80,7 @@ tasks:
     path: docs/coordination/tasks/PRICE-004.yaml
   - id: PRICE-005
     title: Add display_model to usage responses
-    status: in_progress
+    status: done
     owner: codex-main
     touches:
       - insforge-src/shared/usage-metrics-core.js
