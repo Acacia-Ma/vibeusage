@@ -21,10 +21,15 @@ describe("dashboard period bindings", () => {
     const recentRolling = {
       last_7d: { totals: { billable_total_tokens: "recent-stable" } },
     };
-    const usageRolling = {
-      last_7d: { totals: { billable_total_tokens: "week-period" } },
-    };
 
-    expect(selectRollingUsageForDisplay({ recentRolling, usageRolling })).toEqual(recentRolling);
+    expect(selectRollingUsageForDisplay({ recentRolling })).toEqual(recentRolling);
+  });
+
+  it("does not fall back to period-scoped rolling usage when recent usage is unavailable", () => {
+    expect(
+      selectRollingUsageForDisplay({
+        recentRolling: null,
+      }),
+    ).toBeNull();
   });
 });

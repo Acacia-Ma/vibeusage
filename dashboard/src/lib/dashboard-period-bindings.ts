@@ -7,7 +7,6 @@ type UsagePanelLoadingArgs = {
 
 type RollingUsageSelectionArgs = {
   recentRolling?: any;
-  usageRolling?: any;
 };
 
 export function getUsagePanelLoading({ usageLoading }: UsagePanelLoadingArgs = {}) {
@@ -16,8 +15,6 @@ export function getUsagePanelLoading({ usageLoading }: UsagePanelLoadingArgs = {
 
 export function selectRollingUsageForDisplay({
   recentRolling,
-  usageRolling,
 }: RollingUsageSelectionArgs = {}) {
-  if (recentRolling) return recentRolling;
-  return usageRolling ?? null;
+  return recentRolling ?? null;
 }

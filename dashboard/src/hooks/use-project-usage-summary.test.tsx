@@ -88,7 +88,7 @@ describe("useProjectUsageSummary", () => {
     expect(vibeusageApi.getProjectUsageSummary).toHaveBeenCalledTimes(1);
   });
 
-  it("clears stale entries immediately when the requested range changes", async () => {
+  it("keeps previous entries visible while a new requested range is loading", async () => {
     const initialEntries: ProjectUsageEntry[] = [
       {
         project_key: "acme/alpha",
@@ -139,7 +139,7 @@ describe("useProjectUsageSummary", () => {
       });
     });
 
-    await waitFor(() => expect(result.current.entries).toEqual([]));
+    expect(result.current.entries).toEqual(initialEntries);
     expect(result.current.error).toBeNull();
 
     await act(async () => {
@@ -195,7 +195,7 @@ describe("useProjectUsageSummary", () => {
       });
     });
 
-    await waitFor(() => expect(result.current.entries).toEqual([]));
+    expect(result.current.entries).toEqual(initialEntries);
     expect(result.current.loading).toBe(true);
 
     await act(async () => {

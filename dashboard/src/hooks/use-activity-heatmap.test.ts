@@ -152,4 +152,56 @@ describe("useActivityHeatmap", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.heatmap).toEqual(heatmapPayload);
   });
+
+  it("keeps the previous heatmap visible while a refresh is in flight", async () => {
+    const resolvers: Array<(value: any) => void> = [];
+    vibeusageApi.getUsageHeatmap.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+
+    const { result, rerender } = renderHook(
+      (props) =>
+        useActivityHeatmap({
+          baseUrl: "https://example.com",
+          accessToken: "token",
+          guestAllowed: false,
+          cacheKey: "user-1",
+          timeZone: "UTC",
+          tzOffsetMinutes: 0,
+          now: NOW,
+          ...props,
+        }),
+      {
+        initialProps: {
+          weeks: 1,
+        },
+      },
+    );
+
+    await waitFor(() => expect(vibeusageApi.getUsageHeatmap).toHaveBeenCalledTimes(1));
+
+    const previousHeatmap = {
+      to: "2026-03-07",
+      week_starts_on: "sun",
+      weeks: [[{ day: "2026-03-07", value: 42, level: 3 }]],
+    };
+
+    await act(async () => {
+      resolvers.shift()?.(previousHeatmap);
+    });
+
+    await waitFor(() => expect(result.current.heatmap).toEqual(previousHeatmap));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    rerender({
+      weeks: 2,
+    });
+
+    await waitFor(() => expect(vibeusageApi.getUsageHeatmap).toHaveBeenCalledTimes(2));
+    expect(result.current.loading).toBe(true);
+    expect(result.current.heatmap).toEqual(previousHeatmap);
+  });
 });

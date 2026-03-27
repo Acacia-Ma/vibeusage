@@ -54,7 +54,6 @@ export function useProjectUsageSummary({
       if (signal?.aborted || (err as any)?.name === "AbortError") return;
       const message = (err as any)?.message || String(err);
       setError(message);
-      setEntries([]);
     } finally {
       if (signal?.aborted) return;
       setLoading(false);
@@ -81,7 +80,6 @@ export function useProjectUsageSummary({
     }
     if (tokenReady || !guestAllowed || mockEnabled) {
       setLoading(true);
-      setEntries([]);
       setError(null);
     }
     const controller = new AbortController();

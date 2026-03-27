@@ -79,7 +79,6 @@ export function useActivityHeatmap({
       });
       if (signal?.aborted) return;
       setHeatmap(res || null);
-      setDaily([]);
       setSource("edge");
       if (cacheAllowed) {
         writeCache({
@@ -102,15 +101,11 @@ export function useActivityHeatmap({
         } else {
           const err = e as any;
           setError(err?.message || String(err));
-          setDaily([]);
-          setHeatmap(null);
           setSource("edge");
         }
       } else {
         const err = e as any;
         setError(err?.message || String(err));
-        setDaily([]);
-        setHeatmap(null);
         setSource("edge");
       }
     } finally {
@@ -145,9 +140,7 @@ export function useActivityHeatmap({
     }
     setLoading(true);
     if (!cacheAllowed) clearCache();
-    setDaily([]);
     setError(null);
-    setHeatmap(null);
     setSource("edge");
     const controller = new AbortController();
     refresh({ signal: controller.signal });

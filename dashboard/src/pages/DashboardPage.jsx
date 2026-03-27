@@ -467,7 +467,6 @@ export function DashboardPage({
   const {
     daily,
     summary,
-    rolling: usageRolling,
     source: usageSource,
     loading: usageLoading,
     error: usageError,
@@ -527,13 +526,6 @@ export function DashboardPage({
     tzOffsetMinutes,
   });
 
-  const visibleDaily = useMemo(() => {
-    return daily.filter((row) => {
-      if (row?.future) return false;
-      if (!row?.day || !todayKey) return true;
-      return String(row.day) <= String(todayKey);
-    });
-  }, [daily, todayKey]);
   const {
     rows: trendRows,
     from: trendFrom,
@@ -600,8 +592,8 @@ export function DashboardPage({
         : [];
       return trimLeadingZeroMonths(rows);
     }
-    return visibleDaily;
-  }, [period, trendRows, visibleDaily]);
+    return Array.isArray(trendRows) ? trendRows.filter((row) => row?.day && !row?.future) : [];
+  }, [period, trendRows]);
   const sortedDetails = useMemo(
     () => sortDailyRows(detailsRows, effectiveSort),
     [detailsRows, effectiveSort],
@@ -730,12 +722,8 @@ export function DashboardPage({
     [heatmapLoading, modelBreakdownLoading, trendLoading, usageLoading],
   );
   const rollingUsage = useMemo(
-    () =>
-      selectRollingUsageForDisplay({
-        recentRolling,
-        usageRolling,
-      }),
-    [recentRolling, usageRolling],
+    () => selectRollingUsageForDisplay({ recentRolling }),
+    [recentRolling],
   );
   const usageSourceLabel = useMemo(
     () =>

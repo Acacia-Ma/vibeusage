@@ -1,0 +1,192 @@
+import React from "react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { render } from "../test/test-utils.tsx";
+import { DashboardPage } from "./DashboardPage.jsx";
+
+const SKIP_BOOT_LABEL = "Skip boot";
+const SWITCH_TOTAL_LABEL = "Switch total";
+
+const usageDataHook = vi.hoisted(() => ({
+  useUsageData: vi.fn(() => ({
+    daily: [],
+    summary: { total_tokens: "42", billable_total_tokens: "42" },
+    rolling: null,
+    source: "edge",
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  })),
+}));
+
+const recentUsageHook = vi.hoisted(() => ({
+  useRecentUsageData: vi.fn(() => ({
+    rolling: { last_7d: { totals: { billable_total_tokens: "recent" } } },
+    source: "edge",
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  })),
+}));
+
+const trendHook = vi.hoisted(() => ({
+  useTrendData: vi.fn(() => ({
+    rows: [],
+    from: "2026-03-01",
+    to: "2026-03-07",
+    loading: false,
+    source: "edge",
+    error: null,
+    refresh: vi.fn(),
+  })),
+}));
+
+const heatmapHook = vi.hoisted(() => ({
+  useActivityHeatmap: vi.fn(() => ({
+    range: { from: "2026-01-01", to: "2026-03-07" },
+    daily: [],
+    heatmap: { weeks: [] },
+    loading: false,
+    source: "edge",
+    error: null,
+    refresh: vi.fn(),
+  })),
+}));
+
+const modelBreakdownHook = vi.hoisted(() => ({
+  useUsageModelBreakdown: vi.fn(() => ({
+    breakdown: null,
+    loading: false,
+    source: "edge",
+    error: null,
+    refresh: vi.fn(),
+  })),
+}));
+
+const projectUsageHook = vi.hoisted(() => ({
+  useProjectUsageSummary: vi.fn(() => ({
+    entries: [],
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  })),
+}));
+
+const authToken = vi.hoisted(() => ({
+  isAccessTokenReady: vi.fn(() => true),
+  normalizeAccessToken: vi.fn((token) => token),
+  resolveAuthAccessToken: vi.fn(async (token) => token ?? null),
+}));
+
+const mockData = vi.hoisted(() => ({
+  getMockNow: vi.fn(() => null),
+  isMockEnabled: vi.fn(() => false),
+}));
+
+const timezone = vi.hoisted(() => ({
+  formatTimeZoneLabel: vi.fn(() => "UTC+00:00"),
+  formatTimeZoneShortLabel: vi.fn(() => "UTC+00:00"),
+  getBrowserTimeZone: vi.fn(() => "UTC"),
+  getBrowserTimeZoneOffsetMinutes: vi.fn(() => 0),
+  getLocalDateParts: vi.fn(() => ({ year: 2026, month: 3, day: 7 })),
+  getLocalDayKey: vi.fn(() => "2026-03-07"),
+}));
+
+const vibeusageApi = vi.hoisted(() => ({
+  getPublicVisibility: vi.fn(async () => ({ enabled: false, share_token: null, updated_at: null })),
+  setPublicVisibility: vi.fn(async () => ({ enabled: false, share_token: null, updated_at: null })),
+  getUserStatus: vi.fn(async () => ({ subscriptions: { items: [] }, install: null })),
+  getPublicViewProfile: vi.fn(async () => ({ profile: null })),
+  requestInstallLinkCode: vi.fn(async () => ({ code: null, expires_at: null })),
+}));
+
+vi.mock("../hooks/use-usage-data", () => usageDataHook);
+vi.mock("../hooks/use-recent-usage-data", () => recentUsageHook);
+vi.mock("../hooks/use-trend-data", () => trendHook);
+vi.mock("../hooks/use-activity-heatmap", () => heatmapHook);
+vi.mock("../hooks/use-usage-model-breakdown", () => modelBreakdownHook);
+vi.mock("../hooks/use-project-usage-summary", () => projectUsageHook);
+vi.mock("../lib/auth-token", () => authToken);
+vi.mock("../lib/mock-data", () => mockData);
+vi.mock("../lib/timezone", () => timezone);
+vi.mock("../lib/vibeusage-api", () => vibeusageApi);
+vi.mock("../components/BackendStatus.jsx", () => ({ BackendStatus: () => null }));
+vi.mock("../ui/matrix-a/components/BootScreen.jsx", () => ({
+  BootScreen: ({ onSkip }) => (
+    <button type="button" onClick={onSkip}>
+      {SKIP_BOOT_LABEL}
+    </button>
+  ),
+}));
+vi.mock("../ui/matrix-a/components/GithubStar.jsx", () => ({ GithubStar: () => null }));
+vi.mock("../ui/matrix-a/components/ActivityHeatmap.jsx", () => ({ ActivityHeatmap: () => null }));
+vi.mock("../ui/matrix-a/components/ProjectUsagePanel.jsx", () => ({ ProjectUsagePanel: () => null }));
+vi.mock("../ui/foundation/AsciiBox.jsx", () => ({ AsciiBox: ({ children }) => <div>{children}</div> }));
+vi.mock("../ui/foundation/MatrixButton.jsx", () => ({
+  MatrixButton: ({ children, onClick, href }) => {
+    if (href) {
+      return <a href={href}>{children}</a>;
+    }
+
+    return (
+      <button type="button" onClick={onClick}>
+        {children}
+      </button>
+    );
+  },
+}));
+vi.mock("../ui/matrix-a/views/DashboardView.jsx", () => ({
+  DashboardView: ({ setSelectedPeriod }) => (
+    <button type="button" onClick={() => setSelectedPeriod("total")}>
+      {SWITCH_TOTAL_LABEL}
+    </button>
+  ),
+}));
+
+describe("DashboardPage period decoupling", () => {
+  beforeEach(() => {
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("does not wire period range into the recent usage hook when tabs change", async () => {
+    render(
+      <DashboardPage
+        baseUrl="https://example.com"
+        auth="token"
+        currentIdentity={{ displayName: "Victor" }}
+        signedIn
+        sessionSoftExpired={false}
+        signOut={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByText(SKIP_BOOT_LABEL));
+    await waitFor(() => expect(screen.getByText(SWITCH_TOTAL_LABEL)).toBeInTheDocument());
+
+    expect(recentUsageHook.useRecentUsageData).toHaveBeenCalled();
+    const firstCall = recentUsageHook.useRecentUsageData.mock.calls.at(-1)?.[0];
+    expect(firstCall).not.toHaveProperty("from");
+    expect(firstCall).not.toHaveProperty("to");
+    expect(firstCall).not.toHaveProperty("period");
+
+    fireEvent.click(screen.getByText(SWITCH_TOTAL_LABEL));
+
+    await waitFor(() => {
+      const latestCall = recentUsageHook.useRecentUsageData.mock.calls.at(-1)?.[0];
+      expect(latestCall).not.toHaveProperty("from");
+      expect(latestCall).not.toHaveProperty("to");
+      expect(latestCall).not.toHaveProperty("period");
+    });
+  });
+});
