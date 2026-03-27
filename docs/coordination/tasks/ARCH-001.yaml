@@ -21,4 +21,5 @@ notes:
   - "EVIDENCE: docs/repo-sitemap.md is now the active repository navigation source of truth and the live Canvas script/test/artifact were removed."
   - "EVIDENCE: npm test, npm run ci:local, and openspec validate 2026-03-28-replace-canvas-with-repo-sitemap --strict all passed."
   - "NEXT: Historical plans and retrospectives may still mention architecture.canvas, but active workflows no longer depend on it."
-commit_refs: []
+commit_refs:
+  - be82894d
