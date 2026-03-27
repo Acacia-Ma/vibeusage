@@ -126,23 +126,11 @@ export function useUsageModelBreakdown({
       setLoading(false);
       return;
     }
-    if (!cacheAllowed) {
-      clearCache();
-      setBreakdown(null);
-      setSource("edge");
-      setError(null);
-    } else {
-      const cached = readCache();
-      if (cached?.breakdown) {
-        setBreakdown(cached.breakdown);
-        setSource("cache");
-        setError(null);
-      } else if (tokenReady || !guestAllowed || mockEnabled) {
-        setBreakdown(null);
-        setSource("edge");
-        setError(null);
-      }
-    }
+    setLoading(true);
+    if (!cacheAllowed) clearCache();
+    setBreakdown(null);
+    setSource("edge");
+    setError(null);
     const controller = new AbortController();
     refresh({ signal: controller.signal });
     return () => {
@@ -151,7 +139,6 @@ export function useUsageModelBreakdown({
   }, [
     accessToken,
     mockEnabled,
-    readCache,
     refresh,
     tokenReady,
     guestAllowed,

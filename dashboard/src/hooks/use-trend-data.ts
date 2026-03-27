@@ -26,8 +26,6 @@ export function useTrendData({
   timeZone,
   tzOffsetMinutes,
   now,
-  sharedRows,
-  sharedRange,
 }: any = {}) {
   const [rows, setRows] = useState<any[]>([]);
   const [range, setRange] = useState<{ from?: any; to?: any }>(() => ({ from, to }));
@@ -38,9 +36,6 @@ export function useTrendData({
   const mockEnabled = isMockEnabled();
   const tokenReady = isAccessTokenReady(accessToken);
   const cacheAllowed = !guestAllowed;
-  const sharedEnabled = Array.isArray(sharedRows);
-  const sharedFrom = sharedRange?.from || from;
-  const sharedTo = sharedRange?.to || to;
 
   const mode = useMemo(() => {
     if (period === "day") return "hourly";
@@ -81,15 +76,6 @@ export function useTrendData({
   }, [storageKey]);
 
   const refresh = useCallback(async ({ signal }: any = {}) => {
-    if (sharedEnabled) {
-      setRows(Array.isArray(sharedRows) ? sharedRows : []);
-      setRange({ from: sharedFrom, to: sharedTo });
-      setSource("shared");
-      setFetchedAt(null);
-      setLoading(false);
-      setError(null);
-      return;
-    }
     const resolvedToken = await resolveAuthAccessToken(accessToken);
     if (!resolvedToken && !mockEnabled) return;
     if (signal?.aborted) return;
@@ -234,11 +220,6 @@ export function useTrendData({
     mode,
     months,
     readCache,
-    tokenReady,
-    sharedEnabled,
-    sharedFrom,
-    sharedRows,
-    sharedTo,
     timeZone,
     to,
     tzOffsetMinutes,
@@ -248,15 +229,6 @@ export function useTrendData({
   ]);
 
   useEffect(() => {
-    if (sharedEnabled) {
-      setRows(Array.isArray(sharedRows) ? sharedRows : []);
-      setRange({ from: sharedFrom, to: sharedTo });
-      setSource("shared");
-      setFetchedAt(null);
-      setLoading(false);
-      setError(null);
-      return;
-    }
     if (!tokenReady && !guestAllowed && !mockEnabled) {
       setRows([]);
       setRange({ from, to });
@@ -266,52 +238,13 @@ export function useTrendData({
       setFetchedAt(null);
       return;
     }
-    if (!cacheAllowed) {
-      clearCache();
-      setRows([]);
-      setRange({ from, to });
-      setError(null);
-      setSource("edge");
-      setFetchedAt(null);
-    } else {
-      const cached = readCache();
-      if (cached?.rows) {
-        let filledRows =
-          mode === "daily"
-            ? fillDailyGaps(cached.rows || [], cached.from || from, cached.to || to, {
-                timeZone,
-                offsetMinutes: tzOffsetMinutes,
-                now,
-              })
-            : Array.isArray(cached.rows)
-              ? cached.rows
-              : [];
-        if (mode === "hourly") {
-          filledRows = markHourlyFuture(filledRows, {
-            timeZone,
-            offsetMinutes: tzOffsetMinutes,
-            now,
-          });
-        } else if (mode === "monthly") {
-          filledRows = markMonthlyFuture(filledRows, {
-            timeZone,
-            offsetMinutes: tzOffsetMinutes,
-            now,
-          });
-        }
-        setRows(filledRows);
-        setRange({ from: cached.from || from, to: cached.to || to });
-        setSource("cache");
-        setFetchedAt(cached.fetchedAt || null);
-        setError(null);
-      } else if (tokenReady || !guestAllowed || mockEnabled) {
-        setRows([]);
-        setRange({ from, to });
-        setError(null);
-        setSource("edge");
-        setFetchedAt(null);
-      }
-    }
+    setLoading(true);
+    if (!cacheAllowed) clearCache();
+    setRows([]);
+    setRange({ from, to });
+    setError(null);
+    setSource("edge");
+    setFetchedAt(null);
     const controller = new AbortController();
     refresh({ signal: controller.signal });
     return () => {
@@ -320,12 +253,7 @@ export function useTrendData({
   }, [
     accessToken,
     mockEnabled,
-    readCache,
     refresh,
-    sharedEnabled,
-    sharedFrom,
-    sharedRows,
-    sharedTo,
     tokenReady,
     guestAllowed,
     cacheAllowed,

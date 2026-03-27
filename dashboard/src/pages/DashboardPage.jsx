@@ -512,8 +512,6 @@ export function DashboardPage({
     tzOffsetMinutes,
   });
 
-  const shareDailyToTrend = period === "week" || period === "month";
-  const useDailyTrend = period === "week" || period === "month";
   const visibleDaily = useMemo(() => {
     return daily.filter((row) => {
       if (row?.future) return false;
@@ -539,8 +537,6 @@ export function DashboardPage({
     timeZone: trendTimeZone,
     tzOffsetMinutes: trendTzOffsetMinutes,
     now: mockNow,
-    sharedRows: shareDailyToTrend ? daily : null,
-    sharedRange: shareDailyToTrend ? { from, to } : null,
   });
 
   const {
@@ -621,14 +617,13 @@ export function DashboardPage({
     return paginateRows(sortedDetails, detailsPage, DETAILS_PAGE_SIZE);
   }, [detailsPage, period, sortedDetails]);
   const trendRowsForDisplay = useMemo(() => {
-    if (useDailyTrend) return daily;
     if (period === "day") {
       return Array.isArray(trendRows) ? trendRows.filter((row) => row?.hour) : [];
     }
     return trendRows;
-  }, [daily, period, trendRows, useDailyTrend]);
-  const trendFromForDisplay = useDailyTrend ? from : trendFrom;
-  const trendToForDisplay = useDailyTrend ? to : trendTo;
+  }, [period, trendRows]);
+  const trendFromForDisplay = trendFrom;
+  const trendToForDisplay = trendTo;
 
   function renderDetailCell(row, key) {
     if (row?.future) return "—";

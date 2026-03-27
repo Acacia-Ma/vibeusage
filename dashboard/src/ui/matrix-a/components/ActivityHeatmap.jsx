@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { buildActivityHeatmap } from "../../../lib/activity-heatmap";
 import { copy } from "../../../lib/copy";
 
 const OPACITY_BY_LEVEL = [0.12, 0.32, 0.5, 0.7, 1];
@@ -104,31 +103,7 @@ export function ActivityHeatmap({
   defaultToLatestMonth = false,
 }) {
   const weekStartsOn = heatmap?.week_starts_on === "mon" ? "mon" : "sun";
-  const normalizedHeatmap = useMemo(() => {
-    const sourceWeeks = Array.isArray(heatmap?.weeks) ? heatmap.weeks : [];
-    if (!sourceWeeks.length) return { weeks: [] };
-    const rows = [];
-    for (const week of sourceWeeks) {
-      for (const cell of Array.isArray(week) ? week : []) {
-        if (!cell?.day) continue;
-        rows.push({
-          day: cell.day,
-          total_tokens: cell.total_tokens ?? cell.value ?? 0,
-          billable_total_tokens: cell.billable_total_tokens ?? cell.value ?? cell.total_tokens ?? 0,
-        });
-      }
-    }
-    const desiredWeeks = Math.max(52, sourceWeeks.length);
-    const rebuilt = buildActivityHeatmap({
-      dailyRows: rows,
-      weeks: desiredWeeks,
-      to: heatmap?.to,
-      weekStartsOn,
-    });
-    return rebuilt;
-  }, [heatmap?.to, heatmap?.weeks, weekStartsOn]);
-
-  const weeks = normalizedHeatmap?.weeks || [];
+  const weeks = Array.isArray(heatmap?.weeks) ? heatmap.weeks : [];
   const dayLabels =
     weekStartsOn === "mon"
       ? [
@@ -154,10 +129,10 @@ export function ActivityHeatmap({
     () =>
       buildFullYearMonthMarkers({
         weeksCount: weeks.length,
-        to: normalizedHeatmap?.to,
+        to: heatmap?.to,
         weekStartsOn,
       }),
-    [normalizedHeatmap?.to, weekStartsOn, weeks.length],
+    [heatmap?.to, weekStartsOn, weeks.length],
   );
   const latestMonthIndex = useMemo(() => {
     if (!monthMarkers.length) return null;
@@ -489,7 +464,9 @@ export function ActivityHeatmap({
                         key={key}
                         title={copy("heatmap.tooltip", {
                           day: cell.day,
-                          value: formatTokenValue(cell.value),
+                          value: formatTokenValue(
+                            cell.value ?? cell.total_tokens ?? cell.billable_total_tokens ?? 0,
+                          ),
                           unit: copy("heatmap.unit.tokens"),
                           tz: tzDetail,
                         })}
