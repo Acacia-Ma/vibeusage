@@ -105,7 +105,7 @@ tasks:
     path: docs/coordination/tasks/PRICE-005.yaml
   - id: PRICE-006
     title: Backfill deterministic canonical alias effective dates
-    status: in_progress
+    status: done
     owner: codex-main
     touches:
       - insforge-src/functions-esm/vibeusage-pricing-sync.js

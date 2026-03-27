@@ -1,6 +1,6 @@
 id: PRICE-006
 title: Backfill deterministic canonical alias effective dates
-status: in_progress
+status: done
 owner: codex-main
 touches:
   - insforge-src/functions-esm/vibeusage-pricing-sync.js
@@ -14,5 +14,12 @@ touches:
 notes:
   - "DECISION: Fix the split Claude buckets by backfilling only deterministic canonical aliases to the earliest observed raw usage date."
   - "DECISION: Keep pricing alias generation unchanged; this bug lives in raw-to-canonical identity timing."
-  - "NEXT: Add failing regression coverage for first-seen backfill and conflicting alias history."
-commit_refs: []
+  - "DECISION: Deterministic backfill now skips any usage model whose canonical alias history conflicts."
+  - "VERIFY: node --test test/pricing-sync-auto-alias.test.js"
+  - "VERIFY: node scripts/acceptance/openrouter-pricing-sync.cjs"
+  - "VERIFY: node scripts/build-insforge-functions.cjs"
+  - "VERIFY: npm run build:insforge:check"
+  - "VERIFY: openspec validate 2026-03-28-refactor-model-identity-before-pricing --strict"
+  - "VERIFY: npm test"
+commit_refs:
+  - 56d85b11
