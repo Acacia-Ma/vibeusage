@@ -132,3 +132,64 @@ test("buildAliasRows creates alias for deepseek family matches", () => {
     },
   ]);
 });
+
+test("buildAliasRows keeps glm vision variants from colliding with plain glm aliases", () => {
+  const rows = buildAliasRows({
+    usageModels: ["zai-org/glm-4.6"],
+    pricingModelIds: new Set(["z-ai/glm-4.6", "z-ai/glm-4.6v"]),
+    pricingMeta: [
+      { id: "z-ai/glm-4.6", created: 1, context_length: 1 },
+      { id: "z-ai/glm-4.6v", created: 2, context_length: 2 },
+    ],
+    pricingSource: "openrouter",
+    effectiveFrom: "2026-03-27",
+    existingAliasMap: buildExistingAliasMap([]),
+  });
+
+  assert.deepEqual(rows, [
+    {
+      usage_model: "zai-org/glm-4.6",
+      pricing_model: "z-ai/glm-4.6",
+      pricing_source: "openrouter",
+      effective_from: "2026-03-27",
+      active: true,
+    },
+  ]);
+});
+
+test("buildAliasRows creates alias for mimo free usage models", () => {
+  const rows = buildAliasRows({
+    usageModels: ["mimo-v2-pro-free"],
+    pricingModelIds: new Set(["xiaomi/mimo-v2-pro"]),
+    pricingMeta: [
+      { id: "xiaomi/mimo-v2-flash", created: 1, context_length: 1 },
+      { id: "xiaomi/mimo-v2-pro", created: 2, context_length: 2 },
+    ],
+    pricingSource: "openrouter",
+    effectiveFrom: "2026-03-27",
+    existingAliasMap: buildExistingAliasMap([]),
+  });
+
+  assert.deepEqual(rows, [
+    {
+      usage_model: "mimo-v2-pro-free",
+      pricing_model: "xiaomi/mimo-v2-pro",
+      pricing_source: "openrouter",
+      effective_from: "2026-03-27",
+      active: true,
+    },
+  ]);
+});
+
+test("buildAliasRows keeps preview-only gemini models on fallback", () => {
+  const rows = buildAliasRows({
+    usageModels: ["gemini-3-pro"],
+    pricingModelIds: new Set(["google/gemini-3-pro-preview"]),
+    pricingMeta: [{ id: "google/gemini-3-pro-preview", created: 1, context_length: 1 }],
+    pricingSource: "openrouter",
+    effectiveFrom: "2026-03-27",
+    existingAliasMap: buildExistingAliasMap([]),
+  });
+
+  assert.deepEqual(rows, []);
+});

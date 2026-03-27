@@ -18,3 +18,14 @@ tasks:
       - scripts/ops/pricing-alias-diagnostics.sql
       - docs/ops/pricing-sync-health.md
     path: docs/coordination/tasks/PRICE-001.yaml
+  - id: PRICE-002
+    title: Reduce safe residual pricing fallbacks
+    status: in_progress
+    owner: codex-main
+    touches:
+      - insforge-src/functions/vibeusage-pricing-sync.js
+      - insforge-functions/vibeusage-pricing-sync.js
+      - scripts/acceptance/openrouter-pricing-sync.cjs
+      - test/pricing-sync-auto-alias.test.js
+      - scripts/ops/pricing-alias-diagnostics.sql
+    path: docs/coordination/tasks/PRICE-002.yaml

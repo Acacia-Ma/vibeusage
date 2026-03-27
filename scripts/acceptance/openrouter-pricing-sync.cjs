@@ -188,6 +188,22 @@ function buildOpenRouterPayload() {
         },
       },
       {
+        id: "z-ai/glm-4.6",
+        created: 13,
+        pricing: {
+          prompt: 0.0000009,
+          completion: 0.0000018,
+        },
+      },
+      {
+        id: "z-ai/glm-4.6v",
+        created: 13,
+        pricing: {
+          prompt: 0.0000014,
+          completion: 0.0000028,
+        },
+      },
+      {
         id: "moonshotai/kimi-k2.5",
         created: 14,
         pricing: {
@@ -201,6 +217,14 @@ function buildOpenRouterPayload() {
         pricing: {
           prompt: 0.0000011,
           completion: 0.0000021,
+        },
+      },
+      {
+        id: "xiaomi/mimo-v2-pro",
+        created: 16,
+        pricing: {
+          prompt: 0.0000006,
+          completion: 0.0000012,
         },
       },
       {
@@ -233,8 +257,10 @@ async function main() {
     { model: "minimax-m2.5-highspeed" },
     { model: "gemini-3-pro" },
     { model: "zai/glm-4.7" },
+    { model: "zai-org/glm-4.6" },
     { model: "k2p5" },
     { model: "deepseek-v3.1" },
+    { model: "mimo-v2-pro-free" },
     { model: "coder-model" },
     { model: "unknown" },
   ];
@@ -275,14 +301,14 @@ async function main() {
 
   assert.equal(res.status, 200);
   assert.equal(body.success, true);
-  assert.equal(body.models_total, 10);
-  assert.equal(body.models_processed, 9);
-  assert.equal(body.rows_upserted, 9);
-  assert.equal(body.usage_models_total, 8);
-  assert.equal(body.aliases_generated, 6);
-  assert.equal(body.aliases_upserted, 6);
+  assert.equal(body.models_total, 13);
+  assert.equal(body.models_processed, 12);
+  assert.equal(body.rows_upserted, 12);
+  assert.equal(body.usage_models_total, 10);
+  assert.equal(body.aliases_generated, 7);
+  assert.equal(body.aliases_upserted, 7);
   assert.equal(db.upsertCalls, 1);
-  assert.equal(db.upserts.length, 9);
+  assert.equal(db.upserts.length, 12);
 
   const first = db.upserts.find((row) => row.model === "anthropic/claude-opus-4.5");
   const second = db.upserts.find((row) => row.model === "openai/gpt-4o-mini");
@@ -301,16 +327,17 @@ async function main() {
   assert.equal(db.retention.eq.value, "openrouter");
   assert.equal(db.retention.update.active, false);
   assert.equal(db.aliasUpsertCalls, 1);
-  assert.equal(db.aliasUpserts.length, 6);
+  assert.equal(db.aliasUpserts.length, 7);
   assert.deepEqual(
     db.aliasUpserts.map((row) => ({ usage_model: row.usage_model, pricing_model: row.pricing_model })),
     [
       { usage_model: "claude-opus-4-5-20251101", pricing_model: "anthropic/claude-opus-4.5" },
       { usage_model: "minimax-m2.5-highspeed", pricing_model: "minimax/minimax-m2.5" },
-      { usage_model: "gemini-3-pro", pricing_model: "google/gemini-3-pro-preview" },
       { usage_model: "zai/glm-4.7", pricing_model: "z-ai/glm-4.7" },
+      { usage_model: "zai-org/glm-4.6", pricing_model: "z-ai/glm-4.6" },
       { usage_model: "k2p5", pricing_model: "moonshotai/kimi-k2.5" },
       { usage_model: "deepseek-v3.1", pricing_model: "deepseek/deepseek-chat-v3.1" },
+      { usage_model: "mimo-v2-pro-free", pricing_model: "xiaomi/mimo-v2-pro" },
     ],
   );
 

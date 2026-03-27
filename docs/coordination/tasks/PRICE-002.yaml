@@ -1,0 +1,17 @@
+id: PRICE-002
+title: Reduce safe residual pricing fallbacks
+status: in_progress
+owner: codex-main
+touches:
+  - insforge-src/functions/vibeusage-pricing-sync.js
+  - insforge-functions/vibeusage-pricing-sync.js
+  - scripts/acceptance/openrouter-pricing-sync.cjs
+  - test/pricing-sync-auto-alias.test.js
+  - scripts/ops/pricing-alias-diagnostics.sql
+notes:
+  - "DECISION: This follow-up only reduces residual fallbacks that still have a single unambiguous pricing target."
+  - "DECISION: Ambiguous names such as kimi-for-coding and gemini-3-pro stay on fallback until the upstream usage name becomes specific enough."
+  - "EVIDENCE: Local coverage now adds deterministic handling for zai-org/glm-4.6 and mimo-v2-pro-free while keeping gemini preview aliases on fallback."
+  - "BLOCKED: Production deployment is still gated by the legacy CommonJS Insforge2 path; direct MCP deploy fails Deno type checks for this function."
+  - "NEXT: Either accept the local-only change set for now or approve migrating vibeusage-pricing-sync onto the deployable ESM function pipeline."
+commit_refs: []

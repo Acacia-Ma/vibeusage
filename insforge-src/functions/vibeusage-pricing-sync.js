@@ -472,6 +472,7 @@ function detectVendorFromFamily(usageModel) {
   if (normalized.includes("minimax")) return "minimax";
   if (normalized.includes("gemini")) return "google";
   if (normalized.includes("deepseek")) return "deepseek";
+  if (normalized.includes("mimo")) return "xiaomi";
   if (normalized.includes("glm")) return "z-ai";
   if (normalized.includes("kimi") || normalized === "k2p5") return "moonshotai";
   return null;
@@ -489,6 +490,8 @@ function normalizeVendor(value) {
       return "minimax";
     case "deepseek":
       return "deepseek";
+    case "xiaomi":
+      return "xiaomi";
     case "z-ai":
     case "zai":
     case "zai-org":
@@ -524,6 +527,8 @@ function buildAliasKeyForVendor(modelId, vendor, { isUsageModel } = {}) {
       return extractGeminiAliasKey(modelId);
     case "z-ai":
       return extractGlmAliasKey(modelId);
+    case "xiaomi":
+      return extractMimoAliasKey(modelId);
     case "moonshotai":
       return extractKimiAliasKey(modelId, { isUsageModel });
     default:
@@ -571,21 +576,32 @@ function extractDeepSeekAliasKey(modelId) {
 
 function extractGlmAliasKey(modelId) {
   const normalized = normalizeAliasInput(modelId);
-  const match = normalized.match(/glm-?(\d+(?:[.-]\d+)?)(?:-(flash|turbo))?/);
+  const match = normalized.match(/^glm-?(\d+(?:[.-]\d+)?)(v)?(?:-(flash|turbo))?$/);
   if (!match) return null;
   const version = normalizeVersionToken(match[1]);
-  const suffix = match[2] || null;
-  return suffix ? `glm-${version}-${suffix}` : `glm-${version}`;
+  const vision = match[2] ? "v" : "";
+  const suffix = match[3] || null;
+  return suffix ? `glm-${version}${vision}-${suffix}` : `glm-${version}${vision}`;
 }
 
 function extractGeminiAliasKey(modelId) {
   const normalized = normalizeAliasInput(modelId);
-  const match = normalized.match(/gemini-(\d+(?:[.-]\d+)?)-(pro|flash|flash-lite)(?:-(image))?/);
+  const match = normalized.match(
+    /^gemini-(\d+(?:[.-]\d+)?)-(pro|flash|flash-lite)(?:-(image))?(?:-(preview(?:-[0-9-]+)?))?$/,
+  );
   if (!match) return null;
   const version = normalizeVersionToken(match[1]);
   const tier = match[2];
   const image = match[3] ? "-image" : "";
-  return `gemini-${version}-${tier}${image}`;
+  const preview = match[4] ? `-${match[4]}` : "";
+  return `gemini-${version}-${tier}${image}${preview}`;
+}
+
+function extractMimoAliasKey(modelId) {
+  const normalized = normalizeAliasInput(modelId);
+  const match = normalized.match(/^mimo-(v\d+)-(flash|omni|pro)(?:-free)?$/);
+  if (!match) return null;
+  return `mimo-${normalizeVersionToken(match[1])}-${match[2]}`;
 }
 
 function extractKimiAliasKey(modelId, { isUsageModel } = {}) {
