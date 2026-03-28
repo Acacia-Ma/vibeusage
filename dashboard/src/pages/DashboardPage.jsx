@@ -30,7 +30,7 @@ import { getMockNow, isMockEnabled } from "../lib/mock-data";
 import {
   buildFleetData,
   buildTopModels,
-  deriveDisplayModel,
+  resolveModelDisplayName,
 } from "../lib/model-breakdown";
 import { safeWriteClipboard, safeWriteClipboardImage } from "../lib/safe-browser";
 import { isScreenshotModeEnabled } from "../lib/screenshot-mode";
@@ -927,11 +927,7 @@ export function DashboardPage({
         if (!Number.isFinite(tokens) || tokens <= 0) continue;
         if (tokens > topModelTokens) {
           topModelTokens = tokens;
-          modelName = model?.display_model
-            ? deriveDisplayModel(model.display_model) || String(model.display_model)
-            : model?.model
-              ? deriveDisplayModel(model.model) || String(model.model)
-              : placeholderShort;
+          modelName = resolveModelDisplayName(model, placeholderShort);
         }
       }
       if (topModelTokens > 0) {

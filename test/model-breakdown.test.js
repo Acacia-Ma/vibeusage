@@ -260,3 +260,26 @@ test("hydrateModelBreakdownDisplayModels derives display_model for cached vendor
   assert.equal(hydrated.sources[0].models[0].display_model, "claude-opus-4.6");
   assert.equal(hydrated.sources[0].models[0].model_id, "anthropic/claude-opus-4.6");
 });
+
+test("resolveModelDisplayName falls back to model_id when display fields are absent", async () => {
+  const mod = await loadDashboardModule("dashboard/src/lib/model-breakdown.ts");
+  const resolveModelDisplayName = mod.resolveModelDisplayName;
+
+  const name = resolveModelDisplayName(
+    {
+      model_id: "anthropic/claude-opus-4.6",
+    },
+    "-",
+  );
+
+  assert.equal(name, "claude-opus-4.6");
+});
+
+test("resolveModelDisplayName returns fallback when model fields are all absent", async () => {
+  const mod = await loadDashboardModule("dashboard/src/lib/model-breakdown.ts");
+  const resolveModelDisplayName = mod.resolveModelDisplayName;
+
+  const name = resolveModelDisplayName({}, "fallback");
+
+  assert.equal(name, "fallback");
+});

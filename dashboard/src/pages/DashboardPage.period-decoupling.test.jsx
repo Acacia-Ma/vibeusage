@@ -7,6 +7,7 @@ import { DashboardPage } from "./DashboardPage.jsx";
 
 const SKIP_BOOT_LABEL = "Skip boot";
 const SWITCH_TOTAL_LABEL = "Switch total";
+const SHARE_TO_X_LABEL = "Share to X";
 const dashboardViewProps = vi.hoisted(() => ({ current: null }));
 
 const usageDataHook = vi.hoisted(() => ({
@@ -103,6 +104,11 @@ const vibeusageApi = vi.hoisted(() => ({
   requestInstallLinkCode: vi.fn(async () => ({ code: null, expires_at: null })),
 }));
 
+const htmlToImage = vi.hoisted(() => ({
+  toBlob: vi.fn(async () => new Blob(["image"], { type: "image/png" })),
+  toPng: vi.fn(async () => "data:image/png;base64,ZmFrZQ=="),
+}));
+
 vi.mock("../hooks/use-usage-data", () => usageDataHook);
 vi.mock("../hooks/use-recent-usage-data", () => recentUsageHook);
 vi.mock("../hooks/use-trend-data", () => trendHook);
@@ -113,6 +119,7 @@ vi.mock("../lib/auth-token", () => authToken);
 vi.mock("../lib/mock-data", () => mockData);
 vi.mock("../lib/timezone", () => timezone);
 vi.mock("../lib/vibeusage-api", () => vibeusageApi);
+vi.mock("html-to-image", () => htmlToImage);
 vi.mock("../components/BackendStatus.jsx", () => ({ BackendStatus: () => null }));
 vi.mock("../ui/matrix-a/components/BootScreen.jsx", () => ({
   BootScreen: ({ onSkip }) => (
@@ -142,14 +149,23 @@ vi.mock("../ui/matrix-a/views/DashboardView.jsx", () => ({
   DashboardView: (props) => {
     dashboardViewProps.current = props;
     return (
-      <button type="button" onClick={() => props.setSelectedPeriod("total")}>
-        {SWITCH_TOTAL_LABEL}
-      </button>
+      <>
+        <button type="button" onClick={() => props.setSelectedPeriod("total")}>
+          {SWITCH_TOTAL_LABEL}
+        </button>
+        {props.screenshotMode ? (
+          <button type="button" onClick={props.handleShareToX}>
+            {SHARE_TO_X_LABEL}
+          </button>
+        ) : null}
+      </>
     );
   },
 }));
 
 describe("DashboardPage period decoupling", () => {
+  const originalLocation = window.location;
+
   beforeEach(() => {
     window.matchMedia = vi.fn().mockReturnValue({
       matches: false,
@@ -158,11 +174,15 @@ describe("DashboardPage period decoupling", () => {
       addListener: vi.fn(),
       removeListener: vi.fn(),
     });
+    htmlToImage.toBlob.mockClear();
+    htmlToImage.toPng.mockClear();
   });
 
   afterEach(() => {
     vi.clearAllMocks();
     dashboardViewProps.current = null;
+    window.history.replaceState({}, "", "/");
+    window.location = originalLocation;
   });
 
   it("does not wire period range into the recent usage hook when tabs change", async () => {
@@ -223,5 +243,53 @@ describe("DashboardPage period decoupling", () => {
     await waitFor(() => expect(screen.getByText(SWITCH_TOTAL_LABEL)).toBeInTheDocument());
 
     expect(dashboardViewProps.current?.usagePanelRefreshing).toBe(true);
+  });
+
+  it("uses the shared display helper for screenshot share text when display_model is missing", async () => {
+    const shareLocation = new URL("https://www.vibeusage.cc/?screenshot=1");
+    window.location = shareLocation;
+    window.history.replaceState({}, "", "/?screenshot=1");
+    modelBreakdownHook.useUsageModelBreakdown.mockReturnValue({
+      breakdown: {
+        sources: [
+          {
+            source: "claude",
+            totals: { billable_total_tokens: 100 },
+            models: [
+              {
+                model: "anthropic/claude-opus-4.6",
+                model_id: "anthropic/claude-opus-4.6",
+                totals: { billable_total_tokens: 100 },
+              },
+            ],
+          },
+        ],
+      },
+      loading: false,
+      source: "edge",
+      error: null,
+      refresh: vi.fn(),
+    });
+
+    render(
+      <DashboardPage
+        baseUrl="https://example.com"
+        auth={{ userId: "user-1" }}
+        currentIdentity={{ displayName: "Victor" }}
+        signedIn
+        sessionSoftExpired={false}
+        signOut={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByText(SKIP_BOOT_LABEL));
+    await waitFor(() => expect(screen.getByText(SHARE_TO_X_LABEL)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText(SHARE_TO_X_LABEL));
+
+    await waitFor(() => {
+      expect(String(window.location.href)).toContain("claude-opus-4.6");
+      expect(String(window.location.href)).not.toContain("anthropic%2Fclaude-opus-4.6");
+    });
   });
 });

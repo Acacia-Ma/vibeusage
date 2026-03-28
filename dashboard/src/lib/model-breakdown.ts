@@ -71,9 +71,10 @@ export function hydrateModelBreakdownDisplayModels(modelBreakdown: any) {
   };
 }
 
-function resolveModelName(model: any, fallback: any) {
+export function resolveModelDisplayName(model: any, fallback: any) {
   if (model?.display_model) return deriveDisplayModel(model.display_model) ?? String(model.display_model);
   if (model?.model) return deriveDisplayModel(model.model) ?? String(model.model);
+  if (model?.model_id) return deriveDisplayModel(model.model_id) ?? String(model.model_id);
   return fallback;
 }
 
@@ -119,7 +120,7 @@ export function buildFleetData(modelBreakdown: any, { copyFn }: AnyRecord = {}) 
           if (!Number.isFinite(modelTokens) || modelTokens <= 0) return null;
           const share =
             entry.totalTokens > 0 ? Math.round((modelTokens / entry.totalTokens) * 1000) / 10 : 0;
-          const name = resolveModelName(model, safeCopy("shared.placeholder.short"));
+          const name = resolveModelDisplayName(model, safeCopy("shared.placeholder.short"));
           const id = resolveModelId(model);
           return { id, name, share, usage: modelTokens, calc: pricingMode };
         })
@@ -150,7 +151,7 @@ export function buildTopModels(modelBreakdown: any, { limit = 3, copyFn }: AnyRe
       const tokens = toFiniteNumber(model?.totals?.billable_total_tokens) ?? 0;
       if (!Number.isFinite(tokens) || tokens <= 0) continue;
       totalTokensAll += tokens;
-      const name = resolveModelName(model, safeCopy("shared.placeholder.short"));
+      const name = resolveModelDisplayName(model, safeCopy("shared.placeholder.short"));
       const key = resolveModelId(model) || normalizeModelId(name);
       if (!key) continue;
       totalsByKey.set(key, (totalsByKey.get(key) || 0) + tokens);
