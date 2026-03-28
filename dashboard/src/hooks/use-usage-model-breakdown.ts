@@ -10,6 +10,7 @@ import {
   readDashboardLiveSnapshot,
   writeDashboardLiveSnapshot,
 } from "../lib/dashboard-live-snapshot";
+import { hydrateModelBreakdownDisplayModels } from "../lib/model-breakdown";
 import { isMockEnabled } from "../lib/mock-data";
 import { getTimeZoneCacheKey } from "../lib/timezone";
 import { getUsageModelBreakdown } from "../lib/vibeusage-api";
@@ -33,6 +34,10 @@ export function useUsageModelBreakdown({
   const mockEnabled = isMockEnabled();
   const tokenReady = isAccessTokenReady(accessToken);
   const cacheAllowed = !guestAllowed;
+  const normalizeBreakdown = useCallback(
+    (value: any) => hydrateModelBreakdownDisplayModels(value),
+    [],
+  );
 
   const storageKey = useMemo(
     () =>
@@ -45,10 +50,22 @@ export function useUsageModelBreakdown({
     [baseUrl, cacheKey, from, timeZone, to, tzOffsetMinutes],
   );
   const liveSnapshot = storageKey ? readDashboardLiveSnapshot("modelBreakdown", storageKey) : null;
+  const normalizedLiveSnapshot = useMemo(() => {
+    if (!liveSnapshot?.breakdown) return liveSnapshot;
+    return {
+      ...liveSnapshot,
+      breakdown: normalizeBreakdown(liveSnapshot.breakdown),
+    };
+  }, [liveSnapshot, normalizeBreakdown]);
 
   const readCache = useCallback(() => {
-    return readDashboardCache(storageKey, (parsed) => Boolean(parsed?.breakdown));
-  }, [storageKey]);
+    const cached = readDashboardCache(storageKey, (parsed) => Boolean(parsed?.breakdown));
+    if (!cached?.breakdown) return cached;
+    return {
+      ...cached,
+      breakdown: normalizeBreakdown(cached.breakdown),
+    };
+  }, [normalizeBreakdown, storageKey]);
 
   const writeCache = useCallback(
     (payload: any) => {
@@ -68,14 +85,14 @@ export function useUsageModelBreakdown({
 
   const applySnapshot = useCallback((snapshot: any) => {
     if (!snapshot) return;
-    setBreakdown(snapshot.breakdown || null);
+    setBreakdown(normalizeBreakdown(snapshot.breakdown || null));
     setSource("edge");
     setResolvedStorageKey(storageKey);
-  }, [storageKey]);
+  }, [normalizeBreakdown, storageKey]);
 
   const hasImmediateSnapshot =
-    resolvedStorageKey !== storageKey && Boolean(storageKey) && Boolean(liveSnapshot?.breakdown);
-  const visibleBreakdown = hasImmediateSnapshot ? liveSnapshot?.breakdown || null : breakdown;
+    resolvedStorageKey !== storageKey && Boolean(storageKey) && Boolean(normalizedLiveSnapshot?.breakdown);
+  const visibleBreakdown = hasImmediateSnapshot ? normalizedLiveSnapshot?.breakdown || null : breakdown;
   const visibleSource = hasImmediateSnapshot ? "edge" : source;
   const visibleLoading = hasImmediateSnapshot ? false : loading;
   const visibleRefreshing = hasImmediateSnapshot ? true : refreshing;
@@ -110,14 +127,15 @@ export function useUsageModelBreakdown({
         signal,
       });
       if (signal?.aborted) return;
-      setBreakdown(res || null);
+      const normalized = normalizeBreakdown(res || null);
+      setBreakdown(normalized);
       setSource("edge");
       setResolvedStorageKey(storageKey);
       writeDashboardLiveSnapshot("modelBreakdown", storageKey, {
-        breakdown: res || null,
+        breakdown: normalized,
       });
-      if (res && cacheAllowed) {
-        writeCache({ breakdown: res, fetchedAt: new Date().toISOString() });
+      if (normalized && cacheAllowed) {
+        writeCache({ breakdown: normalized, fetchedAt: new Date().toISOString() });
       } else if (!cacheAllowed) {
         clearCache();
       }
@@ -126,7 +144,7 @@ export function useUsageModelBreakdown({
       if (cacheAllowed) {
         const cached = readCache();
         if (cached?.breakdown) {
-          setBreakdown(cached.breakdown);
+          setBreakdown(normalizeBreakdown(cached.breakdown));
           setSource("cache");
           setError(null);
           setResolvedStorageKey(storageKey);
@@ -159,6 +177,7 @@ export function useUsageModelBreakdown({
     tokenReady,
     tzOffsetMinutes,
     clearCache,
+    normalizeBreakdown,
     storageKey,
     writeCache,
   ]);

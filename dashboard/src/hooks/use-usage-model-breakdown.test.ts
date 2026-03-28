@@ -163,7 +163,20 @@ describe("useUsageModelBreakdown", () => {
 
   it("hydrates a resolved model breakdown snapshot immediately while refreshing in the background", async () => {
     liveSnapshots.readDashboardLiveSnapshot.mockReturnValue({
-      breakdown: { models: [{ label: "snapshot", value: "84" }] },
+      breakdown: {
+        sources: [
+          {
+            source: "claude",
+            models: [
+              {
+                model: "anthropic/claude-sonnet-4.6",
+                model_id: "anthropic/claude-sonnet-4.6",
+                totals: { billable_total_tokens: 84 },
+              },
+            ],
+          },
+        ],
+      },
     });
 
     let resolveBreakdown: ((value: any) => void) | null = null;
@@ -189,7 +202,19 @@ describe("useUsageModelBreakdown", () => {
 
     await waitFor(() =>
       expect(result.current.breakdown).toEqual({
-        models: [{ label: "snapshot", value: "84" }],
+        sources: [
+          {
+            source: "claude",
+            models: [
+              {
+                model: "anthropic/claude-sonnet-4.6",
+                display_model: "claude-sonnet-4.6",
+                model_id: "anthropic/claude-sonnet-4.6",
+                totals: { billable_total_tokens: 84 },
+              },
+            ],
+          },
+        ],
       }),
     );
     expect(result.current.loading).toBe(false);
@@ -202,5 +227,57 @@ describe("useUsageModelBreakdown", () => {
 
     await waitFor(() => expect(result.current.refreshing).toBe(false));
     expect(result.current.breakdown).toEqual(nextBreakdown);
+  });
+
+  it("hydrates cached model breakdown entries with derived display_model when refresh fails", async () => {
+    dashboardCache.readDashboardCache.mockReturnValue({
+      breakdown: {
+        sources: [
+          {
+            source: "claude",
+            models: [
+              {
+                model: "anthropic/claude-opus-4.6",
+                model_id: "anthropic/claude-opus-4.6",
+                totals: { billable_total_tokens: 51 },
+              },
+            ],
+          },
+        ],
+      },
+      fetchedAt: "2026-03-07T00:00:00.000Z",
+    });
+    vibeusageApi.getUsageModelBreakdown.mockRejectedValue(new Error("Unauthorized"));
+
+    const { result } = renderHook(() =>
+      useUsageModelBreakdown({
+        baseUrl: "https://example.com",
+        accessToken: "token",
+        guestAllowed: false,
+        from: "2026-03-01",
+        to: "2026-03-07",
+        cacheKey: "user-1",
+        timeZone: "UTC",
+        tzOffsetMinutes: 0,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.source).toBe("cache");
+    expect(result.current.breakdown).toEqual({
+      sources: [
+        {
+          source: "claude",
+          models: [
+            {
+              model: "anthropic/claude-opus-4.6",
+              display_model: "claude-opus-4.6",
+              model_id: "anthropic/claude-opus-4.6",
+              totals: { billable_total_tokens: 51 },
+            },
+          ],
+        },
+      ],
+    });
   });
 });

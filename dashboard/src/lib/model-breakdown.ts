@@ -15,6 +15,62 @@ function resolveModelId(model: any) {
   return null;
 }
 
+function deriveDisplayModel(value: any) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const segments = trimmed
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  if (segments.length > 1) {
+    return segments[segments.length - 1];
+  }
+  return trimmed;
+}
+
+function hydrateModelEntryDisplayModel(model: any) {
+  if (!model || typeof model !== "object") return model;
+  const displayModel = deriveDisplayModel(model?.display_model ?? model?.model ?? model?.model_id);
+  if (!displayModel || model?.display_model === displayModel) return model;
+  return {
+    ...model,
+    display_model: displayModel,
+  };
+}
+
+export function hydrateModelBreakdownDisplayModels(modelBreakdown: any) {
+  if (!modelBreakdown || typeof modelBreakdown !== "object") return modelBreakdown;
+  const sources: any[] = Array.isArray(modelBreakdown?.sources) ? modelBreakdown.sources : [];
+  if (!sources.length) return modelBreakdown;
+
+  let sourcesChanged = false;
+  const nextSources = sources.map((source: any) => {
+    const models: any[] = Array.isArray(source?.models) ? source.models : [];
+    if (!models.length) return source;
+
+    let modelsChanged = false;
+    const nextModels = models.map((model) => {
+      const nextModel = hydrateModelEntryDisplayModel(model);
+      if (nextModel !== model) modelsChanged = true;
+      return nextModel;
+    });
+
+    if (!modelsChanged) return source;
+    sourcesChanged = true;
+    return {
+      ...source,
+      models: nextModels,
+    };
+  });
+
+  if (!sourcesChanged) return modelBreakdown;
+  return {
+    ...modelBreakdown,
+    sources: nextSources,
+  };
+}
+
 function resolveModelName(model: any, fallback: any) {
   if (model?.display_model) return String(model.display_model);
   if (model?.model) return String(model.model);

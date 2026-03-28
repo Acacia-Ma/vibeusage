@@ -185,3 +185,28 @@ test("buildTopModels prefers display_model for presentation", async () => {
   assert.equal(topModels[0].name, "claude-sonnet-4.6");
   assert.equal(topModels[0].id, "anthropic/claude-sonnet-4.6");
 });
+
+test("hydrateModelBreakdownDisplayModels derives display_model for cached vendor-prefixed entries", async () => {
+  const mod = await loadDashboardModule("dashboard/src/lib/model-breakdown.ts");
+  const hydrateModelBreakdownDisplayModels = mod.hydrateModelBreakdownDisplayModels;
+
+  const modelBreakdown = {
+    sources: [
+      {
+        source: "claude",
+        models: [
+          {
+            model: "anthropic/claude-opus-4.6",
+            model_id: "anthropic/claude-opus-4.6",
+            totals: { billable_total_tokens: 80 },
+          },
+        ],
+      },
+    ],
+  };
+
+  const hydrated = hydrateModelBreakdownDisplayModels(modelBreakdown);
+
+  assert.equal(hydrated.sources[0].models[0].display_model, "claude-opus-4.6");
+  assert.equal(hydrated.sources[0].models[0].model_id, "anthropic/claude-opus-4.6");
+});
