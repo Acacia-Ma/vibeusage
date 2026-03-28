@@ -15,7 +15,7 @@ function resolveModelId(model: any) {
   return null;
 }
 
-function deriveDisplayModel(value: any) {
+export function deriveDisplayModel(value: any) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -72,8 +72,8 @@ export function hydrateModelBreakdownDisplayModels(modelBreakdown: any) {
 }
 
 function resolveModelName(model: any, fallback: any) {
-  if (model?.display_model) return String(model.display_model);
-  if (model?.model) return String(model.model);
+  if (model?.display_model) return deriveDisplayModel(model.display_model) ?? String(model.display_model);
+  if (model?.model) return deriveDisplayModel(model.model) ?? String(model.model);
   return fallback;
 }
 

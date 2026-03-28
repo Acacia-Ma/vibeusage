@@ -27,7 +27,11 @@ import {
 } from "../lib/format";
 import { shouldShowInstallCard } from "../lib/install-status";
 import { getMockNow, isMockEnabled } from "../lib/mock-data";
-import { buildFleetData, buildTopModels } from "../lib/model-breakdown";
+import {
+  buildFleetData,
+  buildTopModels,
+  deriveDisplayModel,
+} from "../lib/model-breakdown";
 import { safeWriteClipboard, safeWriteClipboardImage } from "../lib/safe-browser";
 import { isScreenshotModeEnabled } from "../lib/screenshot-mode";
 import {
@@ -924,9 +928,9 @@ export function DashboardPage({
         if (tokens > topModelTokens) {
           topModelTokens = tokens;
           modelName = model?.display_model
-            ? String(model.display_model)
+            ? deriveDisplayModel(model.display_model) || String(model.display_model)
             : model?.model
-              ? String(model.model)
+              ? deriveDisplayModel(model.model) || String(model.model)
               : placeholderShort;
         }
       }

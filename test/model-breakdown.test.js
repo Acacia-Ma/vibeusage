@@ -92,6 +92,32 @@ test("buildFleetData prefers display_model over vendor-prefixed model names", as
   assert.equal(fleetData[0].models[0].id, "anthropic/claude-sonnet-4.6");
 });
 
+test("buildFleetData strips vendor prefixes even when display_model is absent", async () => {
+  const mod = await loadDashboardModule("dashboard/src/lib/model-breakdown.ts");
+  const buildFleetData = mod.buildFleetData;
+
+  const modelBreakdown = {
+    pricing: { pricing_mode: "list" },
+    sources: [
+      {
+        source: "claude",
+        totals: { total_tokens: 1200, total_cost_usd: 1.2 },
+        models: [
+          {
+            model: "anthropic/claude-haiku-4.5",
+            model_id: "anthropic/claude-haiku-4.5",
+            totals: { total_tokens: 1200 },
+          },
+        ],
+      },
+    ],
+  };
+
+  const fleetData = buildFleetData(modelBreakdown);
+
+  assert.equal(fleetData[0].models[0].name, "claude-haiku-4.5");
+});
+
 test("buildTopModels aggregates by canonical model_id across sources", async () => {
   const mod = await loadDashboardModule("dashboard/src/lib/model-breakdown.ts");
   const buildTopModels = mod.buildTopModels;
@@ -184,6 +210,30 @@ test("buildTopModels prefers display_model for presentation", async () => {
 
   assert.equal(topModels[0].name, "claude-sonnet-4.6");
   assert.equal(topModels[0].id, "anthropic/claude-sonnet-4.6");
+});
+
+test("buildTopModels strips vendor prefixes when display_model is absent", async () => {
+  const mod = await loadDashboardModule("dashboard/src/lib/model-breakdown.ts");
+  const buildTopModels = mod.buildTopModels;
+
+  const modelBreakdown = {
+    sources: [
+      {
+        source: "claude",
+        models: [
+          {
+            model: "anthropic/claude-opus-4.6",
+            model_id: "anthropic/claude-opus-4.6",
+            totals: { billable_total_tokens: 80 },
+          },
+        ],
+      },
+    ],
+  };
+
+  const topModels = buildTopModels(modelBreakdown, { limit: 1 });
+
+  assert.equal(topModels[0].name, "claude-opus-4.6");
 });
 
 test("hydrateModelBreakdownDisplayModels derives display_model for cached vendor-prefixed entries", async () => {
