@@ -61,6 +61,12 @@ This document is the single source of truth for repository navigation. Use it to
 - Model display rule:
   - Usage dashboards should prefer backend-provided `display_model` for presentation.
   - `model_id` remains the only canonical key for filtering, pricing, and aggregation.
+- Model display debug path:
+  - Start at `dashboard/src/hooks/use-usage-model-breakdown.ts` for live fetch, cache fallback, and live snapshot reuse.
+  - Then read `dashboard/src/lib/model-breakdown.ts` for final fleet/top-model label derivation.
+  - Then read `dashboard/src/pages/DashboardPage.jsx` for summary-level fallback selection.
+  - Then read `dashboard/src/ui/matrix-a/components/TopModelsPanel.jsx`, `NeuralAdaptiveFleet.jsx`, and `CostAnalysisModal.jsx` for final rendered text.
+  - Browser-local cache helpers live in `dashboard/src/lib/dashboard-cache.ts` and `dashboard/src/lib/dashboard-live-snapshot.ts`.
 
 ### Edge Functions
 

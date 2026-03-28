@@ -7,6 +7,26 @@ Use this file as the first filter. Read full docs only when card fields match yo
 
 ## Repo: vibeusage
 
+- **2026-02-17 — Session Close Trigger Retrospective**
+  - path: `vibeusage/2026-02-17-session-close-0023-1472963598577041574.md`
+  - layer: `fullstack`
+  - module: `session-close`
+  - severity: `S3`
+  - design_mismatch: `no`
+  - detection_gap: `no`
+  - reusable_for: `session-close`, `retrospective workflow`
+  - summary: Discord thread close event triggered the session-end retrospective workflow and produced a lightweight closeout record.
+
+- **2026-03-28 — Dashboard Display Model Prefix Regression**
+  - path: `vibeusage/2026-03-28-dashboard-display-model-prefix-regression.md`
+  - layer: `fullstack`
+  - module: `dashboard-model-display`
+  - severity: `S2`
+  - design_mismatch: `yes`
+  - detection_gap: `yes`
+  - reusable_for: `dashboard`, `display-model`, `cache fallback`, `release verification`, `repo-sitemap`
+  - summary: Backend and deploys were correct, but cache fallback and component-level raw-model fallback still leaked vendor-prefixed labels.
+
 - **2026-02-14 — Leaderboard Public View Clickability + Mobile Landing Fallback**
   - path: `vibeusage/2026-02-14-leaderboard-public-view-clickability.md`
   - layer: `fullstack`
