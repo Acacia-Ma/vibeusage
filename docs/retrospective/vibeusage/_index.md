@@ -1,5 +1,10 @@
 # vibeusage Retrospectives (L1 Cards)
 
+- **2026-03-30 — Insforge ESM Hard Cut Runtime Contract Mismatch** (`backend`, `insforge-esm-runtime-contract`, `S1`)
+  - file: `2026-03-30-insforge-esm-hard-cut-runtime-contract-mismatch.md`
+  - tags: `design_mismatch=yes`, `detection_gap=yes`
+  - quick take: The hard cut removed the legacy path correctly, but we swapped in an undocumented injected-global runtime contract and only closed the release after live probes plus a merged-main redeploy.
+
 - **2026-02-17 — Session Close Trigger Retrospective** (`fullstack`, `session-close`, `S3`)
   - file: `2026-02-17-session-close-0023-1472963598577041574.md`
   - tags: `design_mismatch=no`, `detection_gap=no`

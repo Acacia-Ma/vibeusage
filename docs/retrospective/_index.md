@@ -7,6 +7,16 @@ Use this file as the first filter. Read full docs only when card fields match yo
 
 ## Repo: vibeusage
 
+- **2026-03-30 — Insforge ESM Hard Cut Runtime Contract Mismatch**
+  - path: `vibeusage/2026-03-30-insforge-esm-hard-cut-runtime-contract-mismatch.md`
+  - layer: `backend`
+  - module: `insforge-esm-runtime-contract`
+  - severity: `S1`
+  - design_mismatch: `yes`
+  - detection_gap: `yes`
+  - reusable_for: `insforge`, `edge-functions`, `esm-hard-cut`, `runtime-contract`, `release-provenance`, `deploy-smoke`
+  - summary: The ESM hard cut was structurally correct, but we replaced the official SDK-import runtime contract with an unproven injected-global assumption and had to recover via live probes plus a merged-main redeploy.
+
 - **2026-02-17 — Session Close Trigger Retrospective**
   - path: `vibeusage/2026-02-17-session-close-0023-1472963598577041574.md`
   - layer: `fullstack`
