@@ -1,5 +1,4 @@
 import { createClient } from "@insforge/sdk";
-
 import { getInsforgeAnonKey, getInsforgeBaseUrl } from "./config";
 import { createTimeoutFetch } from "./http-timeout";
 
@@ -38,7 +37,22 @@ type InsforgeAuthLike = {
 
 type InsforgeClientBridgeLike = {
   auth?: InsforgeAuthLike;
+  database?: {
+    from?: (...args: any[]) => unknown;
+    rpc?: (...args: any[]) => unknown;
+  };
 };
+
+function bindDatabaseMethods(client: InsforgeClientBridgeLike) {
+  const database = client?.database;
+  if (!database || typeof database !== "object") return;
+  if (typeof database.from === "function") {
+    database.from = database.from.bind(database);
+  }
+  if (typeof database.rpc === "function") {
+    database.rpc = database.rpc.bind(database);
+  }
+}
 
 function getTokenManager(client: unknown): InsforgeTokenManagerLike | null {
   if (!client || typeof client !== "object") return null;
@@ -50,20 +64,10 @@ function getTokenManager(client: unknown): InsforgeTokenManagerLike | null {
 function decodeBase64Url(input: string): string | null {
   if (typeof input !== "string" || input.length === 0) return null;
   const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = normalized.padEnd(
-    normalized.length + ((4 - (normalized.length % 4)) % 4),
-    "="
-  );
+  const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
   try {
     if (typeof globalThis.atob === "function") {
       return globalThis.atob(padded);
-    }
-  } catch (_e) {
-    // fall through
-  }
-  try {
-    if (typeof Buffer !== "undefined") {
-      return Buffer.from(padded, "base64").toString("utf8");
     }
   } catch (_e) {
     // fall through
@@ -100,9 +104,10 @@ function wrapTokenForStorage(token: string): string {
   return JSON.stringify(envelope);
 }
 
-function unwrapTokenFromStorage(
-  raw: string | null
-): { token: string | null; shouldMigrate: boolean } {
+function unwrapTokenFromStorage(raw: string | null): {
+  token: string | null;
+  shouldMigrate: boolean;
+} {
   if (typeof raw !== "string" || raw.length === 0) {
     return { token: null, shouldMigrate: false };
   }
@@ -127,11 +132,7 @@ function getNamespacedStorageKey(key: string): string {
   return `${INSFORGE_STORAGE_KEY}.${key}`;
 }
 
-function setStorageValue(
-  storage: Storage | null,
-  key: string,
-  value: string
-): boolean {
+function setStorageValue(storage: Storage | null, key: string, value: string): boolean {
   if (!storage) return false;
   try {
     storage.setItem(getNamespacedStorageKey(key), value);
@@ -240,10 +241,7 @@ export function createPersistentStorage() {
         memoryStore.set(key, wrapped);
       };
 
-      const readStoredValue = (
-        storage: Storage | null,
-        rawKey: string
-      ): string | null => {
+      const readStoredValue = (storage: Storage | null, rawKey: string): string | null => {
         if (!storage) return null;
         try {
           return storage.getItem(rawKey);
@@ -289,8 +287,7 @@ export function createPersistentStorage() {
     },
 
     setItem(key: string, value: string): void {
-      const persistedValue =
-        key === INSFORGE_TOKEN_KEY ? wrapTokenForStorage(value) : value;
+      const persistedValue = key === INSFORGE_TOKEN_KEY ? wrapTokenForStorage(value) : value;
 
       // Always update memory
       memoryStore.set(key, persistedValue);
@@ -299,7 +296,7 @@ export function createPersistentStorage() {
       const storage = getStorage();
       if (storage) {
         const ok = setStorageValue(storage, key, persistedValue);
-        if (!ok && process.env.NODE_ENV === "development") {
+        if (!ok && import.meta.env.DEV) {
           // Storage quota exceeded or private mode - keep in memory only
           // eslint-disable-next-line no-console
           console.warn("[Auth] Failed to persist session to storage");
@@ -335,13 +332,15 @@ export function createInsforgeClient({
   if (!baseUrl) throw new Error("Missing baseUrl");
   const anonKey = getInsforgeAnonKey();
   const timeoutFetch = createTimeoutFetch(globalThis.fetch) as unknown as typeof fetch;
-  return createClient({
+  const client = createClient({
     baseUrl,
     anonKey: anonKey || undefined,
     edgeFunctionToken: accessToken || undefined,
     storage: createPersistentStorage(),
     fetch: timeoutFetch,
   });
+  bindDatabaseMethods(client);
+  return client;
 }
 
 export function createInsforgeAuthClient() {
@@ -355,14 +354,15 @@ export function createInsforgeAuthClient() {
     // This is critical for mobile browsers where memory is frequently cleared
     storage: createPersistentStorage(),
   });
+  bindDatabaseMethods(client);
   forceStorageMode(client);
   installSessionPersistenceBridge(client);
   return client;
 }
 
-function persistSessionToStorage(
+export function persistInsforgeSession(
   client: InsforgeClientBridgeLike,
-  session: InsforgeSessionLike
+  session: InsforgeSessionLike,
 ) {
   if (!session?.accessToken) return;
   const tokenManager = getTokenManager(client);
@@ -384,7 +384,7 @@ export function installSessionPersistenceBridge(client: InsforgeClientBridgeLike
   const originalGetCurrentSession = auth.getCurrentSession.bind(auth);
   auth.getCurrentSession = async (...args: unknown[]) => {
     const result = await originalGetCurrentSession(...args);
-    persistSessionToStorage(client, result?.data?.session ?? null);
+    persistInsforgeSession(client, result?.data?.session ?? null);
     return result;
   };
 
@@ -399,7 +399,7 @@ export function forceStorageMode(client: InsforgeClientBridgeLike) {
     }
     tokenManager.setStorageMode();
     if (typeof tokenManager.getSession === "function") {
-      persistSessionToStorage(client, tokenManager.getSession());
+      persistInsforgeSession(client, tokenManager.getSession());
     }
   } catch (_e) {
     // ignore SDK internals mismatch

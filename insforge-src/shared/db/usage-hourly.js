@@ -1,42 +1,17 @@
-'use strict';
+"use strict";
 
-const { applyUsageModelFilter } = require('../model');
-const { applyCanaryFilter } = require('../canary');
+require("../model");
+require("../canary");
+require("../pagination");
+require("../usage-hourly-query-core");
 
-function buildHourlyUsageQuery({
-  edgeClient,
-  userId,
-  source,
-  usageModels,
-  canonicalModel,
-  startIso,
-  endIso,
-  select
-} = {}) {
-  if (!edgeClient?.database?.from) {
-    throw new Error('edgeClient is required');
-  }
-  let query = edgeClient.database
-    .from('vibeusage_tracker_hourly')
-    .select(select || 'hour_start,source,model,total_tokens');
-
-  query = query.eq('user_id', userId);
-  if (source) query = query.eq('source', source);
-  if (Array.isArray(usageModels) && usageModels.length > 0) {
-    query = applyUsageModelFilter(query, usageModels);
-  }
-  query = applyCanaryFilter(query, { source, model: canonicalModel });
-
-  if (startIso) query = query.gte('hour_start', startIso);
-  if (endIso) query = query.lt('hour_start', endIso);
-
-  return query
-    .order('hour_start', { ascending: true })
-    .order('device_id', { ascending: true })
-    .order('source', { ascending: true })
-    .order('model', { ascending: true });
-}
+const usageHourlyQueryCore = globalThis.__vibeusageUsageHourlyQueryCore;
+if (!usageHourlyQueryCore) throw new Error("usage hourly query core not initialized");
 
 module.exports = {
-  buildHourlyUsageQuery
+  DEFAULT_HOURLY_USAGE_SELECT: usageHourlyQueryCore.DEFAULT_HOURLY_USAGE_SELECT,
+  DETAILED_HOURLY_USAGE_SELECT: usageHourlyQueryCore.DETAILED_HOURLY_USAGE_SELECT,
+  AGGREGATE_HOURLY_USAGE_SELECT: usageHourlyQueryCore.AGGREGATE_HOURLY_USAGE_SELECT,
+  buildHourlyUsageQuery: usageHourlyQueryCore.buildHourlyUsageQuery,
+  forEachHourlyUsagePage: usageHourlyQueryCore.forEachHourlyUsagePage,
 };

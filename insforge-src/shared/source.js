@@ -1,29 +1,12 @@
-'use strict';
+"use strict";
 
-const MAX_SOURCE_LENGTH = 64;
+require("./runtime-primitives-core");
 
-function normalizeSource(value) {
-  if (typeof value !== 'string') return null;
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) return null;
-  if (normalized.length > MAX_SOURCE_LENGTH) return normalized.slice(0, MAX_SOURCE_LENGTH);
-  return normalized;
-}
-
-function getSourceParam(url) {
-  if (!url || typeof url.searchParams?.get !== 'function') {
-    return { ok: false, error: 'Invalid request URL' };
-  }
-  const raw = url.searchParams.get('source');
-  if (raw == null) return { ok: true, source: null };
-  if (raw.trim() === '') return { ok: true, source: null };
-  const normalized = normalizeSource(raw);
-  if (!normalized) return { ok: false, error: 'Invalid source' };
-  return { ok: true, source: normalized };
-}
+const runtimePrimitivesCore = globalThis.__vibeusageRuntimePrimitivesCore;
+if (!runtimePrimitivesCore) throw new Error("runtime primitives core not initialized");
 
 module.exports = {
-  MAX_SOURCE_LENGTH,
-  normalizeSource,
-  getSourceParam
+  MAX_SOURCE_LENGTH: runtimePrimitivesCore.MAX_SOURCE_LENGTH,
+  normalizeSource: runtimePrimitivesCore.normalizeSource,
+  getSourceParam: runtimePrimitivesCore.getSourceParam,
 };

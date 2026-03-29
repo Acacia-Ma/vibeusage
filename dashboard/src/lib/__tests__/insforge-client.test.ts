@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
 import {
+  createInsforgeClient,
   createPersistentStorage,
   installSessionPersistenceBridge,
 } from "../insforge-client";
@@ -35,9 +35,7 @@ function buildJwt(expSeconds: number) {
   const header = { alg: "HS256", typ: "JWT" };
   const payload = { exp: expSeconds };
   const encode = (value: unknown) =>
-    Buffer.from(JSON.stringify(value))
-      .toString("base64url")
-      .replace(/=/g, "");
+    Buffer.from(JSON.stringify(value)).toString("base64url").replace(/=/g, "");
   return `${encode(header)}.${encode(payload)}.sig`;
 }
 
@@ -134,5 +132,31 @@ describe("installSessionPersistenceBridge", () => {
 
     expect(originalGetCurrentSession).toHaveBeenCalledTimes(1);
     expect(tokenManager.saveSession).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("createInsforgeClient", () => {
+  beforeEach(() => {
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: createMemoryStorage(),
+    });
+    Object.defineProperty(window, "sessionStorage", {
+      configurable: true,
+      value: createMemoryStorage(),
+    });
+  });
+
+  it("keeps database helpers usable after method extraction", () => {
+    const client = createInsforgeClient({
+      baseUrl: "https://example.com",
+      accessToken: "token-123",
+    });
+
+    const from = client.database.from;
+    const rpc = client.database.rpc;
+
+    expect(() => from("demo_table")).not.toThrow();
+    expect(() => rpc("demo_fn", {})).not.toThrow();
   });
 });

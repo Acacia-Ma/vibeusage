@@ -15,21 +15,76 @@ function resolveModelId(model: any) {
   return null;
 }
 
-function resolveModelName(model: any, fallback: any) {
-  if (model?.model) return String(model.model);
+export function deriveDisplayModel(value: any) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const segments = trimmed
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  if (segments.length > 1) {
+    return segments[segments.length - 1];
+  }
+  return trimmed;
+}
+
+function hydrateModelEntryDisplayModel(model: any) {
+  if (!model || typeof model !== "object") return model;
+  const displayModel = deriveDisplayModel(model?.display_model ?? model?.model ?? model?.model_id);
+  if (!displayModel || model?.display_model === displayModel) return model;
+  return {
+    ...model,
+    display_model: displayModel,
+  };
+}
+
+export function hydrateModelBreakdownDisplayModels(modelBreakdown: any) {
+  if (!modelBreakdown || typeof modelBreakdown !== "object") return modelBreakdown;
+  const sources: any[] = Array.isArray(modelBreakdown?.sources) ? modelBreakdown.sources : [];
+  if (!sources.length) return modelBreakdown;
+
+  let sourcesChanged = false;
+  const nextSources = sources.map((source: any) => {
+    const models: any[] = Array.isArray(source?.models) ? source.models : [];
+    if (!models.length) return source;
+
+    let modelsChanged = false;
+    const nextModels = models.map((model) => {
+      const nextModel = hydrateModelEntryDisplayModel(model);
+      if (nextModel !== model) modelsChanged = true;
+      return nextModel;
+    });
+
+    if (!modelsChanged) return source;
+    sourcesChanged = true;
+    return {
+      ...source,
+      models: nextModels,
+    };
+  });
+
+  if (!sourcesChanged) return modelBreakdown;
+  return {
+    ...modelBreakdown,
+    sources: nextSources,
+  };
+}
+
+export function resolveModelDisplayName(model: any, fallback: any) {
+  if (model?.display_model) return deriveDisplayModel(model.display_model) ?? String(model.display_model);
+  if (model?.model) return deriveDisplayModel(model.model) ?? String(model.model);
+  if (model?.model_id) return deriveDisplayModel(model.model_id) ?? String(model.model_id);
   return fallback;
 }
 
 export function buildFleetData(modelBreakdown: any, { copyFn }: AnyRecord = {}) {
   const safeCopy = typeof copyFn === "function" ? copyFn : (key: string) => key;
-  const sources: any[] = Array.isArray(modelBreakdown?.sources)
-    ? modelBreakdown.sources
-    : [];
+  const sources: any[] = Array.isArray(modelBreakdown?.sources) ? modelBreakdown.sources : [];
   const normalizedSources = sources
     .map((entry: any) => {
-      const totalTokens = toFiniteNumber(
-        entry?.totals?.billable_total_tokens ?? entry?.totals?.total_tokens
-      ) ?? 0;
+      const totalTokens =
+        toFiniteNumber(entry?.totals?.billable_total_tokens ?? entry?.totals?.total_tokens) ?? 0;
       const totalCost = toFiniteNumber(entry?.totals?.total_cost_usd) ?? 0;
       return {
         source: entry?.source,
@@ -42,10 +97,7 @@ export function buildFleetData(modelBreakdown: any, { copyFn }: AnyRecord = {}) 
 
   if (!normalizedSources.length) return [];
 
-  const grandTotal = normalizedSources.reduce(
-    (acc, entry) => acc + entry.totalTokens,
-    0
-  );
+  const grandTotal = normalizedSources.reduce((acc, entry) => acc + entry.totalTokens, 0);
   const pricingMode =
     typeof modelBreakdown?.pricing?.pricing_mode === "string"
       ? modelBreakdown.pricing.pricing_mode.toUpperCase()
@@ -58,22 +110,17 @@ export function buildFleetData(modelBreakdown: any, { copyFn }: AnyRecord = {}) 
       const label = entry.source
         ? String(entry.source).toUpperCase()
         : safeCopy("shared.placeholder.short");
-      const totalPercentRaw =
-        grandTotal > 0 ? (entry.totalTokens / grandTotal) * 100 : 0;
-      const totalPercent = Number.isFinite(totalPercentRaw)
-        ? totalPercentRaw.toFixed(1)
-        : "0.0";
+      const totalPercentRaw = grandTotal > 0 ? (entry.totalTokens / grandTotal) * 100 : 0;
+      const totalPercent = Number.isFinite(totalPercentRaw) ? totalPercentRaw.toFixed(1) : "0.0";
       const models = entry.models
         .map((model: any) => {
-          const modelTokens = toFiniteNumber(
-            model?.totals?.billable_total_tokens ?? model?.totals?.total_tokens
-          ) ?? 0;
+          const modelTokens =
+            toFiniteNumber(model?.totals?.billable_total_tokens ?? model?.totals?.total_tokens) ??
+            0;
           if (!Number.isFinite(modelTokens) || modelTokens <= 0) return null;
           const share =
-            entry.totalTokens > 0
-              ? Math.round((modelTokens / entry.totalTokens) * 1000) / 10
-              : 0;
-          const name = resolveModelName(model, safeCopy("shared.placeholder.short"));
+            entry.totalTokens > 0 ? Math.round((modelTokens / entry.totalTokens) * 1000) / 10 : 0;
+          const name = resolveModelDisplayName(model, safeCopy("shared.placeholder.short"));
           const id = resolveModelId(model);
           return { id, name, share, usage: modelTokens, calc: pricingMode };
         })
@@ -88,14 +135,9 @@ export function buildFleetData(modelBreakdown: any, { copyFn }: AnyRecord = {}) 
     });
 }
 
-export function buildTopModels(
-  modelBreakdown: any,
-  { limit = 3, copyFn }: AnyRecord = {}
-) {
+export function buildTopModels(modelBreakdown: any, { limit = 3, copyFn }: AnyRecord = {}) {
   const safeCopy = typeof copyFn === "function" ? copyFn : (key: string) => key;
-  const sources: any[] = Array.isArray(modelBreakdown?.sources)
-    ? modelBreakdown.sources
-    : [];
+  const sources: any[] = Array.isArray(modelBreakdown?.sources) ? modelBreakdown.sources : [];
   if (!sources.length) return [];
 
   const totalsByKey = new Map();
@@ -109,8 +151,8 @@ export function buildTopModels(
       const tokens = toFiniteNumber(model?.totals?.billable_total_tokens) ?? 0;
       if (!Number.isFinite(tokens) || tokens <= 0) continue;
       totalTokensAll += tokens;
-      const name = resolveModelName(model, safeCopy("shared.placeholder.short"));
-      const key = normalizeModelId(name);
+      const name = resolveModelDisplayName(model, safeCopy("shared.placeholder.short"));
+      const key = resolveModelId(model) || normalizeModelId(name);
       if (!key) continue;
       totalsByKey.set(key, (totalsByKey.get(key) || 0) + tokens);
       const currentWeight = nameWeight.get(key) || 0;
@@ -123,17 +165,13 @@ export function buildTopModels(
 
   if (!totalsByKey.size) return [];
 
-  const knownTotal = Array.from(totalsByKey.values()).reduce(
-    (acc, value) => acc + value,
-    0
-  );
+  const knownTotal = Array.from(totalsByKey.values()).reduce((acc, value) => acc + value, 0);
   const totalTokens = totalTokensAll > 0 ? totalTokensAll : knownTotal;
 
   const normalizedLimit = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 3;
   return Array.from(totalsByKey.entries())
     .map(([key, tokens]) => {
-      const percent =
-        totalTokens > 0 ? ((tokens / totalTokens) * 100).toFixed(1) : "0.0";
+      const percent = totalTokens > 0 ? ((tokens / totalTokens) * 100).toFixed(1) : "0.0";
       return {
         id: key,
         name: nameByKey.get(key) || safeCopy("shared.placeholder.short"),

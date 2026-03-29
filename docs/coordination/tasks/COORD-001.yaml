@@ -1,0 +1,12 @@
+id: COORD-001
+title: Validate Agent Foreman coordination flow
+status: done
+owner: codex-main
+touches:
+  - docs/coordination/index.yaml
+  - docs/coordination/tasks/COORD-001.yaml
+notes:
+  - "DECISION: Agent Foreman is now bootstrapped in vibeusage with AGENTS.md as the coordination entry."
+  - "NEXT: Use PRICE-001 for the pending deployment and production smoke of the pricing sync changes."
+commit_refs:
+  - ba334cc4

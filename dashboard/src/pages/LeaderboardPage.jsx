@@ -13,8 +13,8 @@ import {
 import { isMockEnabled } from "../lib/mock-data";
 import {
   getLeaderboard,
-  getLeaderboardSettings,
-  setLeaderboardSettings,
+  getPublicVisibility,
+  setPublicVisibility,
 } from "../lib/vibeusage-api";
 import { AsciiBox } from "../ui/foundation/AsciiBox.jsx";
 import { MatrixButton } from "../ui/foundation/MatrixButton.jsx";
@@ -167,16 +167,21 @@ export function LeaderboardPage({
     if (mockEnabled) return;
     if (!authTokenAllowed || !authTokenReady) return;
     let active = true;
+    const controller = new AbortController();
     setProfileState((prev) => ({ ...prev, loading: true, error: null }));
     (async () => {
       const token = await resolveAuthAccessToken(effectiveAuthToken);
-      const data = await getLeaderboardSettings({ baseUrl, accessToken: token });
+      const data = await getPublicVisibility({
+        baseUrl,
+        accessToken: token,
+        signal: controller.signal,
+      });
       if (!active) return;
       setProfileState((prev) => ({
         ...prev,
         loading: false,
         error: null,
-        leaderboardPublic: Boolean(data?.leaderboard_public),
+        leaderboardPublic: Boolean(data?.enabled),
       }));
     })().catch((err) => {
       if (!active) return;
@@ -189,22 +194,27 @@ export function LeaderboardPage({
     });
     return () => {
       active = false;
+      controller.abort();
     };
   }, [authTokenAllowed, authTokenReady, baseUrl, effectiveAuthToken, mockEnabled]);
 
   useEffect(() => {
     if (!baseUrl) return;
-    if (!mockEnabled && (!authTokenAllowed || !authTokenReady)) return;
+    if (!mockEnabled && authTokenAllowed && !authTokenReady) return;
     let active = true;
+    const controller = new AbortController();
     setListState((prev) => ({ ...prev, loading: true, error: null }));
     (async () => {
-      const token = await resolveAuthAccessToken(effectiveAuthToken);
+      const token = authTokenAllowed
+        ? await resolveAuthAccessToken(effectiveAuthToken)
+        : null;
       const data = await getLeaderboard({
         baseUrl,
         accessToken: token,
         period,
         limit: PAGE_LIMIT,
         offset: listOffset,
+        signal: controller.signal,
       });
       if (!active) return;
       setListState({ loading: false, error: null, data });
@@ -214,6 +224,7 @@ export function LeaderboardPage({
     });
     return () => {
       active = false;
+      controller.abort();
     };
   }, [
     baseUrl,
@@ -274,16 +285,16 @@ export function LeaderboardPage({
     try {
       const token = await resolveAuthAccessToken(effectiveAuthToken);
       const nextValue = !publicProfileEnabled;
-      const data = await setLeaderboardSettings({
+      const data = await setPublicVisibility({
         baseUrl,
         accessToken: token,
-        leaderboardPublic: nextValue,
+        enabled: nextValue,
       });
       setProfileState((prev) => ({
         ...prev,
         saving: false,
         error: null,
-        leaderboardPublic: Boolean(data?.leaderboard_public),
+        leaderboardPublic: Boolean(data?.enabled),
       }));
       setListReloadToken((value) => value + 1);
     } catch (err) {

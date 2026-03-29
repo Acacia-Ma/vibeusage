@@ -1,9 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-
-import { getUsageModelBreakdown } from "../lib/vibeusage-api";
-import { isMockEnabled } from "../lib/mock-data";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isAccessTokenReady, resolveAuthAccessToken } from "../lib/auth-token";
+import {
+  buildDashboardCacheKey,
+  clearDashboardCache,
+  readDashboardCache,
+  writeDashboardCache,
+} from "../lib/dashboard-cache";
+import {
+  readDashboardLiveSnapshot,
+  writeDashboardLiveSnapshot,
+} from "../lib/dashboard-live-snapshot";
+import { hydrateModelBreakdownDisplayModels } from "../lib/model-breakdown";
+import { isMockEnabled } from "../lib/mock-data";
 import { getTimeZoneCacheKey } from "../lib/timezone";
+import { getUsageModelBreakdown } from "../lib/vibeusage-api";
 
 export function useUsageModelBreakdown({
   baseUrl,
@@ -18,57 +28,94 @@ export function useUsageModelBreakdown({
   const [breakdown, setBreakdown] = useState<any | null>(null);
   const [source, setSource] = useState<string>("edge");
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resolvedStorageKey, setResolvedStorageKey] = useState<string | null>(null);
   const mockEnabled = isMockEnabled();
   const tokenReady = isAccessTokenReady(accessToken);
   const cacheAllowed = !guestAllowed;
+  const normalizeBreakdown = useCallback(
+    (value: any) => hydrateModelBreakdownDisplayModels(value),
+    [],
+  );
 
-  const storageKey = useMemo(() => {
-    if (!cacheKey) return null;
-    const host = safeHost(baseUrl) || "default";
-    const tzKey = getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes });
-    return `vibeusage.modelBreakdown.${cacheKey}.${host}.${from}.${to}.${tzKey}`;
-  }, [baseUrl, cacheKey, from, timeZone, to, tzOffsetMinutes]);
+  const storageKey = useMemo(
+    () =>
+      buildDashboardCacheKey({
+        scope: "modelBreakdown",
+        cacheKey,
+        baseUrl,
+        segments: [from, to, getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes })],
+      }),
+    [baseUrl, cacheKey, from, timeZone, to, tzOffsetMinutes],
+  );
+  const liveSnapshot = storageKey ? readDashboardLiveSnapshot("modelBreakdown", storageKey) : null;
+  const normalizedLiveSnapshot = useMemo(() => {
+    if (!liveSnapshot?.breakdown) return liveSnapshot;
+    return {
+      ...liveSnapshot,
+      breakdown: normalizeBreakdown(liveSnapshot.breakdown),
+    };
+  }, [liveSnapshot, normalizeBreakdown]);
 
   const readCache = useCallback(() => {
-    if (!storageKey || typeof window === "undefined") return null;
-    try {
-      const raw = window.localStorage.getItem(storageKey);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed || !parsed.breakdown) return null;
-      return parsed;
-    } catch (_e) {
-      return null;
-    }
-  }, [storageKey]);
+    const cached = readDashboardCache(storageKey, (parsed) => Boolean(parsed?.breakdown));
+    if (!cached?.breakdown) return cached;
+    return {
+      ...cached,
+      breakdown: normalizeBreakdown(cached.breakdown),
+    };
+  }, [normalizeBreakdown, storageKey]);
 
   const writeCache = useCallback(
     (payload: any) => {
-      if (!storageKey || typeof window === "undefined") return;
-      try {
-        window.localStorage.setItem(storageKey, JSON.stringify(payload));
-      } catch (_e) {
-        // ignore write errors
-      }
+      writeDashboardCache(storageKey, payload, { source: "edge" });
     },
-    [storageKey]
+    [storageKey],
   );
 
   const clearCache = useCallback(() => {
-    if (!storageKey || typeof window === "undefined") return;
-    try {
-      window.localStorage.removeItem(storageKey);
-    } catch (_e) {
-      // ignore remove errors
-    }
+    clearDashboardCache(storageKey);
   }, [storageKey]);
 
-  const refresh = useCallback(async () => {
-    const resolvedToken = await resolveAuthAccessToken(accessToken);
-    if (!resolvedToken && !mockEnabled) return;
-    setLoading(true);
+  const visibleStateRef = useRef(false);
+  useEffect(() => {
+    visibleStateRef.current = Boolean(breakdown);
+  }, [breakdown]);
+
+  const applySnapshot = useCallback((snapshot: any) => {
+    if (!snapshot) return;
+    setBreakdown(normalizeBreakdown(snapshot.breakdown || null));
+    setSource("edge");
+    setResolvedStorageKey(storageKey);
+  }, [normalizeBreakdown, storageKey]);
+
+  const hasImmediateSnapshot =
+    resolvedStorageKey !== storageKey && Boolean(storageKey) && Boolean(normalizedLiveSnapshot?.breakdown);
+  const visibleBreakdown = hasImmediateSnapshot ? normalizedLiveSnapshot?.breakdown || null : breakdown;
+  const visibleSource = hasImmediateSnapshot ? "edge" : source;
+  const visibleLoading = hasImmediateSnapshot ? false : loading;
+  const visibleRefreshing = hasImmediateSnapshot ? true : refreshing;
+  const visibleError = hasImmediateSnapshot ? null : error;
+
+  const refresh = useCallback(async ({ signal }: any = {}) => {
+    const snapshot = readDashboardLiveSnapshot("modelBreakdown", storageKey);
+    if (snapshot?.breakdown) {
+      applySnapshot(snapshot);
+    }
+    const hasVisibleState = Boolean(snapshot?.breakdown) || visibleStateRef.current;
+    setLoading(!hasVisibleState);
+    setRefreshing(hasVisibleState);
     setError(null);
+    const resolvedToken = await resolveAuthAccessToken(accessToken);
+    if (!resolvedToken && !mockEnabled) {
+      if (!signal?.aborted) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
+    if (!resolvedToken && !mockEnabled) return;
+    if (signal?.aborted) return;
     try {
       const res = await getUsageModelBreakdown({
         baseUrl,
@@ -77,38 +124,48 @@ export function useUsageModelBreakdown({
         to,
         timeZone,
         tzOffsetMinutes,
+        signal,
       });
-      setBreakdown(res || null);
+      if (signal?.aborted) return;
+      const normalized = normalizeBreakdown(res || null);
+      setBreakdown(normalized);
       setSource("edge");
-      if (res && cacheAllowed) {
-        writeCache({ breakdown: res, fetchedAt: new Date().toISOString() });
+      setResolvedStorageKey(storageKey);
+      writeDashboardLiveSnapshot("modelBreakdown", storageKey, {
+        breakdown: normalized,
+      });
+      if (normalized && cacheAllowed) {
+        writeCache({ breakdown: normalized, fetchedAt: new Date().toISOString() });
       } else if (!cacheAllowed) {
         clearCache();
       }
     } catch (e) {
+      if (signal?.aborted || (e as any)?.name === "AbortError") return;
       if (cacheAllowed) {
         const cached = readCache();
         if (cached?.breakdown) {
-          setBreakdown(cached.breakdown);
+          setBreakdown(normalizeBreakdown(cached.breakdown));
           setSource("cache");
           setError(null);
+          setResolvedStorageKey(storageKey);
         } else {
-          setBreakdown(null);
           setSource("edge");
           const err = e as any;
           setError(err?.message || String(err));
         }
       } else {
-        setBreakdown(null);
         setSource("edge");
         const err = e as any;
         setError(err?.message || String(err));
       }
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
+      setRefreshing(false);
     }
   }, [
     accessToken,
+    applySnapshot,
     baseUrl,
     from,
     mockEnabled,
@@ -120,6 +177,8 @@ export function useUsageModelBreakdown({
     tokenReady,
     tzOffsetMinutes,
     clearCache,
+    normalizeBreakdown,
+    storageKey,
     writeCache,
   ]);
 
@@ -129,25 +188,22 @@ export function useUsageModelBreakdown({
       setSource("edge");
       setError(null);
       setLoading(false);
+      setRefreshing(false);
+      setResolvedStorageKey(storageKey);
       return;
     }
-    if (!cacheAllowed) {
-      clearCache();
-      setBreakdown(null);
-      setSource("edge");
-      setError(null);
-    } else {
-      const cached = readCache();
-      if (cached?.breakdown) {
-        setBreakdown(cached.breakdown);
-        setSource("cache");
-      }
-    }
-    refresh();
+    setLoading(true);
+    if (!cacheAllowed) clearCache();
+    setSource("edge");
+    setError(null);
+    const controller = new AbortController();
+    refresh({ signal: controller.signal });
+    return () => {
+      controller.abort();
+    };
   }, [
     accessToken,
     mockEnabled,
-    readCache,
     refresh,
     tokenReady,
     guestAllowed,
@@ -155,22 +211,12 @@ export function useUsageModelBreakdown({
     clearCache,
   ]);
 
-  const normalizedSource = mockEnabled ? "mock" : source;
-
   return {
-    breakdown,
-    source: normalizedSource,
-    loading,
-    error,
+    breakdown: visibleBreakdown,
+    source: mockEnabled ? "mock" : visibleSource,
+    loading: visibleLoading,
+    refreshing: visibleRefreshing,
+    error: visibleError,
     refresh,
   };
-}
-
-function safeHost(baseUrl: any) {
-  try {
-    const url = new URL(baseUrl);
-    return url.host;
-  } catch (_e) {
-    return null;
-  }
 }

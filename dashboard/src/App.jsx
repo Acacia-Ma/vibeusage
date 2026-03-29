@@ -1,37 +1,10 @@
-import React, {
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-
 import { useAuth as useInsforgeAuth } from "@insforge/react-router";
-
-import { getInsforgeBaseUrl } from "./lib/config";
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
-import { LandingPage } from "./pages/LandingPage.jsx";
-import { isMockEnabled } from "./lib/mock-data";
-import { fetchLatestTrackerVersion } from "./lib/npm-version";
-import { isScreenshotModeEnabled } from "./lib/screenshot-mode";
 import { getAppVersion } from "./lib/app-version";
+import { getSafeSessionStorage, shouldRedirectFromAuthCallback } from "./lib/auth-callback";
 import { resolveAuthGate } from "./lib/auth-gate";
-import {
-  getSafeSessionStorage,
-  shouldRedirectFromAuthCallback,
-} from "./lib/auth-callback";
-import {
-  clearAuthStorage,
-  clearSessionExpired,
-  clearSessionSoftExpired,
-  loadSessionExpired,
-  loadSessionSoftExpired,
-  subscribeSessionExpired,
-  subscribeSessionSoftExpired,
-} from "./lib/auth-storage";
-import { isLikelyExpiredAccessToken } from "./lib/auth-token";
 import {
   buildRedirectUrl,
   consumePostAuthPath,
@@ -39,9 +12,26 @@ import {
   storeRedirectFromSearch,
   stripRedirectParam,
 } from "./lib/auth-redirect";
-import { insforgeAuthClient } from "./lib/insforge-auth-client";
+import {
+  clearAuthStorage,
+  clearSessionExpired,
+  clearSessionSoftExpired,
+  loadSessionExpired,
+  loadSessionSoftExpired,
+  shouldClearSessionSoftExpiredForToken,
+  subscribeSessionExpired,
+  subscribeSessionSoftExpired,
+} from "./lib/auth-storage";
+import { getAccessTokenUserId, isLikelyExpiredAccessToken } from "./lib/auth-token";
+import { getInsforgeBaseUrl } from "./lib/config";
+import { resolveCurrentIdentity } from "./lib/current-identity";
+import { getCurrentInsforgeSession } from "./lib/insforge-auth-client";
 import { clearInsforgePersistentStorage } from "./lib/insforge-client";
-
+import { isMockEnabled } from "./lib/mock-data";
+import { fetchLatestTrackerVersion } from "./lib/npm-version";
+import { isScreenshotModeEnabled } from "./lib/screenshot-mode";
+import { probeBackend } from "./lib/vibeusage-api";
+import { LandingPage } from "./pages/LandingPage.jsx";
 import { UpgradeAlertModal } from "./ui/matrix-a/components/UpgradeAlertModal.jsx";
 import { VersionBadge } from "./ui/matrix-a/components/VersionBadge.jsx";
 
@@ -57,19 +47,19 @@ function buildAuthEntryUrl(basePath, nextPath) {
 const DashboardPage = React.lazy(() =>
   import("./pages/DashboardPage.jsx").then((mod) => ({
     default: mod.DashboardPage,
-  }))
+  })),
 );
 
 const LeaderboardPage = React.lazy(() =>
   import("./pages/LeaderboardPage.jsx").then((mod) => ({
     default: mod.LeaderboardPage,
-  }))
+  })),
 );
 
 const LeaderboardProfilePage = React.lazy(() =>
   import("./pages/LeaderboardProfilePage.jsx").then((mod) => ({
     default: mod.LeaderboardProfilePage,
-  }))
+  })),
 );
 
 export default function App() {
@@ -89,12 +79,9 @@ export default function App() {
   const appVersion = useMemo(() => getAppVersion(import.meta.env), []);
   const [latestVersion, setLatestVersion] = useState(null);
   const [insforgeSession, setInsforgeSession] = useState();
-  const [sessionExpired, setSessionExpired] = useState(() =>
-    loadSessionExpired()
-  );
-  const [sessionSoftExpired, setSessionSoftExpired] = useState(() =>
-    loadSessionSoftExpired()
-  );
+  const [currentIdentity, setCurrentIdentity] = useState(undefined);
+  const [sessionExpired, setSessionExpired] = useState(() => loadSessionExpired());
+  const [sessionSoftExpired, setSessionSoftExpired] = useState(() => loadSessionSoftExpired());
 
   useEffect(() => {
     let active = true;
@@ -123,15 +110,16 @@ export default function App() {
     }
     let active = true;
     const refreshSession = () => {
-      return insforgeAuthClient.auth
-        .getCurrentSession()
-        .then(({ data }) => {
+      return getCurrentInsforgeSession()
+        .then((session) => {
           if (!active) return;
-          const session = data?.session ?? null;
           setInsforgeSession(session);
-          
+
           // Debug logging for mobile troubleshooting
-          if (process.env.NODE_ENV === "development" || window.location.search.includes("debug=1")) {
+          if (
+            process.env.NODE_ENV === "development" ||
+            window.location.search.includes("debug=1")
+          ) {
             // eslint-disable-next-line no-console
             console.log("[Auth] Session refreshed:", {
               hasSession: Boolean(session?.accessToken),
@@ -143,7 +131,10 @@ export default function App() {
         .catch((err) => {
           if (!active) return;
           setInsforgeSession(null);
-          if (process.env.NODE_ENV === "development" || window.location.search.includes("debug=1")) {
+          if (
+            process.env.NODE_ENV === "development" ||
+            window.location.search.includes("debug=1")
+          ) {
             // eslint-disable-next-line no-console
             console.warn("[Auth] Session refresh failed:", err);
           }
@@ -154,6 +145,35 @@ export default function App() {
       active = false;
     };
   }, [insforgeLoaded, insforgeSignedIn]);
+
+  useEffect(() => {
+    if (!insforgeLoaded) {
+      setCurrentIdentity(undefined);
+      return;
+    }
+
+    const sessionToken = insforgeSession?.accessToken ?? null;
+    if (!sessionToken || isLikelyExpiredAccessToken(sessionToken)) {
+      setCurrentIdentity(null);
+      return;
+    }
+
+    let active = true;
+    setCurrentIdentity(undefined);
+    resolveCurrentIdentity(insforgeSession)
+      .then((identity) => {
+        if (!active) return;
+        setCurrentIdentity(identity);
+      })
+      .catch(() => {
+        if (!active) return;
+        setCurrentIdentity(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [insforgeLoaded, insforgeSession]);
 
   useEffect(() => {
     return subscribeSessionExpired((next) => {
@@ -169,10 +189,7 @@ export default function App() {
 
   useEffect(() => {
     if (!insforgeLoaded) return;
-    if (
-      insforgeSession?.accessToken &&
-      !isLikelyExpiredAccessToken(insforgeSession.accessToken)
-    ) {
+    if (insforgeSession?.accessToken && !isLikelyExpiredAccessToken(insforgeSession.accessToken)) {
       return;
     }
     if (!sessionSoftExpired) return;
@@ -181,19 +198,21 @@ export default function App() {
   }, [insforgeLoaded, insforgeSession, sessionSoftExpired]);
 
   const getInsforgeAccessToken = useCallback(async () => {
-    const fallbackToken =
-      !isLikelyExpiredAccessToken(insforgeSession?.accessToken)
-        ? insforgeSession?.accessToken ?? null
-        : null;
-    if (!insforgeSignedIn) {
+    const fallbackToken = !isLikelyExpiredAccessToken(insforgeSession?.accessToken)
+      ? (insforgeSession?.accessToken ?? null)
+      : null;
+    if (fallbackToken) {
       return fallbackToken;
     }
-    const { data } = await insforgeAuthClient.auth.getCurrentSession();
-    const sessionToken = data?.session?.accessToken ?? null;
+    if (!insforgeSignedIn) {
+      return null;
+    }
+    const session = await getCurrentInsforgeSession();
+    const sessionToken = session?.accessToken ?? null;
     if (!isLikelyExpiredAccessToken(sessionToken)) {
       return sessionToken;
     }
-    return fallbackToken;
+    return null;
   }, [insforgeSession, insforgeSignedIn]);
 
   useEffect(() => {
@@ -206,10 +225,22 @@ export default function App() {
         return;
       }
       try {
-        const { data } = await insforgeAuthClient.auth.getCurrentSession();
+        const session = await getCurrentInsforgeSession();
         if (!active) return;
-        if (data?.session?.accessToken) {
+        const nextToken = session?.accessToken ?? null;
+        if (shouldClearSessionSoftExpiredForToken(nextToken)) {
           clearSessionSoftExpired();
+          return;
+        }
+        if (!nextToken || isLikelyExpiredAccessToken(nextToken)) {
+          return;
+        }
+        try {
+          await probeBackend({ baseUrl, accessToken: nextToken });
+          if (!active) return;
+          clearSessionSoftExpired();
+        } catch (_probeError) {
+          // Keep the soft-expired guard until the same token can pass a protected probe.
         }
       } catch (_e) {
         // ignore refresh errors
@@ -232,20 +263,18 @@ export default function App() {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("focus", onFocus);
     };
-  }, [insforgeSignedIn, sessionSoftExpired]);
+  }, [baseUrl, insforgeSignedIn, sessionSoftExpired]);
 
   const insforgeAuth = useMemo(() => {
     const sessionToken = insforgeSession?.accessToken ?? null;
     if (!sessionToken || isLikelyExpiredAccessToken(sessionToken)) return null;
     const user = insforgeSession.user;
-    const profileName = user?.profile?.name;
-    const displayName = profileName ?? user?.name ?? null;
+    const userId = user?.id ?? getAccessTokenUserId(sessionToken);
     return {
       accessToken: sessionToken,
       getAccessToken: getInsforgeAccessToken,
-      userId: user?.id ?? null,
+      userId,
       email: user?.email ?? null,
-      name: displayName,
       savedAt: new Date().toISOString(),
     };
   }, [getInsforgeAccessToken, insforgeSession]);
@@ -260,14 +289,12 @@ export default function App() {
     const target = resolveRedirectTarget(window.location.search);
     if (target) {
       const user = insforgeSession.user;
-      const profileName = user?.profile?.name;
-      const displayName = profileName ?? user?.name ?? null;
+      const userId = user?.id ?? getAccessTokenUserId(sessionToken);
       redirectOnceRef.current = true;
       const redirectUrl = buildRedirectUrl(target, {
         accessToken: sessionToken,
-        userId: user?.id ?? null,
+        userId,
         email: user?.email ?? null,
-        name: displayName,
       });
       window.location.assign(redirectUrl);
       return;
@@ -277,15 +304,13 @@ export default function App() {
     if (normalizedPath !== "/auth/callback") return;
 
     const nextPath = consumePostAuthPath();
-    const destination =
-      nextPath && nextPath !== "/auth/callback" ? nextPath : "/";
+    const destination = nextPath && nextPath !== "/auth/callback" ? nextPath : "/";
     redirectOnceRef.current = true;
     navigate(destination, { replace: true });
   }, [insforgeSession, navigate, sessionExpired]);
 
   const hasInsforgeSession = Boolean(
-    insforgeSession?.accessToken &&
-      !isLikelyExpiredAccessToken(insforgeSession.accessToken)
+    insforgeSession?.accessToken && !isLikelyExpiredAccessToken(insforgeSession.accessToken),
   );
   const insforgeReady = insforgeLoaded && insforgeSignedIn;
   const useInsforge = insforgeReady || (insforgeLoaded && hasInsforgeSession);
@@ -296,6 +321,16 @@ export default function App() {
     if (!useInsforge || !hasInsforgeSession) return null;
     return insforgeAuth;
   }, [hasInsforgeSession, insforgeAuth, useInsforge]);
+
+  useEffect(() => {
+    if (!insforgeLoaded) return;
+    if (insforgeSignedIn || hasInsforgeSession) return;
+    clearInsforgePersistentStorage();
+    clearAuthStorage();
+    clearSessionExpired();
+    clearSessionSoftExpired();
+  }, [hasInsforgeSession, insforgeLoaded, insforgeSignedIn]);
+
   const signOut = useMemo(() => {
     return async () => {
       try {
@@ -329,24 +364,15 @@ export default function App() {
     if (normalizedPath === "/auth/callback") return null;
     const search = location?.search || "";
     const hash = location?.hash || "";
-    const url = new URL(
-      `${normalizedPath}${search}${hash}`,
-      window.location.origin
-    );
+    const url = new URL(`${normalizedPath}${search}${hash}`, window.location.origin);
     // CLI uses these to pass a loopback callback to complete auth. They are not SPA paths.
     url.searchParams.delete("redirect");
     url.searchParams.delete("base_url");
     const candidate = `${url.pathname}${url.search}${url.hash}`;
     return candidate === "/" ? null : candidate;
   }, [location?.hash, location?.search, pathname]);
-  const signInUrl = useMemo(
-    () => buildAuthEntryUrl("/sign-in", postAuthNext),
-    [postAuthNext]
-  );
-  const signUpUrl = useMemo(
-    () => buildAuthEntryUrl("/sign-up", postAuthNext),
-    [postAuthNext]
-  );
+  const signInUrl = useMemo(() => buildAuthEntryUrl("/sign-in", postAuthNext), [postAuthNext]);
+  const signUpUrl = useMemo(() => buildAuthEntryUrl("/sign-up", postAuthNext), [postAuthNext]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -397,6 +423,7 @@ export default function App() {
         <PageComponent
           baseUrl={baseUrl}
           auth={auth}
+          currentIdentity={currentIdentity}
           signedIn={signedIn}
           sessionSoftExpired={sessionSoftExpired}
           signOut={signOut}

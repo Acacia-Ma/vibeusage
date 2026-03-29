@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-
-import {
-  buildActivityHeatmap,
-  computeActiveStreakDays,
-  getHeatmapRangeLocal,
-} from "../lib/activity-heatmap";
-import { isMockEnabled } from "../lib/mock-data";
+import { getHeatmapRangeLocal } from "../lib/activity-heatmap";
 import { isAccessTokenReady, resolveAuthAccessToken } from "../lib/auth-token";
-import { getUsageDaily, getUsageHeatmap } from "../lib/vibeusage-api";
+import {
+  buildDashboardCacheKey,
+  clearDashboardCache,
+  readDashboardCache,
+  writeDashboardCache,
+} from "../lib/dashboard-cache";
+import { isMockEnabled } from "../lib/mock-data";
 import { getTimeZoneCacheKey } from "../lib/timezone";
+import { getUsageHeatmap } from "../lib/vibeusage-api";
 
 export function useActivityHeatmap({
   baseUrl,
@@ -33,192 +34,63 @@ export function useActivityHeatmap({
   const tokenReady = isAccessTokenReady(accessToken);
   const cacheAllowed = !guestAllowed;
 
-  const storageKey = useMemo(() => {
-    if (!cacheKey) return null;
-    const tzKey = getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes });
-    return `vibeusage.heatmap.${cacheKey}.${weeks}.${weekStartsOn}.${tzKey}`;
-  }, [cacheKey, timeZone, tzOffsetMinutes, weeks, weekStartsOn]);
+  const storageKey = useMemo(
+    () =>
+      buildDashboardCacheKey({
+        scope: "heatmap",
+        cacheKey,
+        baseUrl,
+        segments: [weeks, weekStartsOn, getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes })],
+      }),
+    [baseUrl, cacheKey, timeZone, tzOffsetMinutes, weeks, weekStartsOn],
+  );
 
   const readCache = useCallback(() => {
-    if (!storageKey || typeof window === "undefined") return null;
-    try {
-      const raw = window.localStorage.getItem(storageKey);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed || !parsed.heatmap) return null;
-      return parsed;
-    } catch (_e) {
-      return null;
-    }
+    return readDashboardCache(storageKey, (parsed) => Boolean(parsed?.heatmap));
   }, [storageKey]);
 
   const writeCache = useCallback(
     (payload: any) => {
-      if (!storageKey || typeof window === "undefined") return;
-      try {
-        window.localStorage.setItem(storageKey, JSON.stringify(payload));
-      } catch (_e) {
-        // ignore write errors (quota/private mode)
-      }
+      writeDashboardCache(storageKey, payload, { source: "edge" });
     },
-    [storageKey]
+    [storageKey],
   );
 
   const clearCache = useCallback(() => {
-    if (!storageKey || typeof window === "undefined") return;
-    try {
-      window.localStorage.removeItem(storageKey);
-    } catch (_e) {
-      // ignore remove errors (quota/private mode)
-    }
+    clearDashboardCache(storageKey);
   }, [storageKey]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async ({ signal }: any = {}) => {
     const resolvedToken = await resolveAuthAccessToken(accessToken);
     if (!resolvedToken && !mockEnabled) return;
+    if (signal?.aborted) return;
     setLoading(true);
     setError(null);
     try {
-      try {
-        const res = await getUsageHeatmap({
-          baseUrl,
-          accessToken: resolvedToken,
-          weeks,
-          to: range.to,
-          weekStartsOn,
-          timeZone,
-          tzOffsetMinutes,
-        });
-        const weeksData = Array.isArray(res?.weeks) ? res.weeks : [];
-        if (!weeksData.length && cacheAllowed) {
-          const cached = readCache();
-          if (cached?.heatmap) {
-            setHeatmap(cached.heatmap);
-            setDaily(cached.daily || []);
-            setSource("cache");
-            return;
-          }
-        }
-        const hasLevels = weeksData.some((week: any) =>
-          (Array.isArray(week) ? week : []).some((cell: any) =>
-            cell && Number.isFinite(Number(cell.level))
-          )
-        );
-        if (!hasLevels && weeksData.length) {
-          const rows = [];
-          for (const week of weeksData) {
-            for (const cell of Array.isArray(week) ? week : []) {
-              if (!cell?.day) continue;
-              rows.push({
-                day: cell.day,
-                total_tokens: cell.total_tokens ?? cell.value ?? 0,
-                billable_total_tokens:
-                  cell.billable_total_tokens ?? cell.value ?? cell.total_tokens ?? 0,
-              });
-            }
-          }
-          const localHeatmap = buildActivityHeatmap({
-            dailyRows: rows,
-            weeks,
-            to: res?.to || range.to,
-            weekStartsOn,
-          });
-          setDaily(rows);
-          setHeatmap({
-            ...localHeatmap,
-            week_starts_on: weekStartsOn,
-            active_days: rows.filter(
-              (r: any) => Number(r?.billable_total_tokens ?? r?.total_tokens) > 0
-            ).length,
-            streak_days: computeActiveStreakDays({
-              dailyRows: rows,
-              to: res?.to || range.to,
-            }),
-          });
-          setSource("client");
-          if (cacheAllowed) {
-            writeCache({
-              heatmap: {
-                ...localHeatmap,
-                week_starts_on: weekStartsOn,
-                active_days: rows.filter(
-                  (r: any) => Number(r?.billable_total_tokens ?? r?.total_tokens) > 0
-                ).length,
-                streak_days: computeActiveStreakDays({
-                  dailyRows: rows,
-                  to: res?.to || range.to,
-                }),
-              },
-              daily: rows,
-              fetchedAt: new Date().toISOString(),
-            });
-          } else {
-            clearCache();
-          }
-          return;
-        }
-
-        setHeatmap(res || null);
-        setDaily([]);
-        setSource("edge");
-        if (res && cacheAllowed) {
-          writeCache({
-            heatmap: res,
-            daily: [],
-            fetchedAt: new Date().toISOString(),
-          });
-        } else if (!cacheAllowed) {
-          clearCache();
-        }
-        return;
-      } catch (e) {
-        const err = e as any;
-        const status = err?.status ?? err?.statusCode;
-        if (status === 401 || status === 403) throw e;
-      }
-
-      const dailyRes = await getUsageDaily({
+      const res = await getUsageHeatmap({
         baseUrl,
         accessToken: resolvedToken,
-        from: range.from,
-        to: range.to,
-        timeZone,
-        tzOffsetMinutes,
-      });
-      const rows = Array.isArray(dailyRes?.data) ? dailyRes.data : [];
-      setDaily(rows);
-      const localHeatmap = buildActivityHeatmap({
-        dailyRows: rows,
         weeks,
         to: range.to,
         weekStartsOn,
+        timeZone,
+        tzOffsetMinutes,
+        signal,
       });
-      setHeatmap({
-        ...localHeatmap,
-        week_starts_on: weekStartsOn,
-        active_days: rows.filter(
-          (r: any) => Number(r?.billable_total_tokens ?? r?.total_tokens) > 0
-        ).length,
-        streak_days: computeActiveStreakDays({ dailyRows: rows, to: range.to }),
-      });
-      setSource("client");
+      if (signal?.aborted) return;
+      setHeatmap(res || null);
+      setSource("edge");
       if (cacheAllowed) {
         writeCache({
-          heatmap: {
-            ...localHeatmap,
-            week_starts_on: weekStartsOn,
-            active_days: rows.filter(
-              (r: any) => Number(r?.billable_total_tokens ?? r?.total_tokens) > 0
-            ).length,
-            streak_days: computeActiveStreakDays({ dailyRows: rows, to: range.to }),
-          },
-          daily: rows,
+          heatmap: res || null,
+          daily: [],
           fetchedAt: new Date().toISOString(),
         });
       } else {
         clearCache();
       }
     } catch (e) {
+      if (signal?.aborted || (e as any)?.name === "AbortError") return;
       if (cacheAllowed) {
         const cached = readCache();
         if (cached?.heatmap) {
@@ -229,18 +101,15 @@ export function useActivityHeatmap({
         } else {
           const err = e as any;
           setError(err?.message || String(err));
-          setDaily([]);
-          setHeatmap(null);
           setSource("edge");
         }
       } else {
         const err = e as any;
         setError(err?.message || String(err));
-        setDaily([]);
-        setHeatmap(null);
         setSource("edge");
       }
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, [
@@ -252,7 +121,6 @@ export function useActivityHeatmap({
     range.from,
     range.to,
     readCache,
-    tokenReady,
     timeZone,
     tzOffsetMinutes,
     weekStartsOn,
@@ -270,25 +138,18 @@ export function useActivityHeatmap({
       setSource("edge");
       return;
     }
-    if (!cacheAllowed) {
-      clearCache();
-      setDaily([]);
-      setError(null);
-      setHeatmap(null);
-      setSource("edge");
-    } else {
-      const cached = readCache();
-      if (cached?.heatmap) {
-        setHeatmap(cached.heatmap);
-        setDaily(cached.daily || []);
-        setSource("cache");
-      }
-    }
-    refresh();
+    setLoading(true);
+    if (!cacheAllowed) clearCache();
+    setError(null);
+    setSource("edge");
+    const controller = new AbortController();
+    refresh({ signal: controller.signal });
+    return () => {
+      controller.abort();
+    };
   }, [
     accessToken,
     mockEnabled,
-    readCache,
     refresh,
     tokenReady,
     guestAllowed,
@@ -296,11 +157,7 @@ export function useActivityHeatmap({
     clearCache,
   ]);
 
-  const normalizedSource = mockEnabled
-    ? "mock"
-    : source === "client"
-      ? "edge"
-      : source;
+  const normalizedSource = mockEnabled ? "mock" : source;
 
   return { range, daily, heatmap, source: normalizedSource, loading, error, refresh };
 }

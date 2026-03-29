@@ -3,21 +3,16 @@ import { Select } from "@base-ui/react/select";
 
 import { copy } from "../../../lib/copy";
 import { formatCompactNumber, toDisplayNumber, toFiniteNumber } from "../../../lib/format";
+import { fetchGithubRepoMeta } from "../../../lib/github-repo-meta";
 import { AsciiBox } from "../../foundation/AsciiBox.jsx";
 import { shouldFetchGithubStars } from "../util/should-fetch-github-stars.js";
 
 const LIMIT_OPTIONS = [3, 6, 10];
-const REPO_META_CACHE = new Map();
 
 function splitRepoKey(value) {
   if (typeof value !== "string") return { owner: "", repo: "" };
   const [owner, repo] = value.split("/");
   return { owner: owner || "", repo: repo || "" };
-}
-
-function normalizeStars(value) {
-  if (!Number.isFinite(value)) return null;
-  return Math.max(0, Math.round(value));
 }
 
 function resolveTokens(entry) {
@@ -32,26 +27,11 @@ function resolveTokens(entry) {
   return billable ?? total ?? null;
 }
 
-function resolveRepoMeta(repoId) {
-  if (!repoId) return null;
-  return REPO_META_CACHE.get(repoId) || null;
-}
-
-function cacheRepoMeta(repoId, meta) {
-  if (!repoId || !meta) return;
-  REPO_META_CACHE.set(repoId, meta);
-}
-
 function useGithubRepoMeta(repoId) {
-  const [state, setState] = useState(() => resolveRepoMeta(repoId) || null);
+  const [state, setState] = useState(null);
 
   useEffect(() => {
     if (!repoId) return;
-    const cached = resolveRepoMeta(repoId);
-    if (cached) {
-      setState(cached);
-      return;
-    }
 
     if (typeof window === "undefined") return;
     const prefersReducedMotion =
@@ -66,22 +46,14 @@ function useGithubRepoMeta(repoId) {
     }
 
     let active = true;
-    fetch(`https://api.github.com/repos/${repoId}`)
-      .then((res) => res.json())
-      .then((data) => {
+    fetchGithubRepoMeta(repoId)
+      .then((meta) => {
         if (!active) return;
-        const meta = {
-          stars: normalizeStars(data?.stargazers_count),
-          avatarUrl: typeof data?.owner?.avatar_url === "string" ? data.owner.avatar_url : null,
-        };
-        cacheRepoMeta(repoId, meta);
         setState(meta);
       })
       .catch(() => {
         if (!active) return;
-        const meta = { stars: null, avatarUrl: null };
-        cacheRepoMeta(repoId, meta);
-        setState(meta);
+        setState({ stars: null, avatarUrl: null });
       });
 
     return () => {
@@ -104,6 +76,7 @@ export function ProjectUsagePanel({
   const tokensLabel = copy("dashboard.projects.tokens_label");
   const starsLabel = copy("dashboard.projects.stars_label");
   const emptyLabel = copy("dashboard.projects.empty");
+  const errorLabel = copy("backend.meta.error_label");
   const limitLabel = copy("dashboard.projects.limit_label");
   const limitAria = copy("dashboard.projects.limit_aria");
   const optionLabels = {
@@ -123,6 +96,29 @@ export function ProjectUsagePanel({
   }, [entries]);
 
   const displayEntries = sortedEntries.slice(0, Math.max(1, limit));
+  const placeholderEntries = Array.from({ length: Math.max(1, resolvedLimit) }, (_, index) => {
+    return index;
+  });
+  let emptyStateContent = emptyLabel;
+  if (loading) {
+    emptyStateContent = (
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+        {placeholderEntries.map((index) => (
+          <ProjectUsagePlaceholderCard
+            key={`placeholder-${index}`}
+            placeholder={placeholder}
+          />
+        ))}
+      </div>
+    );
+  } else if (error) {
+    emptyStateContent = (
+      <>
+        <span>{errorLabel}:</span>{" "}
+        <span className="normal-case tracking-normal">{error}</span>
+      </>
+    );
+  }
 
   const tokenFormatOptions = {
     thousandSuffix: copy("shared.unit.thousand_abbrev"),
@@ -145,7 +141,6 @@ export function ProjectUsagePanel({
         <div className="relative">
           <Select.Root
             value={resolvedLimit}
-            modal={false}
             items={LIMIT_OPTIONS.map((value) => ({
               value,
               label: optionLabels[value],
@@ -164,9 +159,9 @@ export function ProjectUsagePanel({
               <span className="text-matrix-bright">▾</span>
             </Select.Trigger>
             <Select.Portal>
-              <Select.Positioner align="end" side="bottom" sideOffset={8}>
-                <Select.Popup className="w-40 border border-matrix-ghost bg-matrix-panelStrong backdrop-blur-md z-20">
-                  <Select.List aria-label={limitAria}>
+              <Select.Positioner align="end" side="bottom" sideOffset={8} className="z-50">
+                <Select.Popup className="w-40 border border-matrix-ghost bg-matrix-panelStrong backdrop-blur-md pointer-events-auto">
+                  <Select.List aria-label={limitAria} role="listbox">
                     {LIMIT_OPTIONS.map((value) => (
                       <Select.Item
                         key={value}
@@ -192,7 +187,7 @@ export function ProjectUsagePanel({
 
       {displayEntries.length === 0 ? (
         <div className="text-caption text-matrix-muted uppercase tracking-[0.2em]">
-          {loading ? placeholder : error ? placeholder : emptyLabel}
+          {emptyStateContent}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -326,5 +321,26 @@ function ProjectUsageCard({
         </span>
       </div>
     </a>
+  );
+}
+
+function ProjectUsagePlaceholderCard({ placeholder }) {
+  return (
+    <div
+      className="relative flex h-full min-h-[152px] flex-col gap-3 border border-matrix-ghost bg-matrix-panel px-4 py-5 opacity-60"
+      data-project-card-placeholder="true"
+    >
+      <div className="flex items-start gap-3">
+        <div className="h-10 w-10 rounded-full border border-matrix-ghost bg-matrix-panelStrong" />
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <div className="h-4 w-24 border border-matrix-ghost bg-matrix-panelStrong" />
+          <div className="h-3 w-32 border border-matrix-ghost bg-matrix-panelStrong" />
+        </div>
+      </div>
+      <div className="mt-auto flex items-center justify-between gap-4 text-caption uppercase tracking-[0.2em] text-matrix-muted">
+        <span>{placeholder}</span>
+        <span>{placeholder}</span>
+      </div>
+    </div>
   );
 }

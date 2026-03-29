@@ -4,9 +4,11 @@ This document describes the public Edge Function endpoints used by the VibeUsage
 
 ## Source of truth (important)
 
-- Author source code lives in `insforge-src/`.
-- Deployable artifacts live in `insforge-functions/` and are generated (single-file).
-- Do not hand-edit `insforge-functions/*.js`; edit `insforge-src/` and rebuild.
+- The only author source for live `vibeusage-*` Edge Functions is `insforge-src/functions-esm/`.
+- Shared ESM helpers for function authoring live under `insforge-src/functions-esm/shared/` and `insforge-src/shared/*.mjs`.
+- Deployable artifacts live in `insforge-functions/` and are generated as single-file ESM outputs.
+- `insforge-src/functions/` is retired and must not be used for authoring, local loading, test fixtures, or deploy decisions.
+- Do not hand-edit `insforge-functions/*.js`; edit the authoritative source under `insforge-src/functions-esm/`.
 
 ## Build & deploy
 
@@ -25,9 +27,14 @@ npm run build:insforge:check
 Deploy (example):
 
 ```bash
-# Update code only; keep existing slugs.
-insforge2 update-function --slug vibeusage-usage-summary --codeFile insforge-functions/vibeusage-usage-summary.js
+# ESM author sources are bundled into single-file deploy artifacts first.
+insforge2 update-function --slug vibeusage-device-token-issue --codeFile insforge-functions/vibeusage-device-token-issue.js
 ```
+
+Runtime note:
+
+- Generated artifacts inject `npm:@insforge/sdk` at the top level and bind `globalThis.createClient` inside the artifact before the handler runs.
+- The deployed ESM handler must not assume the InsForge runtime injects `globalThis.createClient` for us.
 
 ## Auth models
 
@@ -802,7 +809,8 @@ Return token usage leaderboard for the current UTC period window.
 
 Auth:
 
-- `Authorization: Bearer <user_jwt>`
+- Optional `Authorization: Bearer <user_jwt>`
+- Anonymous requests are supported and return public rows only (`me=null`)
 
 Query:
 
@@ -824,8 +832,10 @@ Rules:
 - Unknown/unclassified models are included in the `other_tokens` bucket.
 - Privacy-safe: no email and no raw logs.
 - `entries[].is_public` is always a boolean.
+- Public gating uses canonical `vibeusage_public_views` active state (`revoked_at IS NULL`) at read time.
 - `entries[].user_id` is exposed only when `is_public=true`; otherwise it is `null`.
-- Response includes `me` even when not in Top N.
+- When authenticated, response includes `me` (even when not in Top N).
+- When anonymous, `me` is `null`.
 
 Response:
 
@@ -864,6 +874,98 @@ Response:
   }
 }
 ```
+
+---
+
+### GET /functions/vibeusage-leaderboard-profile
+
+Return a single leaderboard snapshot entry for a requested `user_id` and period.
+
+Auth:
+
+- Optional `Authorization: Bearer <user_jwt>`
+- Anonymous access is allowed for public profiles
+
+Query:
+
+- `user_id=<uuid>` (required)
+- `period=week|month|total` (optional, default `week`)
+
+Rules:
+
+- Self access (authenticated and `user_id === me`) is always allowed.
+- Non-self access requires active canonical public visibility (`vibeusage_public_views.revoked_at IS NULL`).
+- Snapshot `is_public` is not used as authorization truth.
+
+Response:
+
+```json
+{
+  "period": "week",
+  "from": "YYYY-MM-DD",
+  "to": "YYYY-MM-DD",
+  "generated_at": "iso",
+  "entry": {
+    "user_id": "uuid",
+    "display_name": "string",
+    "avatar_url": "string|null",
+    "rank": 1,
+    "gpt_tokens": "0",
+    "claude_tokens": "0",
+    "other_tokens": "0",
+    "total_tokens": "0"
+  }
+}
+```
+
+---
+
+### GET /functions/vibeusage-public-visibility
+
+Read effective public visibility state for current user.
+
+Auth:
+
+- `Authorization: Bearer <user_jwt>`
+
+Response:
+
+```json
+{ "enabled": true, "updated_at": "iso", "share_token": "pv1-<uuid>" }
+```
+
+Notes:
+
+- `enabled` is canonical state from `vibeusage_public_views` active row (`revoked_at IS NULL`).
+- `share_token` is present only when `enabled=true`.
+
+---
+
+### POST /functions/vibeusage-public-visibility
+
+Toggle effective public visibility for current user.
+
+Auth:
+
+- `Authorization: Bearer <user_jwt>`
+
+Request body:
+
+```json
+{ "enabled": true }
+```
+
+Response:
+
+```json
+{ "enabled": true, "updated_at": "iso", "share_token": "pv1-<uuid>" }
+```
+
+Notes:
+
+- `enabled=true`: upsert/activate public row (`revoked_at=null`).
+- `enabled=false`: revoke public row (`revoked_at=now`).
+- Hard-cut semantics: ON => visible immediately; OFF => hidden immediately.
 
 ---
 
@@ -920,25 +1022,16 @@ curl -s "$BASE_URL/functions/vibeusage-leaderboard?period=week" \
 
 ---
 
-### POST /functions/vibeusage-leaderboard-settings
+### Retired endpoints (hard-cut)
 
-Update the current user's leaderboard privacy setting.
+The following endpoints are retired and return `410 Gone` with `{ "error": "Endpoint retired" }`:
 
-Auth:
+- `POST /functions/vibeusage-leaderboard-settings`
+- `GET /functions/vibeusage-public-view-status`
+- `POST /functions/vibeusage-public-view-issue`
+- `POST /functions/vibeusage-public-view-revoke`
 
-- `Authorization: Bearer <user_jwt>`
-
-Request body:
-
-```json
-{ "leaderboard_public": true }
-```
-
-Response:
-
-```json
-{ "leaderboard_public": true, "updated_at": "iso" }
-```
+Use `GET/POST /functions/vibeusage-public-visibility` instead.
 
 ---
 

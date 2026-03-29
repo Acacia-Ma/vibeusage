@@ -1,11 +1,10 @@
-import React from "react";
 import { act, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { render } from "../../../../test/test-utils";
 import { copy } from "../../../../lib/copy";
 import { formatCompactNumber } from "../../../../lib/format";
+import { render } from "../../../../test/test-utils";
 import { ProjectUsagePanel } from "../ProjectUsagePanel.jsx";
 
 describe("ProjectUsagePanel", () => {
@@ -70,5 +69,18 @@ describe("ProjectUsagePanel", () => {
       await user.keyboard("{Escape}");
     });
     expect(screen.queryByRole("listbox", { name: limitAria })).not.toBeInTheDocument();
+  });
+
+  it("shows the current error instead of the empty placeholder", () => {
+    render(<ProjectUsagePanel entries={[]} error="JWSError JWSInvalidSignature" />);
+
+    expect(screen.getByText(/JWSError JWSInvalidSignature/)).toBeInTheDocument();
+  });
+
+  it("keeps placeholder cards visible while loading with no entries", () => {
+    const { container } = render(<ProjectUsagePanel entries={[]} loading />);
+
+    expect(container.querySelectorAll('[data-project-card-placeholder="true"]')).toHaveLength(3);
+    expect(screen.queryByText(copy("dashboard.projects.empty"))).not.toBeInTheDocument();
   });
 });

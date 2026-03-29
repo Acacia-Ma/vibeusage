@@ -131,7 +131,9 @@ Response:
       },
       "models": [
         {
-          "model": "gpt-5.2-codex",
+          "model_id": "anthropic/claude-opus-4.6",
+          "model": "anthropic/claude-opus-4.6",
+          "display_model": "claude-opus-4.6",
           "totals": {
             "total_tokens": "0",
             "input_tokens": "0",
@@ -158,6 +160,12 @@ Response:
   }
 }
 ```
+
+Model naming contract:
+
+- `model_id` is the canonical aggregation and pricing key.
+- `display_model` is a response-only display field for UI presentation.
+- Frontend model labels should prefer `display_model` and only fall back to `model` or `model_id` for display recovery.
 
 ### GET /functions/vibeusage-usage-daily
 

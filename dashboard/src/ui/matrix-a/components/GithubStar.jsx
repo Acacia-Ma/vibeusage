@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-
+import { fetchGithubRepoMeta } from "../../../lib/github-repo-meta";
 import { shouldFetchGithubStars } from "../util/should-fetch-github-stars.js";
 
 /**
@@ -25,16 +25,16 @@ export const GithubStar = ({
     if (!shouldFetchGithubStars({ prefersReducedMotion, screenshotCapture })) {
       return;
     }
-    // Attempt to fetch stars from GitHub API
-    // Note: This might hit rate limits if not authenticated, but standard for non-sensitive data
-    fetch(`https://api.github.com/repos/${repo}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && typeof data.stargazers_count === "number") {
-          setStars(data.stargazers_count);
-        }
+    let active = true;
+    fetchGithubRepoMeta(repo)
+      .then((meta) => {
+        if (!active) return;
+        setStars(meta?.stars ?? null);
       })
       .catch((err) => console.error("GitHub API fetch failed", err));
+    return () => {
+      active = false;
+    };
   }, [repo]);
 
   const baseClasses =

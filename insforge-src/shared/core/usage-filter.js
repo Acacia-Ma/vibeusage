@@ -1,22 +1,12 @@
-'use strict';
+"use strict";
 
-const { normalizeUsageModel } = require('../model');
-const { extractDateKey, resolveIdentityAtDate } = require('../model-alias-timeline');
+require("../model");
+require("../model-alias-timeline");
+require("../usage-filter-core");
 
-function shouldIncludeUsageRow({ row, canonicalModel, hasModelFilter, aliasTimeline, to }) {
-  if (!hasModelFilter) return true;
-  const rawModel = normalizeUsageModel(row?.model);
-  const dateKey = extractDateKey(row?.hour_start || row?.day) || to;
-  const identity = resolveIdentityAtDate({ rawModel, dateKey, timeline: aliasTimeline });
-  const filterIdentity = resolveIdentityAtDate({
-    rawModel: canonicalModel,
-    usageKey: canonicalModel,
-    dateKey,
-    timeline: aliasTimeline
-  });
-  return identity.model_id === filterIdentity.model_id;
-}
+const usageFilterCore = globalThis.__vibeusageUsageFilterCore;
+if (!usageFilterCore) throw new Error("usage filter core not initialized");
 
 module.exports = {
-  shouldIncludeUsageRow
+  shouldIncludeUsageRow: usageFilterCore.shouldIncludeUsageRow,
 };
