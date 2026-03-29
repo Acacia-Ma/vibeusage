@@ -1,12 +1,13 @@
-const fs = require('node:fs/promises');
-const path = require('node:path');
+const fs = require("node:fs/promises");
+const path = require("node:path");
 
-const { ensureDir, readJson, writeJson } = require('./fs');
+const { ensureDir, readJson, writeJson } = require("./fs");
 
 async function upsertNotify({ configPath, notifyCmd, notifyOriginalPath, configLabel }) {
-  const originalText = await fs.readFile(configPath, 'utf8').catch(() => null);
+  const originalText = await fs.readFile(configPath, "utf8").catch(() => null);
   if (originalText == null) {
-    const label = typeof configLabel === 'string' && configLabel.length > 0 ? configLabel : 'Config';
+    const label =
+      typeof configLabel === "string" && configLabel.length > 0 ? configLabel : "Config";
     throw new Error(`${label} not found: ${configPath}`);
   }
 
@@ -19,14 +20,17 @@ async function upsertNotify({ configPath, notifyCmd, notifyOriginalPath, configL
       await ensureDir(path.dirname(notifyOriginalPath));
       const existing = await readJson(notifyOriginalPath);
       if (!existing) {
-        await writeJson(notifyOriginalPath, { notify: existingNotify, capturedAt: new Date().toISOString() });
+        await writeJson(notifyOriginalPath, {
+          notify: existingNotify,
+          capturedAt: new Date().toISOString(),
+        });
       }
     }
 
     const updated = setNotify(originalText, notifyCmd);
-    const backupPath = `${configPath}.bak.${new Date().toISOString().replace(/[:.]/g, '-')}`;
+    const backupPath = `${configPath}.bak.${new Date().toISOString().replace(/[:.]/g, "-")}`;
     await fs.copyFile(configPath, backupPath);
-    await fs.writeFile(configPath, updated, 'utf8');
+    await fs.writeFile(configPath, updated, "utf8");
     return { changed: true, backupPath };
   }
 
@@ -34,23 +38,23 @@ async function upsertNotify({ configPath, notifyCmd, notifyOriginalPath, configL
 }
 
 async function restoreNotify({ configPath, notifyOriginalPath, expectedNotify }) {
-  const text = await fs.readFile(configPath, 'utf8').catch(() => null);
-  if (text == null) return { restored: false, skippedReason: 'config-missing' };
+  const text = await fs.readFile(configPath, "utf8").catch(() => null);
+  if (text == null) return { restored: false, skippedReason: "config-missing" };
 
   const original = await readJson(notifyOriginalPath);
   const originalNotify = Array.isArray(original?.notify) ? original.notify : null;
   const currentNotify = extractNotify(text);
 
   if (!originalNotify && expectedNotify && !arraysEqual(currentNotify, expectedNotify)) {
-    return { restored: false, skippedReason: 'no-backup-not-installed' };
+    return { restored: false, skippedReason: "no-backup-not-installed" };
   }
 
   const updated = originalNotify ? setNotify(text, originalNotify) : removeNotify(text);
-  if (updated === text) return { restored: false, skippedReason: 'no-change' };
+  if (updated === text) return { restored: false, skippedReason: "no-change" };
 
-  const backupPath = `${configPath}.bak.${new Date().toISOString().replace(/[:.]/g, '-')}`;
+  const backupPath = `${configPath}.bak.${new Date().toISOString().replace(/[:.]/g, "-")}`;
   await fs.copyFile(configPath, backupPath).catch(() => {});
-  await fs.writeFile(configPath, updated, 'utf8');
+  await fs.writeFile(configPath, updated, "utf8");
   return { restored: true, skippedReason: null };
 }
 
@@ -60,7 +64,7 @@ async function loadNotifyOriginal(notifyOriginalPath) {
 }
 
 async function readNotify(configPath) {
-  const text = await fs.readFile(configPath, 'utf8').catch(() => null);
+  const text = await fs.readFile(configPath, "utf8").catch(() => null);
   if (text == null) return null;
   return extractNotify(text);
 }
@@ -70,7 +74,7 @@ async function upsertCodexNotify({ codexConfigPath, notifyCmd, notifyOriginalPat
     configPath: codexConfigPath,
     notifyCmd,
     notifyOriginalPath,
-    configLabel: 'Codex config'
+    configLabel: "Codex config",
   });
 }
 
@@ -78,7 +82,7 @@ async function restoreCodexNotify({ codexConfigPath, notifyOriginalPath, notifyC
   return restoreNotify({
     configPath: codexConfigPath,
     notifyOriginalPath,
-    expectedNotify: notifyCmd
+    expectedNotify: notifyCmd,
   });
 }
 
@@ -95,7 +99,7 @@ async function upsertEveryCodeNotify({ codeConfigPath, notifyCmd, notifyOriginal
     configPath: codeConfigPath,
     notifyCmd,
     notifyOriginalPath,
-    configLabel: 'Every Code config'
+    configLabel: "Every Code config",
   });
 }
 
@@ -103,7 +107,7 @@ async function restoreEveryCodeNotify({ codeConfigPath, notifyOriginalPath, noti
   return restoreNotify({
     configPath: codeConfigPath,
     notifyOriginalPath,
-    expectedNotify: notifyCmd
+    expectedNotify: notifyCmd,
   });
 }
 
@@ -117,14 +121,25 @@ async function readEveryCodeNotify(codeConfigPath) {
 
 function extractNotify(text) {
   // Heuristic parse: find a line that starts with "notify =".
+  // Supports single-line arrays:
+  // - notify = ["a", "b"]
+  // And multi-line arrays:
+  // - notify = [
+  //     "a",
+  //     "b"
+  //   ]
   const lines = text.split(/\r?\n/);
-  for (const line of lines) {
-    const m = line.match(/^\s*notify\s*=\s*(.+)\s*$/);
-    if (m) {
-      const rhs = m[1].trim();
-      const parsed = parseTomlStringArray(rhs);
-      if (parsed) return parsed;
-    }
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const m = line.match(/^\s*notify\s*=\s*(.*)\s*$/);
+    if (!m) continue;
+
+    const rhs = (m[1] || "").trim();
+    const literal = readTomlArrayLiteral(lines, i, rhs);
+    if (!literal) continue;
+
+    const parsed = parseTomlStringArray(literal);
+    if (parsed) return parsed;
   }
   return null;
 }
@@ -137,12 +152,15 @@ function setNotify(text, notifyCmd) {
   let replaced = false;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const isNotify = /^\s*notify\s*=/.test(line);
-    if (isNotify) {
+    const m = line.match(/^\s*notify\s*=\s*(.*)\s*$/);
+    if (m) {
       if (!replaced) {
         out.push(notifyLine);
         replaced = true;
       }
+
+      const rhs = (m[1] || "").trim();
+      i = findTomlArrayBlockEnd(lines, i, rhs);
       continue;
     }
     out.push(line);
@@ -155,24 +173,34 @@ function setNotify(text, notifyCmd) {
     out.splice(headerIdx, 0, notifyLine);
   }
 
-  return out.join('\n').replace(/\n+$/, '\n');
+  return out.join("\n").replace(/\n+$/, "\n");
 }
 
 function removeNotify(text) {
   const lines = text.split(/\r?\n/);
-  const out = lines.filter((l) => !/^\s*notify\s*=/.test(l));
-  return out.join('\n').replace(/\n+$/, '\n');
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const m = line.match(/^\s*notify\s*=\s*(.*)\s*$/);
+    if (m) {
+      const rhs = (m[1] || "").trim();
+      i = findTomlArrayBlockEnd(lines, i, rhs);
+      continue;
+    }
+    out.push(line);
+  }
+  return out.join("\n").replace(/\n+$/, "\n");
 }
 
 function parseTomlStringArray(rhs) {
   // Minimal parser for ["a", "b"] string arrays.
   // Assumes there are no escapes in strings (good enough for our usage).
-  if (!rhs.startsWith('[') || !rhs.endsWith(']')) return null;
+  if (!rhs.startsWith("[") || !rhs.endsWith("]")) return null;
   const inner = rhs.slice(1, -1).trim();
   if (!inner) return [];
 
   const parts = [];
-  let current = '';
+  let current = "";
   let inString = false;
   let quote = null;
   for (let i = 0; i < inner.length; i++) {
@@ -181,7 +209,7 @@ function parseTomlStringArray(rhs) {
       if (ch === '"' || ch === "'") {
         inString = true;
         quote = ch;
-        current = '';
+        current = "";
       }
       continue;
     }
@@ -198,7 +226,105 @@ function parseTomlStringArray(rhs) {
 }
 
 function formatTomlStringArray(arr) {
-  return `[${arr.map((s) => JSON.stringify(String(s))).join(', ')}]`;
+  return `[${arr.map((s) => JSON.stringify(String(s))).join(", ")}]`;
+}
+
+function readTomlArrayLiteral(lines, startIndex, rhs) {
+  const first = rhs.trim();
+  if (!first.startsWith("[")) return null;
+
+  let inString = false;
+  let quote = null;
+  let depth = 0;
+  let sawOpen = false;
+
+  function scanChunk(chunk) {
+    for (let i = 0; i < chunk.length; i++) {
+      const ch = chunk[i];
+      if (!inString) {
+        if (ch === '"' || ch === "'") {
+          inString = true;
+          quote = ch;
+          continue;
+        }
+        if (ch === "[") {
+          depth += 1;
+          sawOpen = true;
+          continue;
+        }
+        if (ch === "]") {
+          depth -= 1;
+          if (sawOpen && depth === 0) return i;
+        }
+        continue;
+      }
+      if (ch === quote) {
+        inString = false;
+        quote = null;
+      }
+    }
+    return -1;
+  }
+
+  const parts = [first];
+  let endPos = scanChunk(first);
+  if (endPos !== -1) return first.slice(0, endPos + 1).trim();
+
+  for (let j = startIndex + 1; j < lines.length; j++) {
+    const line = lines[j];
+    endPos = scanChunk(line);
+    if (endPos !== -1) {
+      parts.push(line.slice(0, endPos + 1));
+      return parts.join("\n").trim();
+    }
+    parts.push(line);
+  }
+
+  return null;
+}
+
+function findTomlArrayBlockEnd(lines, startIndex, rhs) {
+  const first = rhs.trim();
+  if (!first.startsWith("[")) return startIndex;
+
+  let inString = false;
+  let quote = null;
+  let depth = 0;
+  let sawOpen = false;
+
+  function scanChunk(chunk) {
+    for (let i = 0; i < chunk.length; i++) {
+      const ch = chunk[i];
+      if (!inString) {
+        if (ch === '"' || ch === "'") {
+          inString = true;
+          quote = ch;
+          continue;
+        }
+        if (ch === "[") {
+          depth += 1;
+          sawOpen = true;
+          continue;
+        }
+        if (ch === "]") {
+          depth -= 1;
+          if (sawOpen && depth === 0) return true;
+        }
+        continue;
+      }
+      if (ch === quote) {
+        inString = false;
+        quote = null;
+      }
+    }
+    return false;
+  }
+
+  if (scanChunk(first)) return startIndex;
+  for (let j = startIndex + 1; j < lines.length; j++) {
+    if (scanChunk(lines[j])) return j;
+  }
+  return startIndex;
 }
 
 function arraysEqual(a, b) {
@@ -220,5 +346,5 @@ module.exports = {
   upsertEveryCodeNotify,
   restoreEveryCodeNotify,
   loadEveryCodeNotifyOriginal,
-  readEveryCodeNotify
+  readEveryCodeNotify,
 };

@@ -1,0 +1,295 @@
+import React from "react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { render } from "../test/test-utils.tsx";
+import { DashboardPage } from "./DashboardPage.jsx";
+
+const SKIP_BOOT_LABEL = "Skip boot";
+const SWITCH_TOTAL_LABEL = "Switch total";
+const SHARE_TO_X_LABEL = "Share to X";
+const dashboardViewProps = vi.hoisted(() => ({ current: null }));
+
+const usageDataHook = vi.hoisted(() => ({
+  useUsageData: vi.fn(() => ({
+    daily: [],
+    summary: { total_tokens: "42", billable_total_tokens: "42" },
+    rolling: null,
+    source: "edge",
+    loading: false,
+    refreshing: false,
+    error: null,
+    refresh: vi.fn(),
+  })),
+}));
+
+const recentUsageHook = vi.hoisted(() => ({
+  useRecentUsageData: vi.fn(() => ({
+    rolling: { last_7d: { totals: { billable_total_tokens: "recent" } } },
+    source: "edge",
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  })),
+}));
+
+const trendHook = vi.hoisted(() => ({
+  useTrendData: vi.fn(() => ({
+    rows: [],
+    from: "2026-03-01",
+    to: "2026-03-07",
+    loading: false,
+    source: "edge",
+    error: null,
+    refresh: vi.fn(),
+  })),
+}));
+
+const heatmapHook = vi.hoisted(() => ({
+  useActivityHeatmap: vi.fn(() => ({
+    range: { from: "2026-01-01", to: "2026-03-07" },
+    daily: [],
+    heatmap: { weeks: [] },
+    loading: false,
+    source: "edge",
+    error: null,
+    refresh: vi.fn(),
+  })),
+}));
+
+const modelBreakdownHook = vi.hoisted(() => ({
+  useUsageModelBreakdown: vi.fn(() => ({
+    breakdown: null,
+    loading: false,
+    source: "edge",
+    error: null,
+    refresh: vi.fn(),
+  })),
+}));
+
+const projectUsageHook = vi.hoisted(() => ({
+  useProjectUsageSummary: vi.fn(() => ({
+    entries: [],
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  })),
+}));
+
+const authToken = vi.hoisted(() => ({
+  isAccessTokenReady: vi.fn(() => true),
+  normalizeAccessToken: vi.fn((token) => token),
+  resolveAuthAccessToken: vi.fn(async (token) => token ?? null),
+}));
+
+const mockData = vi.hoisted(() => ({
+  getMockNow: vi.fn(() => null),
+  isMockEnabled: vi.fn(() => false),
+}));
+
+const timezone = vi.hoisted(() => ({
+  formatTimeZoneLabel: vi.fn(() => "UTC+00:00"),
+  formatTimeZoneShortLabel: vi.fn(() => "UTC+00:00"),
+  getBrowserTimeZone: vi.fn(() => "UTC"),
+  getBrowserTimeZoneOffsetMinutes: vi.fn(() => 0),
+  getLocalDateParts: vi.fn(() => ({ year: 2026, month: 3, day: 7 })),
+  getLocalDayKey: vi.fn(() => "2026-03-07"),
+}));
+
+const vibeusageApi = vi.hoisted(() => ({
+  getPublicVisibility: vi.fn(async () => ({ enabled: false, share_token: null, updated_at: null })),
+  setPublicVisibility: vi.fn(async () => ({ enabled: false, share_token: null, updated_at: null })),
+  getUserStatus: vi.fn(async () => ({ subscriptions: { items: [] }, install: null })),
+  getPublicViewProfile: vi.fn(async () => ({ profile: null })),
+  requestInstallLinkCode: vi.fn(async () => ({ code: null, expires_at: null })),
+}));
+
+const htmlToImage = vi.hoisted(() => ({
+  toBlob: vi.fn(async () => new Blob(["image"], { type: "image/png" })),
+  toPng: vi.fn(async () => "data:image/png;base64,ZmFrZQ=="),
+}));
+
+vi.mock("../hooks/use-usage-data", () => usageDataHook);
+vi.mock("../hooks/use-recent-usage-data", () => recentUsageHook);
+vi.mock("../hooks/use-trend-data", () => trendHook);
+vi.mock("../hooks/use-activity-heatmap", () => heatmapHook);
+vi.mock("../hooks/use-usage-model-breakdown", () => modelBreakdownHook);
+vi.mock("../hooks/use-project-usage-summary", () => projectUsageHook);
+vi.mock("../lib/auth-token", () => authToken);
+vi.mock("../lib/mock-data", () => mockData);
+vi.mock("../lib/timezone", () => timezone);
+vi.mock("../lib/vibeusage-api", () => vibeusageApi);
+vi.mock("html-to-image", () => htmlToImage);
+vi.mock("../components/BackendStatus.jsx", () => ({ BackendStatus: () => null }));
+vi.mock("../ui/matrix-a/components/BootScreen.jsx", () => ({
+  BootScreen: ({ onSkip }) => (
+    <button type="button" onClick={onSkip}>
+      {SKIP_BOOT_LABEL}
+    </button>
+  ),
+}));
+vi.mock("../ui/matrix-a/components/GithubStar.jsx", () => ({ GithubStar: () => null }));
+vi.mock("../ui/matrix-a/components/ActivityHeatmap.jsx", () => ({ ActivityHeatmap: () => null }));
+vi.mock("../ui/matrix-a/components/ProjectUsagePanel.jsx", () => ({ ProjectUsagePanel: () => null }));
+vi.mock("../ui/foundation/AsciiBox.jsx", () => ({ AsciiBox: ({ children }) => <div>{children}</div> }));
+vi.mock("../ui/foundation/MatrixButton.jsx", () => ({
+  MatrixButton: ({ children, onClick, href }) => {
+    if (href) {
+      return <a href={href}>{children}</a>;
+    }
+
+    return (
+      <button type="button" onClick={onClick}>
+        {children}
+      </button>
+    );
+  },
+}));
+vi.mock("../ui/matrix-a/views/DashboardView.jsx", () => ({
+  DashboardView: (props) => {
+    dashboardViewProps.current = props;
+    return (
+      <>
+        <button type="button" onClick={() => props.setSelectedPeriod("total")}>
+          {SWITCH_TOTAL_LABEL}
+        </button>
+        {props.screenshotMode ? (
+          <button type="button" onClick={props.handleShareToX}>
+            {SHARE_TO_X_LABEL}
+          </button>
+        ) : null}
+      </>
+    );
+  },
+}));
+
+describe("DashboardPage period decoupling", () => {
+  const originalLocation = window.location;
+
+  beforeEach(() => {
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    });
+    htmlToImage.toBlob.mockClear();
+    htmlToImage.toPng.mockClear();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    dashboardViewProps.current = null;
+    window.history.replaceState({}, "", "/");
+    window.location = originalLocation;
+  });
+
+  it("does not wire period range into the recent usage hook when tabs change", async () => {
+    render(
+      <DashboardPage
+        baseUrl="https://example.com"
+        auth="token"
+        currentIdentity={{ displayName: "Victor" }}
+        signedIn
+        sessionSoftExpired={false}
+        signOut={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByText(SKIP_BOOT_LABEL));
+    await waitFor(() => expect(screen.getByText(SWITCH_TOTAL_LABEL)).toBeInTheDocument());
+
+    expect(recentUsageHook.useRecentUsageData).toHaveBeenCalled();
+    const firstCall = recentUsageHook.useRecentUsageData.mock.calls.at(-1)?.[0];
+    expect(firstCall).not.toHaveProperty("from");
+    expect(firstCall).not.toHaveProperty("to");
+    expect(firstCall).not.toHaveProperty("period");
+
+    fireEvent.click(screen.getByText(SWITCH_TOTAL_LABEL));
+
+    await waitFor(() => {
+      const latestCall = recentUsageHook.useRecentUsageData.mock.calls.at(-1)?.[0];
+      expect(latestCall).not.toHaveProperty("from");
+      expect(latestCall).not.toHaveProperty("to");
+      expect(latestCall).not.toHaveProperty("period");
+    });
+  });
+
+  it("forwards usage refreshing state to the dashboard view", async () => {
+    usageDataHook.useUsageData.mockReturnValue({
+      daily: [],
+      summary: { total_tokens: "42", billable_total_tokens: "42" },
+      rolling: null,
+      source: "edge",
+      loading: false,
+      refreshing: true,
+      error: null,
+      refresh: vi.fn(),
+    });
+
+    render(
+      <DashboardPage
+        baseUrl="https://example.com"
+        auth={{ userId: "user-1" }}
+        currentIdentity={{ displayName: "Victor" }}
+        signedIn
+        sessionSoftExpired={false}
+        signOut={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByText(SKIP_BOOT_LABEL));
+    await waitFor(() => expect(screen.getByText(SWITCH_TOTAL_LABEL)).toBeInTheDocument());
+
+    expect(dashboardViewProps.current?.usagePanelRefreshing).toBe(true);
+  });
+
+  it("uses the shared display helper for screenshot share text when display_model is missing", async () => {
+    const shareLocation = new URL("https://www.vibeusage.cc/?screenshot=1");
+    window.location = shareLocation;
+    window.history.replaceState({}, "", "/?screenshot=1");
+    modelBreakdownHook.useUsageModelBreakdown.mockReturnValue({
+      breakdown: {
+        sources: [
+          {
+            source: "claude",
+            totals: { billable_total_tokens: 100 },
+            models: [
+              {
+                model: "anthropic/claude-opus-4.6",
+                model_id: "anthropic/claude-opus-4.6",
+                totals: { billable_total_tokens: 100 },
+              },
+            ],
+          },
+        ],
+      },
+      loading: false,
+      source: "edge",
+      error: null,
+      refresh: vi.fn(),
+    });
+
+    render(
+      <DashboardPage
+        baseUrl="https://example.com"
+        auth={{ userId: "user-1" }}
+        currentIdentity={{ displayName: "Victor" }}
+        signedIn
+        sessionSoftExpired={false}
+        signOut={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByText(SKIP_BOOT_LABEL));
+    await waitFor(() => expect(screen.getByText(SHARE_TO_X_LABEL)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText(SHARE_TO_X_LABEL));
+
+    await waitFor(() => {
+      expect(String(window.location.href)).toContain("claude-opus-4.6");
+      expect(String(window.location.href)).not.toContain("anthropic%2Fclaude-opus-4.6");
+    });
+  });
+});

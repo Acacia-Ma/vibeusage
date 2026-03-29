@@ -4,6 +4,44 @@ export function normalizeAccessToken(token) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function decodeAccessTokenPayload(token) {
+  const normalized = normalizeAccessToken(token);
+  if (!normalized) return null;
+  const parts = normalized.split(".");
+  if (parts.length < 2) return null;
+  const payloadPart = parts[1];
+  try {
+    const padded = payloadPart
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+      .padEnd(payloadPart.length + ((4 - (payloadPart.length % 4)) % 4), "=");
+    const decoded =
+      typeof atob === "function" ? atob(padded) : Buffer.from(padded, "base64").toString("utf8");
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+}
+
+export function getAccessTokenExpiryMs(token) {
+  const payload = decodeAccessTokenPayload(token);
+  const exp = payload?.exp;
+  if (typeof exp !== "number" || !Number.isFinite(exp) || exp <= 0) return null;
+  return Math.floor(exp * 1000);
+}
+
+export function getAccessTokenUserId(token) {
+  const payload = decodeAccessTokenPayload(token);
+  const sub = typeof payload?.sub === "string" ? payload.sub.trim() : "";
+  return sub.length > 0 ? sub : null;
+}
+
+export function isLikelyExpiredAccessToken(token, skewMs = 30_000) {
+  const expiryMs = getAccessTokenExpiryMs(token);
+  if (!expiryMs) return false;
+  return expiryMs <= Date.now() + Math.max(0, Number(skewMs) || 0);
+}
+
 export async function resolveAuthAccessToken(auth) {
   if (!auth) return null;
   if (typeof auth === "string") return normalizeAccessToken(auth);
@@ -19,11 +57,16 @@ export async function resolveAuthAccessToken(auth) {
     if (typeof auth.getAccessToken === "function") {
       try {
         const token = await auth.getAccessToken();
-        return normalizeAccessToken(token);
+        const normalized = normalizeAccessToken(token);
+        if (normalized) return normalized;
       } catch {
-        return null;
+        // fall back to object.accessToken when available
       }
+      return normalizeAccessToken(auth.accessToken);
     }
+    // Keep readiness semantics consistent with isAccessTokenReady:
+    // object-only providers (without getAccessToken) are treated as not ready.
+    return null;
   }
   return normalizeAccessToken(auth);
 }

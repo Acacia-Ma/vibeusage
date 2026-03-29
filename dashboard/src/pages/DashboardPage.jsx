@@ -1,32 +1,39 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-
-import { copy } from "../lib/copy";
-import { getRangeForPeriod } from "../lib/date-range";
-import { getDetailsSortColumns, sortDailyRows } from "../lib/daily";
+import { BackendStatus } from "../components/BackendStatus.jsx";
+import { useActivityHeatmap } from "../hooks/use-activity-heatmap";
+import { useProjectUsageSummary } from "../hooks/use-project-usage-summary";
+import { useRecentUsageData } from "../hooks/use-recent-usage-data";
+import { useTrendData } from "../hooks/use-trend-data";
+import { useUsageData } from "../hooks/use-usage-data";
+import { useUsageModelBreakdown } from "../hooks/use-usage-model-breakdown";
 import {
-  DETAILS_PAGE_SIZE,
-  paginateRows,
-  trimLeadingZeroMonths,
-} from "../lib/details";
+  isAccessTokenReady,
+  normalizeAccessToken,
+  resolveAuthAccessToken,
+} from "../lib/auth-token";
+import { copy } from "../lib/copy";
+import { getDetailsSortColumns, sortDailyRows } from "../lib/daily";
+import { getRangeForPeriod } from "../lib/date-range";
+import { DETAILS_PAGE_SIZE, paginateRows, trimLeadingZeroMonths } from "../lib/details";
+import {
+  getUsagePanelLoading,
+  selectRollingUsageForDisplay,
+} from "../lib/dashboard-period-bindings";
 import {
   formatCompactNumber,
   formatUsdCurrency,
   toDisplayNumber,
   toFiniteNumber,
 } from "../lib/format";
+import { shouldShowInstallCard } from "../lib/install-status";
+import { getMockNow, isMockEnabled } from "../lib/mock-data";
 import {
-  getPublicViewProfile,
-  getPublicViewStatus,
-  issuePublicViewToken,
-  requestInstallLinkCode,
-  revokePublicViewToken,
-} from "../lib/vibeusage-api";
-import { buildFleetData, buildTopModels } from "../lib/model-breakdown";
+  buildFleetData,
+  buildTopModels,
+  resolveModelDisplayName,
+} from "../lib/model-breakdown";
 import { safeWriteClipboard, safeWriteClipboardImage } from "../lib/safe-browser";
-import { useActivityHeatmap } from "../hooks/use-activity-heatmap.js";
-import { useTrendData } from "../hooks/use-trend-data.js";
-import { useUsageData } from "../hooks/use-usage-data.js";
-import { useUsageModelBreakdown } from "../hooks/use-usage-model-breakdown.js";
+import { isScreenshotModeEnabled } from "../lib/screenshot-mode";
 import {
   formatTimeZoneLabel,
   formatTimeZoneShortLabel,
@@ -34,20 +41,20 @@ import {
   getBrowserTimeZoneOffsetMinutes,
   getLocalDayKey,
 } from "../lib/timezone";
-import { BackendStatus } from "../components/BackendStatus.jsx";
+import {
+  getPublicVisibility,
+  setPublicVisibility,
+  getUserStatus,
+  getPublicViewProfile,
+  requestInstallLinkCode,
+} from "../lib/vibeusage-api";
 import { AsciiBox } from "../ui/foundation/AsciiBox.jsx";
 import { MatrixButton } from "../ui/foundation/MatrixButton.jsx";
 import { ActivityHeatmap } from "../ui/matrix-a/components/ActivityHeatmap.jsx";
 import { BootScreen } from "../ui/matrix-a/components/BootScreen.jsx";
 import { GithubStar } from "../ui/matrix-a/components/GithubStar.jsx";
+import { ProjectUsagePanel } from "../ui/matrix-a/components/ProjectUsagePanel.jsx";
 import { DashboardView } from "../ui/matrix-a/views/DashboardView.jsx";
-import { getMockNow, isMockEnabled } from "../lib/mock-data";
-import { isScreenshotModeEnabled } from "../lib/screenshot-mode";
-import {
-  isAccessTokenReady,
-  normalizeAccessToken,
-  resolveAuthAccessToken,
-} from "../lib/auth-token";
 
 const PERIODS = ["day", "week", "month", "total"];
 const DETAILS_DATE_KEYS = new Set(["day", "hour", "month"]);
@@ -88,7 +95,6 @@ function isProductionHost(hostname) {
   return hostname === "www.vibeusage.cc";
 }
 
-
 function isForceInstallEnabled() {
   if (typeof window === "undefined") return false;
   const params = new URLSearchParams(window.location.search);
@@ -100,6 +106,7 @@ function isForceInstallEnabled() {
 export function DashboardPage({
   baseUrl,
   auth,
+  currentIdentity,
   signedIn,
   sessionSoftExpired,
   signOut,
@@ -123,6 +130,7 @@ export function DashboardPage({
   const [publicViewCopied, setPublicViewCopied] = useState(false);
   const [publicProfileName, setPublicProfileName] = useState(null);
   const [publicProfileAvatarUrl, setPublicProfileAvatarUrl] = useState(null);
+  const [userStatus, setUserStatus] = useState(null);
   const [compactSummary, setCompactSummary] = useState(() => {
     if (typeof window === "undefined" || !window.matchMedia) return false;
     return window.matchMedia("(max-width: 640px)").matches;
@@ -142,9 +150,8 @@ export function DashboardPage({
   const authAccessToken = useMemo(() => {
     if (!authTokenAllowed) return null;
     if (typeof auth === "function") return auth;
-    if (typeof auth?.getAccessToken === "function") {
-      return auth.getAccessToken.bind(auth);
-    }
+    if (typeof auth === "string") return auth;
+    if (auth && typeof auth === "object") return auth;
     return null;
   }, [auth, authTokenAllowed]);
   const effectiveAuthToken = authTokenAllowed ? authAccessToken : null;
@@ -175,6 +182,7 @@ export function DashboardPage({
       return;
     }
     let active = true;
+    const controller = new AbortController();
     const resetLinkCode = () => {
       setLinkCode(null);
       setLinkCodeExpiresAt(null);
@@ -199,13 +207,13 @@ export function DashboardPage({
         const data = await requestInstallLinkCode({
           baseUrl,
           accessToken: resolvedToken,
+          signal: controller.signal,
         });
         if (!active) return;
         setLinkCode(typeof data?.link_code === "string" ? data.link_code : null);
-        setLinkCodeExpiresAt(
-          typeof data?.expires_at === "string" ? data.expires_at : null
-        );
+        setLinkCodeExpiresAt(typeof data?.expires_at === "string" ? data.expires_at : null);
       } catch (err) {
+        if (controller.signal.aborted || err?.name === "AbortError") return;
         if (!active) return;
         setLinkCode(null);
         setLinkCodeExpiresAt(null);
@@ -217,6 +225,7 @@ export function DashboardPage({
     })();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [
     baseUrl,
@@ -246,6 +255,7 @@ export function DashboardPage({
       return;
     }
     let active = true;
+    const controller = new AbortController();
     setPublicViewLoading(true);
     (async () => {
       let resolvedToken = null;
@@ -262,16 +272,14 @@ export function DashboardPage({
         return;
       }
       try {
-        const data = await getPublicViewStatus({
+        const data = await getPublicVisibility({
           baseUrl,
           accessToken: resolvedToken,
         });
         if (!active) return;
         const enabled = Boolean(data?.enabled);
-        const token =
-          typeof data?.share_token === "string" ? data.share_token : null;
         setPublicViewEnabled(enabled);
-        setPublicViewToken(token);
+        setPublicViewToken(data?.share_token || null);
       } catch (_err) {
         if (!active) return;
         setPublicViewEnabled(false);
@@ -283,6 +291,7 @@ export function DashboardPage({
     })();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [baseUrl, mockEnabled, signedIn, publicMode, authTokenReady, effectiveAuthToken]);
 
@@ -300,15 +309,12 @@ export function DashboardPage({
     setPublicProfileName(null);
     setPublicProfileAvatarUrl(null);
     let active = true;
-    getPublicViewProfile({ baseUrl, accessToken: publicToken })
+    const controller = new AbortController();
+    getPublicViewProfile({ baseUrl, accessToken: publicToken, signal: controller.signal })
       .then((data) => {
         if (!active) return;
-        setPublicProfileName(
-          typeof data?.display_name === "string" ? data.display_name : null
-        );
-        setPublicProfileAvatarUrl(
-          typeof data?.avatar_url === "string" ? data.avatar_url : null
-        );
+        setPublicProfileName(typeof data?.display_name === "string" ? data.display_name : null);
+        setPublicProfileAvatarUrl(typeof data?.avatar_url === "string" ? data.avatar_url : null);
       })
       .catch(() => {
         if (!active) return;
@@ -317,8 +323,51 @@ export function DashboardPage({
       });
     return () => {
       active = false;
+      controller.abort();
     };
   }, [baseUrl, publicMode, publicToken]);
+
+  useEffect(() => {
+    if (!signedIn || mockEnabled || publicMode) {
+      setUserStatus(null);
+      return;
+    }
+    if (!authTokenReady) {
+      setUserStatus(null);
+      return;
+    }
+    let active = true;
+    const controller = new AbortController();
+    (async () => {
+      let resolvedToken = null;
+      try {
+        resolvedToken = await resolveAuthAccessToken(effectiveAuthToken);
+      } catch (_err) {
+        resolvedToken = null;
+      }
+      if (!active) return;
+      if (!resolvedToken) {
+        setUserStatus(null);
+        return;
+      }
+      try {
+        const data = await getUserStatus({
+          baseUrl,
+          accessToken: resolvedToken,
+          signal: controller.signal,
+        });
+        if (!active) return;
+        setUserStatus(data && typeof data === "object" ? data : null);
+      } catch (_err) {
+        if (!active) return;
+        setUserStatus(null);
+      }
+    })();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [authTokenReady, baseUrl, effectiveAuthToken, mockEnabled, publicMode, signedIn]);
 
   const linkCodeExpired = useMemo(() => {
     if (!linkCodeExpiresAt) return false;
@@ -336,13 +385,7 @@ export function DashboardPage({
     setLinkCodeExpiresAt(null);
     setLinkCodeError(null);
     setLinkCodeRefreshToken((value) => value + 1);
-  }, [
-    linkCodeExpired,
-    linkCodeExpiresAt,
-    linkCodeLoading,
-    mockEnabled,
-    signedIn,
-  ]);
+  }, [linkCodeExpired, linkCodeExpiresAt, linkCodeLoading, mockEnabled, signedIn]);
 
   useEffect(() => {
     if (!linkCodeExpiresAt || publicMode) return;
@@ -351,10 +394,7 @@ export function DashboardPage({
     const now = Date.now();
     setLinkCodeExpiryTick(now);
     if (ts <= now) return;
-    const timeoutId = window.setTimeout(
-      () => setLinkCodeExpiryTick(Date.now()),
-      ts - now
-    );
+    const timeoutId = window.setTimeout(() => setLinkCodeExpiryTick(Date.now()), ts - now);
     const handleVisibilityChange = () => {
       if (typeof document === "undefined") return;
       if (document.visibilityState !== "visible") return;
@@ -389,9 +429,7 @@ export function DashboardPage({
   const timeZone = useMemo(() => getBrowserTimeZone(), []);
   const tzOffsetMinutes = useMemo(() => getBrowserTimeZoneOffsetMinutes(), []);
   const mockNow = useMemo(() => getMockNow(), []);
-  const cacheKey = publicMode
-    ? null
-    : auth?.userId || auth?.email || "default";
+  const cacheKey = publicMode ? null : auth?.userId || auth?.email || null;
   const [selectedPeriod, setSelectedPeriod] = useState("week");
   const period = screenshotMode ? "total" : selectedPeriod;
   const range = useMemo(
@@ -401,22 +439,21 @@ export function DashboardPage({
         offsetMinutes: tzOffsetMinutes,
         now: mockNow,
       }),
-    [mockNow, period, timeZone, tzOffsetMinutes]
+    [mockNow, period, timeZone, tzOffsetMinutes],
   );
   const from = range.from;
   const to = range.to;
   const timeZoneLabel = useMemo(
     () => formatTimeZoneLabel({ timeZone, offsetMinutes: tzOffsetMinutes }),
-    [timeZone, tzOffsetMinutes]
+    [timeZone, tzOffsetMinutes],
   );
   const timeZoneShortLabel = useMemo(
-    () =>
-      formatTimeZoneShortLabel({ timeZone, offsetMinutes: tzOffsetMinutes }),
-    [timeZone, tzOffsetMinutes]
+    () => formatTimeZoneShortLabel({ timeZone, offsetMinutes: tzOffsetMinutes }),
+    [timeZone, tzOffsetMinutes],
   );
   const timeZoneRangeLabel = useMemo(
     () => `Local time (${timeZoneShortLabel})`,
-    [timeZoneShortLabel]
+    [timeZoneShortLabel],
   );
   const trendTimeZone = timeZone;
   const trendTzOffsetMinutes = tzOffsetMinutes;
@@ -428,7 +465,7 @@ export function DashboardPage({
         offsetMinutes: tzOffsetMinutes,
         date: mockNow || new Date(),
       }),
-    [mockNow, timeZone, tzOffsetMinutes]
+    [mockNow, timeZone, tzOffsetMinutes],
   );
 
   const {
@@ -436,6 +473,7 @@ export function DashboardPage({
     summary,
     source: usageSource,
     loading: usageLoading,
+    refreshing: usageRefreshing,
     error: usageError,
     refresh: refreshUsage,
   } = useUsageData({
@@ -445,6 +483,16 @@ export function DashboardPage({
     from,
     to,
     includeDaily: period !== "total",
+    cacheKey,
+    timeZone,
+    tzOffsetMinutes,
+    now: mockNow,
+  });
+
+  const { rolling: recentRolling, refresh: refreshRecentUsage } = useRecentUsageData({
+    baseUrl,
+    accessToken,
+    guestAllowed,
     cacheKey,
     timeZone,
     tzOffsetMinutes,
@@ -466,15 +514,23 @@ export function DashboardPage({
     tzOffsetMinutes,
   });
 
-  const shareDailyToTrend = period === "week" || period === "month";
-  const useDailyTrend = period === "week" || period === "month";
-  const visibleDaily = useMemo(() => {
-    return daily.filter((row) => {
-      if (row?.future) return false;
-      if (!row?.day || !todayKey) return true;
-      return String(row.day) <= String(todayKey);
-    });
-  }, [daily, todayKey]);
+  const [projectUsageLimit, setProjectUsageLimit] = useState(3);
+  const {
+    entries: projectUsageEntries,
+    loading: projectUsageLoading,
+    error: projectUsageError,
+  } = useProjectUsageSummary({
+    baseUrl,
+    accessToken,
+    guestAllowed,
+    limit: projectUsageLimit,
+    allTime: true,
+    from,
+    to,
+    timeZone,
+    tzOffsetMinutes,
+  });
+
   const {
     rows: trendRows,
     from: trendFrom,
@@ -493,8 +549,6 @@ export function DashboardPage({
     timeZone: trendTimeZone,
     tzOffsetMinutes: trendTzOffsetMinutes,
     now: mockNow,
-    sharedRows: shareDailyToTrend ? daily : null,
-    sharedRange: shareDailyToTrend ? { from, to } : null,
   });
 
   const {
@@ -518,10 +572,7 @@ export function DashboardPage({
     if (period === "total") return "month";
     return "day";
   }, [period]);
-  const detailsColumns = useMemo(
-    () => getDetailsSortColumns(detailsDateKey),
-    [detailsDateKey]
-  );
+  const detailsColumns = useMemo(() => getDetailsSortColumns(detailsDateKey), [detailsDateKey]);
   const [sort, setSort] = useState(() => ({ key: "day", dir: "desc" }));
   useEffect(() => {
     setSort((prev) => {
@@ -538,9 +589,7 @@ export function DashboardPage({
   }, [detailsDateKey, sort]);
   const detailsRows = useMemo(() => {
     if (period === "day") {
-      return Array.isArray(trendRows)
-        ? trendRows.filter((row) => row?.hour && !row?.future)
-        : [];
+      return Array.isArray(trendRows) ? trendRows.filter((row) => row?.hour && !row?.future) : [];
     }
     if (period === "total") {
       const rows = Array.isArray(trendRows)
@@ -548,15 +597,15 @@ export function DashboardPage({
         : [];
       return trimLeadingZeroMonths(rows);
     }
-    return visibleDaily;
-  }, [period, trendRows, visibleDaily]);
+    return Array.isArray(trendRows) ? trendRows.filter((row) => row?.day && !row?.future) : [];
+  }, [period, trendRows]);
   const sortedDetails = useMemo(
     () => sortDailyRows(detailsRows, effectiveSort),
-    [detailsRows, effectiveSort]
+    [detailsRows, effectiveSort],
   );
   const hasDetailsActual = useMemo(
     () => detailsRows.some((row) => !row?.missing && !row?.future),
-    [detailsRows]
+    [detailsRows],
   );
   const detailsPageCount = useMemo(() => {
     if (!DETAILS_PAGED_PERIODS.has(period)) return 1;
@@ -580,16 +629,13 @@ export function DashboardPage({
     return paginateRows(sortedDetails, detailsPage, DETAILS_PAGE_SIZE);
   }, [detailsPage, period, sortedDetails]);
   const trendRowsForDisplay = useMemo(() => {
-    if (useDailyTrend) return daily;
     if (period === "day") {
-      return Array.isArray(trendRows)
-        ? trendRows.filter((row) => row?.hour)
-        : [];
+      return Array.isArray(trendRows) ? trendRows.filter((row) => row?.hour) : [];
     }
     return trendRows;
-  }, [daily, period, trendRows, useDailyTrend]);
-  const trendFromForDisplay = useDailyTrend ? from : trendFrom;
-  const trendToForDisplay = useDailyTrend ? to : trendTo;
+  }, [period, trendRows]);
+  const trendFromForDisplay = trendFrom;
+  const trendToForDisplay = trendTo;
 
   function renderDetailCell(row, key) {
     if (row?.future) return "—";
@@ -615,8 +661,7 @@ export function DashboardPage({
 
   function toggleSort(key) {
     setSort((prev) => {
-      if (prev.key === key)
-        return { key, dir: prev.dir === "asc" ? "desc" : "asc" };
+      if (prev.key === key) return { key, dir: prev.dir === "asc" ? "desc" : "asc" };
       return { key, dir: "desc" };
     });
   }
@@ -665,41 +710,53 @@ export function DashboardPage({
 
   const refreshAll = useCallback(() => {
     refreshUsage();
+    refreshRecentUsage();
     refreshHeatmap();
     refreshTrend();
     refreshModelBreakdown();
-  }, [refreshHeatmap, refreshModelBreakdown, refreshTrend, refreshUsage]);
+  }, [refreshHeatmap, refreshModelBreakdown, refreshRecentUsage, refreshTrend, refreshUsage]);
 
-  const usageLoadingState =
-    usageLoading || heatmapLoading || trendLoading || modelBreakdownLoading;
+  const usagePanelLoading = useMemo(
+    () =>
+      getUsagePanelLoading({
+        usageLoading,
+        heatmapLoading,
+        trendLoading,
+        modelBreakdownLoading,
+      }),
+    [heatmapLoading, modelBreakdownLoading, trendLoading, usageLoading],
+  );
+  const rollingUsage = useMemo(
+    () => selectRollingUsageForDisplay({ recentRolling }),
+    [recentRolling],
+  );
   const usageSourceLabel = useMemo(
     () =>
       copy("shared.data_source", {
         source: String(usageSource || "edge").toUpperCase(),
       }),
-    [usageSource]
+    [usageSource],
   );
   const publicViewInvalid = useMemo(() => {
     if (!publicMode || !usageError) return false;
     const status =
       typeof usageError === "object" && usageError
-        ? usageError?.status ?? usageError?.statusCode
+        ? (usageError?.status ?? usageError?.statusCode)
         : null;
     if (status === 401) return true;
     const message =
-      typeof usageError === "string"
-        ? usageError
-        : String(usageError?.message || usageError || "");
+      typeof usageError === "string" ? usageError : String(usageError?.message || usageError || "");
     return /unauthorized|invalid|token|revoked|401/i.test(message);
   }, [publicMode, usageError]);
   const identityRawName = useMemo(() => {
-    if (typeof auth?.name !== "string") return "";
-    return auth.name.trim();
-  }, [auth?.name]);
+    if (typeof currentIdentity?.displayName !== "string") return "";
+    return currentIdentity.displayName.trim();
+  }, [currentIdentity?.displayName]);
   const publicIdentityName = useMemo(() => {
     if (typeof publicProfileName !== "string") return "";
     return publicProfileName.trim();
   }, [publicProfileName]);
+  const identityPending = !publicMode && signedIn && currentIdentity === undefined;
 
   const identityLabel = useMemo(() => {
     if (!identityRawName || identityRawName.includes("@")) {
@@ -716,8 +773,11 @@ export function DashboardPage({
     if (publicMode) {
       return publicIdentityName || copy("dashboard.identity.fallback");
     }
+    if (identityPending) {
+      return copy("shared.placeholder.short");
+    }
     return identityHandle;
-  }, [identityHandle, publicIdentityName, publicMode]);
+  }, [identityHandle, identityPending, publicIdentityName, publicMode]);
   const identityStartDate = useMemo(() => {
     let earliest = null;
 
@@ -747,6 +807,38 @@ export function DashboardPage({
 
     return earliest;
   }, [heatmap?.weeks, heatmapDaily]);
+  const identitySubscriptions = useMemo(() => {
+    if (publicMode) return [];
+    const rows = Array.isArray(userStatus?.subscriptions?.items)
+      ? userStatus.subscriptions.items
+      : [];
+    const normalized = rows
+      .map((row) => {
+        const tool = typeof row?.tool === "string" ? row.tool.trim() : "";
+        const planTypeRaw =
+          typeof row?.plan_type === "string"
+            ? row.plan_type
+            : typeof row?.planType === "string"
+              ? row.planType
+              : "";
+        const planType = planTypeRaw.trim();
+        if (!tool || !planType) return null;
+        return {
+          tool,
+          planType,
+          provider: typeof row?.provider === "string" ? row.provider.trim() : "",
+          product: typeof row?.product === "string" ? row.product.trim() : "",
+          rateLimitTier:
+            typeof row?.rate_limit_tier === "string"
+              ? row.rate_limit_tier.trim()
+              : typeof row?.rateLimitTier === "string"
+                ? row.rateLimitTier.trim()
+                : "",
+        };
+      })
+      .filter(Boolean);
+    return normalized.slice(0, 6);
+  }, [publicMode, userStatus]);
 
   const activityHeatmapBlock = (
     <AsciiBox
@@ -805,15 +897,13 @@ export function DashboardPage({
   const screenshotTwitterHint = copy("dashboard.screenshot.twitter_hint");
   const placeholderShort = copy("shared.placeholder.short");
   const agentSummary = useMemo(() => {
-    const sources = Array.isArray(modelBreakdown?.sources)
-      ? modelBreakdown.sources
-      : [];
+    const sources = Array.isArray(modelBreakdown?.sources) ? modelBreakdown.sources : [];
     let topSource = null;
     let topSourceTokens = 0;
 
     for (const source of sources) {
       const tokens = toFiniteNumber(
-        source?.totals?.billable_total_tokens ?? source?.totals?.total_tokens
+        source?.totals?.billable_total_tokens ?? source?.totals?.total_tokens,
       );
       if (!Number.isFinite(tokens) || tokens <= 0) continue;
       if (tokens > topSourceTokens) {
@@ -827,19 +917,17 @@ export function DashboardPage({
     let modelPercent = "0.0";
 
     if (topSource && topSourceTokens > 0) {
-      agentName = topSource?.source
-        ? String(topSource.source).toUpperCase()
-        : placeholderShort;
+      agentName = topSource?.source ? String(topSource.source).toUpperCase() : placeholderShort;
       const models = Array.isArray(topSource?.models) ? topSource.models : [];
       let topModelTokens = 0;
       for (const model of models) {
         const tokens = toFiniteNumber(
-          model?.totals?.billable_total_tokens ?? model?.totals?.total_tokens
+          model?.totals?.billable_total_tokens ?? model?.totals?.total_tokens,
         );
         if (!Number.isFinite(tokens) || tokens <= 0) continue;
         if (tokens > topModelTokens) {
           topModelTokens = tokens;
-          modelName = model?.model ? String(model.model) : placeholderShort;
+          modelName = resolveModelDisplayName(model, placeholderShort);
         }
       }
       if (topModelTokens > 0) {
@@ -850,8 +938,7 @@ export function DashboardPage({
     return { agentName, modelName, modelPercent };
   }, [modelBreakdown, placeholderShort]);
   const displayTotalTokens = toDisplayNumber(summaryTotalTokens);
-  const twitterTotalTokens =
-    displayTotalTokens === "-" ? placeholderShort : displayTotalTokens;
+  const twitterTotalTokens = displayTotalTokens === "-" ? placeholderShort : displayTotalTokens;
   const screenshotTwitterText = copy("dashboard.screenshot.twitter_text", {
     total_tokens: twitterTotalTokens,
     agent_name: agentSummary.agentName,
@@ -896,8 +983,7 @@ export function DashboardPage({
           height: `${scrollHeight}px`,
         },
         filter: (node) =>
-          !(node instanceof HTMLElement) ||
-          node.dataset?.screenshotExclude !== "true",
+          !(node instanceof HTMLElement) || node.dataset?.screenshotExclude !== "true",
       });
       if (blob) return blob;
       const dataUrl = await toPng(root, {
@@ -911,8 +997,7 @@ export function DashboardPage({
           height: `${scrollHeight}px`,
         },
         filter: (node) =>
-          !(node instanceof HTMLElement) ||
-          node.dataset?.screenshotExclude !== "true",
+          !(node instanceof HTMLElement) || node.dataset?.screenshotExclude !== "true",
       });
       if (!dataUrl) return null;
       const response = await fetch(dataUrl);
@@ -960,12 +1045,9 @@ export function DashboardPage({
   const footerLeftContent = screenshotMode
     ? null
     : accessEnabled
-    ? copy("dashboard.footer.active", { range: timeZoneRangeLabel })
-    : copy("dashboard.footer.auth");
-  const periodsForDisplay = useMemo(
-    () => (screenshotMode ? [] : PERIODS),
-    [screenshotMode]
-  );
+      ? copy("dashboard.footer.active", { range: timeZoneRangeLabel })
+      : copy("dashboard.footer.auth");
+  const periodsForDisplay = useMemo(() => (screenshotMode ? [] : PERIODS), [screenshotMode]);
 
   const metricsRows = useMemo(
     () => [
@@ -997,29 +1079,39 @@ export function DashboardPage({
       summary?.output_tokens,
       summary?.reasoning_output_tokens,
       summaryTotalTokens,
-    ]
+    ],
   );
 
   const summaryCostValue = useMemo(() => {
     const formatted = formatUsdCurrency(summary?.total_cost_usd);
-    if (!formatted || formatted === "-" || formatted.startsWith("$"))
-      return formatted;
+    if (!formatted || formatted === "-" || formatted.startsWith("$")) return formatted;
     return `$${formatted}`;
   }, [summary?.total_cost_usd]);
 
   const fleetData = useMemo(
     () => buildFleetData(modelBreakdown, { copyFn: copy }),
-    [modelBreakdown]
+    [modelBreakdown],
   );
   const topModels = useMemo(
     () => buildTopModels(modelBreakdown, { limit: 3, copyFn: copy }),
-    [modelBreakdown]
+    [modelBreakdown],
+  );
+  const projectUsageBlock = useMemo(
+    () => (
+      <ProjectUsagePanel
+        entries={projectUsageEntries}
+        limit={projectUsageLimit}
+        onLimitChange={setProjectUsageLimit}
+        loading={projectUsageLoading}
+        error={projectUsageError}
+      />
+    ),
+    [projectUsageEntries, projectUsageLimit, projectUsageLoading, projectUsageError],
   );
 
   const openCostModal = useCallback(() => setCostModalOpen(true), []);
   const closeCostModal = useCallback(() => setCostModalOpen(false), []);
-  const costInfoEnabled =
-    summaryCostValue && summaryCostValue !== "-" && fleetData.length > 0;
+  const costInfoEnabled = summaryCostValue && summaryCostValue !== "-" && fleetData.length > 0;
 
   const installInitCmdBase = copy("dashboard.install.cmd.init");
   const resolvedLinkCode = !linkCodeExpired ? linkCode : null;
@@ -1036,10 +1128,18 @@ export function DashboardPage({
   const installCopiedLabel = copy("dashboard.install.copied");
   const sessionExpiredCopyLabel = copy("dashboard.session_expired.copy_label");
   const sessionExpiredCopiedLabel = copy("dashboard.session_expired.copied");
-  const shouldShowInstall =
-    !publicMode &&
-    !screenshotMode &&
-    (forceInstall || (accessEnabled && !heatmapLoading && activeDays === 0));
+  const hasActiveDeviceToken = Boolean(
+    userStatus?.install?.has_active_device_token ?? userStatus?.install?.hasActiveDeviceToken,
+  );
+  const shouldShowInstall = shouldShowInstallCard({
+    publicMode,
+    screenshotMode,
+    forceInstall,
+    accessEnabled,
+    heatmapLoading,
+    activeDays,
+    hasActiveDeviceToken,
+  });
   const installPrompt = copy("dashboard.install.prompt");
   const publicViewTitle = copy("dashboard.public_view.title");
   const publicViewStatusEnabledLabel = copy("dashboard.public_view.status.enabled");
@@ -1059,12 +1159,8 @@ export function DashboardPage({
     const url = new URL(`/share/${publicViewToken}`, window.location.origin);
     return url.toString();
   }, [publicViewToken]);
-  const publicViewCopyButtonLabel = publicViewCopied
-    ? publicViewCopiedLabel
-    : publicViewCopyLabel;
-  const publicViewToggleLabel = publicViewEnabled
-    ? publicViewDisableLabel
-    : publicViewEnableLabel;
+  const publicViewCopyButtonLabel = publicViewCopied ? publicViewCopiedLabel : publicViewCopyLabel;
+  const publicViewToggleLabel = publicViewEnabled ? publicViewDisableLabel : publicViewEnableLabel;
 
   const handleCopyInstall = useCallback(async () => {
     if (!installInitCmdCopy) return;
@@ -1093,14 +1189,12 @@ export function DashboardPage({
           setPublicViewActionLoading(false);
           return;
         }
-        const data = await issuePublicViewToken({
+        const data = await getPublicVisibility({
           baseUrl,
           accessToken: resolvedToken,
+          signal: controller.signal,
         });
-        const token =
-          typeof data?.share_token === "string" ? data.share_token : null;
-        const enabled = Boolean(data?.enabled ?? token);
-        setPublicViewEnabled(enabled);
+        const token = typeof data?.share_token === "string" ? data.share_token : null;
         setPublicViewToken(token);
         if (token && typeof window !== "undefined") {
           const url = new URL(`/share/${token}`, window.location.origin);
@@ -1117,13 +1211,7 @@ export function DashboardPage({
     if (!didCopy) return;
     setPublicViewCopied(true);
     window.setTimeout(() => setPublicViewCopied(false), 2000);
-  }, [
-    effectiveAuthToken,
-    baseUrl,
-    publicViewActionLoading,
-    publicViewEnabled,
-    publicViewUrl,
-  ]);
+  }, [effectiveAuthToken, baseUrl, publicViewActionLoading, publicViewEnabled, publicViewUrl]);
 
   const handleTogglePublicView = useCallback(async () => {
     if (publicViewActionLoading) return;
@@ -1135,24 +1223,15 @@ export function DashboardPage({
         setPublicViewActionLoading(false);
         return;
       }
-      if (publicViewEnabled) {
-        await revokePublicViewToken({
-          baseUrl,
-          accessToken: resolvedToken,
-        });
-        setPublicViewEnabled(false);
-        setPublicViewToken(null);
-      } else {
-        const data = await issuePublicViewToken({
-          baseUrl,
-          accessToken: resolvedToken,
-        });
-        const token =
-          typeof data?.share_token === "string" ? data.share_token : null;
-        const enabled = Boolean(data?.enabled ?? token);
-        setPublicViewEnabled(enabled);
-        setPublicViewToken(token);
-      }
+      const nextValue = !publicViewEnabled;
+      const data = await setPublicVisibility({
+        baseUrl,
+        accessToken: resolvedToken,
+        enabled: nextValue,
+      });
+      const enabled = Boolean(data?.enabled);
+      setPublicViewEnabled(enabled);
+      setPublicViewToken(data?.share_token || null);
     } catch (_err) {
       // ignore toggle errors
     } finally {
@@ -1160,10 +1239,7 @@ export function DashboardPage({
     }
   }, [effectiveAuthToken, baseUrl, publicViewActionLoading, publicViewEnabled]);
 
-  const dailyEmptyTemplate = useMemo(
-    () => copy("dashboard.daily.empty", { cmd: "{{cmd}}" }),
-    []
-  );
+  const dailyEmptyTemplate = useMemo(() => copy("dashboard.daily.empty", { cmd: "{{cmd}}" }), []);
   const [dailyEmptyPrefix, dailyEmptySuffix] = useMemo(() => {
     const parts = dailyEmptyTemplate.split("{{cmd}}");
     if (parts.length === 1) return [dailyEmptyTemplate, ""];
@@ -1176,8 +1252,13 @@ export function DashboardPage({
     ) : null;
 
   const headerRight = (
-    <div className="flex items-center gap-4">
-      <GithubStar isFixed={false} size="header" />
+    <div className="ml-auto flex w-max min-w-max items-center gap-2 sm:gap-3 md:gap-4">
+      <GithubStar isFixed={false} size="header" className="hidden sm:inline-flex" />
+      {!publicMode && signedIn ? (
+        <MatrixButton as="a" size="header" href="/leaderboard">
+          {copy("leaderboard.nav.open")}
+        </MatrixButton>
+      ) : null}
 
       {publicMode ? (
         signedIn ? (
@@ -1194,9 +1275,7 @@ export function DashboardPage({
           {copy("dashboard.sign_out")}
         </MatrixButton>
       ) : (
-        <span className="text-[10px] opacity-60">
-          {copy("dashboard.not_signed_in")}
-        </span>
+        <span className="text-[10px] opacity-60">{copy("dashboard.not_signed_in")}</span>
       )}
     </div>
   );
@@ -1232,7 +1311,9 @@ export function DashboardPage({
       identityDisplayName={identityDisplayName}
       identityStartDate={identityStartDate}
       activeDays={activeDays}
+      identitySubscriptions={identitySubscriptions}
       identityScrambleDurationMs={identityScrambleDurationMs}
+      projectUsageBlock={projectUsageBlock}
       topModels={topModels}
       signedIn={signedIn}
       publicMode={publicMode}
@@ -1270,6 +1351,7 @@ export function DashboardPage({
       summaryLabel={summaryLabel}
       summaryValue={summaryValue}
       summaryCostValue={summaryCostValue}
+      rollingUsage={rollingUsage}
       costInfoEnabled={costInfoEnabled}
       openCostModal={openCostModal}
       allowBreakdownToggle={allowBreakdownToggle}
@@ -1280,7 +1362,8 @@ export function DashboardPage({
       coreIndexCollapseAria={coreIndexCollapseAria}
       coreIndexExpandAria={coreIndexExpandAria}
       refreshAll={refreshAll}
-      usageLoadingState={usageLoadingState}
+      usagePanelLoading={usagePanelLoading}
+      usagePanelRefreshing={usageRefreshing}
       usageError={usageError}
       rangeLabel={rangeLabel}
       timeZoneRangeLabel={timeZoneRangeLabel}

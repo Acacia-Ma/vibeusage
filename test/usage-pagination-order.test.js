@@ -1,10 +1,10 @@
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { test } = require('node:test');
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const { test } = require("node:test");
 
 function readFile(relPath) {
-  return fs.readFileSync(path.join(process.cwd(), relPath), 'utf8');
+  return fs.readFileSync(path.join(process.cwd(), relPath), "utf8");
 }
 
 function countOccurrences(haystack, needle) {
@@ -13,62 +13,283 @@ function countOccurrences(haystack, needle) {
 }
 
 function normalize(content) {
-  return content.replace(/\s+/g, '');
+  return content.replace(/\s+/g, "").replace(/"/g, "'");
 }
 
-test('usage pagination uses deterministic ordering', () => {
+test("usage pagination uses deterministic ordering", () => {
   const hourlyOrder =
     "order('hour_start',{ascending:true}).order('device_id',{ascending:true}).order('source',{ascending:true}).order('model',{ascending:true})";
   const rollupOrder =
     "order('day',{ascending:true}).order('source',{ascending:true}).order('model',{ascending:true})";
   const adminOrder =
     "order('hour_start',{ascending:true}).order('user_id',{ascending:true}).order('device_id',{ascending:true}).order('source',{ascending:true}).order('model',{ascending:true})";
+  const hourlyScanCall = "forEachHourlyUsagePage(";
+  const rowCollectorCall = "collectHourlyUsageRows(";
+  const filteredRowsCall = "collectFilteredUsageRows(";
+  const hourlyBucketScanCall = "collectHourlyUsageBuckets(";
+  const aggregateCollectorCall = "collectAggregateUsageRange(";
+  const aggregateRequestCall = "resolveAggregateUsageRequestContext(";
+  const aggregateEndpointStartCall = "startAggregateUsageRequest(";
+  const aggregateEndpointFinishCall = "finishAggregateUsageRequest(";
 
-  assert.ok(normalize(readFile('insforge-src/shared/usage-rollup.js')).includes(rollupOrder));
-  assert.equal(
-    countOccurrences(
-      normalize(readFile('insforge-src/functions/vibeusage-usage-summary.js')),
-      hourlyOrder
-    ),
-    1
-  );
-  assert.equal(
-    countOccurrences(
-      normalize(readFile('insforge-src/functions/vibeusage-usage-daily.js')),
-      hourlyOrder
-    ),
-    1
-  );
-  assert.equal(
-    countOccurrences(
-      normalize(readFile('insforge-src/functions/vibeusage-usage-model-breakdown.js')),
-      hourlyOrder
-    ),
-    1
+  assert.ok(
+    normalize(readFile("insforge-src/shared/usage-rollup-core.js")).includes(rollupOrder),
   );
   assert.ok(
-    normalize(readFile('insforge-src/shared/db/usage-hourly.js')).includes(hourlyOrder)
-  );
-  assert.ok(
-    normalize(readFile('insforge-src/functions/vibeusage-usage-monthly.js')).includes(
-      'buildHourlyUsageQuery'
-    )
+    normalize(readFile("insforge-src/shared/usage-hourly-query-core.js")).includes(hourlyOrder),
   );
   assert.equal(
     countOccurrences(
-      normalize(readFile('insforge-src/functions/vibeusage-usage-heatmap.js')),
-      hourlyOrder
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-summary.js")),
+      hourlyScanCall,
     ),
-    2
+    1,
   );
   assert.equal(
     countOccurrences(
-      normalize(readFile('insforge-src/functions/vibeusage-usage-hourly.js')),
-      hourlyOrder
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-daily.js")),
+      aggregateCollectorCall,
     ),
-    2
+    0,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-summary.js")),
+      aggregateCollectorCall,
+    ),
+    0,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-summary.js")),
+      aggregateRequestCall,
+    ),
+    0,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-daily.js")),
+      aggregateRequestCall,
+    ),
+    0,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js")),
+      filteredRowsCall,
+    ),
+    1,
   );
   assert.ok(
-    normalize(readFile('insforge-src/functions/vibeusage-pricing-sync.js')).includes(adminOrder)
+    normalize(readFile("insforge-src/shared/db/usage-hourly.js")).includes(
+      "require('../usage-hourly-query-core')",
+    ),
+  );
+  assert.ok(
+    normalize(readFile("insforge-src/shared/db/usage-hourly.js")).includes(
+      "forEachHourlyUsagePage:usageHourlyQueryCore.forEachHourlyUsagePage",
+    ),
+  );
+  assert.ok(
+    normalize(readFile("insforge-src/shared/db/usage-hourly.js")).includes(
+      "DETAILED_HOURLY_USAGE_SELECT:usageHourlyQueryCore.DETAILED_HOURLY_USAGE_SELECT",
+    ),
+  );
+  assert.ok(
+    normalize(readFile("insforge-src/functions-esm/shared/db/usage-hourly.js")).includes(
+      "import'../../../shared/usage-hourly-query-core.mjs'",
+    ),
+  );
+  assert.ok(
+    normalize(readFile("insforge-src/functions-esm/shared/db/usage-hourly.js")).includes(
+      "forEachHourlyUsagePage=usageHourlyQueryCore.forEachHourlyUsagePage",
+    ),
+  );
+  assert.ok(
+    normalize(readFile("insforge-src/functions-esm/shared/db/usage-hourly.js")).includes(
+      "DETAILED_HOURLY_USAGE_SELECT=usageHourlyQueryCore.DETAILED_HOURLY_USAGE_SELECT",
+    ),
+  );
+  assert.ok(
+    normalize(readFile("insforge-src/shared/usage-aggregate-collector-core.js")).includes(
+      "const{DETAILED_HOURLY_USAGE_SELECT,forEachHourlyUsagePage}=usageHourlyQueryCore",
+    ),
+  );
+  assert.ok(
+    normalize(readFile("insforge-src/shared/usage-row-collector-core.js")).includes(
+      "select:select||usageHourlyQueryCore.DETAILED_HOURLY_USAGE_SELECT",
+    ),
+  );
+  assert.ok(
+    normalize(readFile("insforge-src/shared/usage-aggregate-collector-core.js")).includes(
+      "asyncfunctioncollectAggregateUsageRange(",
+    ),
+  );
+  assert.ok(
+    normalize(readFile("insforge-src/shared/usage-aggregate-request-core.js")).includes(
+      "asyncfunctionresolveAggregateUsageRequestContext(",
+    ),
+  );
+  assert.ok(
+    normalize(readFile("insforge-src/functions-esm/shared/core/usage-aggregate.js")).includes(
+      "asyncfunctionstartAggregateUsageRequest(",
+    ),
+  );
+  assert.ok(
+    normalize(readFile("insforge-src/functions-esm/shared/core/usage-aggregate.js")).includes(
+      "asyncfunctionfinishAggregateUsageRequest(",
+    ),
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-summary.js")),
+      aggregateEndpointStartCall,
+    ),
+    1,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-summary.js")),
+      aggregateEndpointFinishCall,
+    ),
+    1,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-daily.js")),
+      aggregateEndpointStartCall,
+    ),
+    1,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-daily.js")),
+      aggregateEndpointFinishCall,
+    ),
+    1,
+  );
+  assert.ok(
+    normalize(readFile("insforge-src/shared/usage-row-collector-core.js")).includes(
+      "asyncfunctioncollectHourlyUsageRows(",
+    ),
+  );
+  assert.ok(
+    normalize(readFile("insforge-src/functions-esm/shared/core/usage-filtered-rows.js")).includes(
+      "collectHourlyUsageRows(",
+    ),
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/shared/usage-pricing-core.js")),
+      aggregateCollectorCall,
+    ),
+    0,
+  );
+  assert.ok(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-monthly.js")),
+      filteredRowsCall,
+    ) === 1,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-monthly.js")),
+      rowCollectorCall,
+    ),
+    0,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-monthly.js")),
+      hourlyScanCall,
+    ),
+    0,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-heatmap.js")),
+      filteredRowsCall,
+    ),
+    1,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-heatmap.js")),
+      rowCollectorCall,
+    ),
+    0,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-hourly.js")),
+      filteredRowsCall,
+    ),
+    0,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-hourly.js")),
+      rowCollectorCall,
+    ),
+    0,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-hourly.js")),
+      hourlyBucketScanCall,
+    ),
+    1,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/shared/core/usage-hourly.js")),
+      filteredRowsCall,
+    ),
+    1,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-summary.js")),
+      "buildHourlyUsageQuery(",
+    ),
+    0,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-daily.js")),
+      "buildHourlyUsageQuery(",
+    ),
+    0,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-monthly.js")),
+      "buildHourlyUsageQuery(",
+    ),
+    0,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-hourly.js")),
+      "buildHourlyUsageQuery(",
+    ),
+    0,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-heatmap.js")),
+      "buildHourlyUsageQuery(",
+    ),
+    0,
+  );
+  assert.equal(
+    countOccurrences(
+      normalize(readFile("insforge-src/functions-esm/vibeusage-usage-model-breakdown.js")),
+      "buildHourlyUsageQuery(",
+    ),
+    0,
+  );
+  assert.ok(
+    normalize(readFile("insforge-src/functions-esm/vibeusage-pricing-sync.js")).includes(adminOrder),
   );
 });

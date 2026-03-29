@@ -1,0 +1,37 @@
+id: PRICE-005
+title: Add display_model to usage responses
+status: done
+owner: codex-main
+touches:
+  - insforge-src/shared/usage-metrics-core.js
+  - insforge-src/shared/usage-metrics-core.mjs
+  - insforge-src/shared/usage-pricing-core.js
+  - insforge-src/shared/usage-pricing-core.mjs
+  - insforge-functions/vibeusage-usage-summary.js
+  - insforge-functions/vibeusage-usage-model-breakdown.js
+  - insforge-functions/vibeusage-usage-daily.js
+  - insforge-functions/vibeusage-usage-hourly.js
+  - insforge-functions/vibeusage-usage-monthly.js
+  - insforge-functions/vibeusage-usage-heatmap.js
+  - insforge-functions/vibeusage-ingest.js
+  - dashboard/src/lib/model-breakdown.ts
+  - dashboard/src/pages/DashboardPage.jsx
+  - docs/repo-sitemap.md
+  - test/edge-functions.test.js
+  - test/model-breakdown.test.js
+  - openspec/changes/2026-03-28-add-display-model-to-usage-responses/
+  - docs/coordination/index.yaml
+  - docs/coordination/tasks/PRICE-005.yaml
+notes:
+  - "DECISION: Keep model_id as the only pricing and aggregation key while adding display_model as a response-only presentation field."
+  - "DECISION: Derive display_model by safely stripping a vendor prefix from model_id or model display text when a slash is present."
+  - "DECISION: Backend usage responses now emit display_model while preserving model_id as the only pricing and aggregation key."
+  - "FOLLOWUP: Align shared pricing-core test expectations with the new display_model response contract after CI surfaced one stale assertion."
+  - "VERIFY: node --test test/model-breakdown.test.js"
+  - "VERIFY: node --test test/edge-functions.test.js --test-name-pattern \"display_model|canonical model filter includes alias rows|emits model_id and merges aliases\""
+  - "VERIFY: node scripts/build-insforge-functions.cjs"
+  - "VERIFY: npm run build:insforge:check"
+  - "VERIFY: openspec validate 2026-03-28-add-display-model-to-usage-responses --strict"
+commit_refs:
+  - 51cfe899
+  - db2141a7

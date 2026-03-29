@@ -19,11 +19,7 @@ const IGNORED_DIRS = new Set([
 
 const CLIENT_IMPORT_PATTERNS = ["insforge-src", "insforge-functions"];
 const CLIENT_INTERNAL_PATTERNS = ["INSFORGE_INTERNAL_URL"];
-const SERVICE_ROLE_PATTERNS = [
-  "SERVICE_ROLE_KEY",
-  "INSFORGE_SERVICE_ROLE_KEY",
-  "service_role_key",
-];
+const SERVICE_ROLE_PATTERNS = ["SERVICE_ROLE_KEY", "INSFORGE_SERVICE_ROLE_KEY", "service_role_key"];
 const SDK_ALLOWLIST = new Set([
   path.join("src", "lib", "insforge-client.js"),
   path.join("src", "lib", "insforge-client.ts"),
@@ -153,7 +149,12 @@ function scanSqlFiles(root, errors) {
           message: "Avoid MONEY type; use numeric instead.",
         });
       }
-      if (/\btimestamp\b/i.test(lower) && !/\btimestamp\s+with\s+time\s+zone\b/i.test(lower)) {
+      const hasTimestamp = /\btimestamp\b/i.test(lower);
+      const hasTimestampWithTimeZone = /\btimestamp\s+with\s+time\s+zone\b/i.test(lower);
+      const hasTimestampCastAtTimeZone =
+        /::\s*timestamp\s+at\s+time\s+zone\b/i.test(lower) ||
+        /\bcast\s*\([^)]*\bas\s+timestamp\s*\)\s+at\s+time\s+zone\b/i.test(lower);
+      if (hasTimestamp && !hasTimestampWithTimeZone && !hasTimestampCastAtTimeZone) {
         errors.push({
           code: "SQL_TIMESTAMP",
           file,

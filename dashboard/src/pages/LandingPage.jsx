@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { copy } from "../lib/copy";
+import { getAppVersion } from "../lib/app-version";
+import { safeWriteClipboard } from "../lib/safe-browser";
 import { isScreenshotModeEnabled } from "../lib/screenshot-mode";
 import { LandingView } from "../ui/matrix-a/views/LandingView.jsx";
 import { shouldDeferMount } from "./should-defer-mount.js";
@@ -42,6 +44,7 @@ function useDeferredMount(delayMs = 0, shouldDefer = true) {
 }
 
 export function LandingPage({ signInUrl, signUpUrl }) {
+  const appVersion = useMemo(() => getAppVersion(import.meta.env), []);
   const specialHandle = copy("landing.handle.special");
   const defaultHandle = copy("landing.handle.default");
   const loginLabel = copy("landing.nav.login");
@@ -70,24 +73,33 @@ export function LandingPage({ signInUrl, signUpUrl }) {
 
   const handlePlaceholder = useMemo(
     () => copy("landing.handle.placeholder", { handle: specialHandle }),
-    [specialHandle]
+    [specialHandle],
   );
 
   const rankLabel = useMemo(() => {
     const rank =
-      handle === specialHandle
-        ? copy("landing.rank.singularity")
-        : copy("landing.rank.unranked");
+      handle === specialHandle ? copy("landing.rank.singularity") : copy("landing.rank.unranked");
     return copy("landing.rank.expectation", { rank });
   }, [handle, specialHandle]);
+
+  const installCommand = copy("landing.install.command");
+  const [installCopied, setInstallCopied] = useState(false);
 
   const handleChange = (event) => {
     setHandle(event.target.value.toUpperCase());
   };
 
+  const handleCopyInstall = async () => {
+    const didCopy = await safeWriteClipboard(installCommand);
+    if (!didCopy) return;
+    setInstallCopied(true);
+    window.setTimeout(() => setInstallCopied(false), 2000);
+  };
+
   return (
     <LandingView
       copy={copy}
+      appVersion={appVersion}
       effectsReady={effectsReady}
       signInUrl={signInUrl}
       signUpUrl={signUpUrl}
@@ -98,6 +110,9 @@ export function LandingPage({ signInUrl, signUpUrl }) {
       specialHandle={specialHandle}
       handlePlaceholder={handlePlaceholder}
       rankLabel={rankLabel}
+      installCommand={installCommand}
+      installCopied={installCopied}
+      onCopyInstallCommand={handleCopyInstall}
     />
   );
 }

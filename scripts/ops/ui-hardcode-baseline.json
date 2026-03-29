@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-01-25T06:00:59.240Z",
+  "generatedAt": "2026-03-20T12:38:03.645Z",
   "root": "dashboard/src",
   "rules": {
     "colors": "hex/rgb(a) literals",
     "rawText": "JSX text nodes containing letters or digits"
   },
   "totals": {
-    "colors": 75,
+    "colors": 128,
     "rawText": 12
   },
   "files": {
@@ -41,7 +41,12 @@
       "rawTextTokens": []
     },
     "dashboard/src/ui/foundation/MatrixShell.jsx": {
-      "colors": 4,
+      "colors": 2,
+      "rawText": 0,
+      "rawTextTokens": []
+    },
+    "dashboard/src/ui/foundation/SignalBox.jsx": {
+      "colors": 5,
       "rawText": 0,
       "rawTextTokens": []
     },
@@ -50,11 +55,16 @@
       "rawText": 0,
       "rawTextTokens": []
     },
+    "dashboard/src/ui/matrix-a/components/ClientLogos.jsx": {
+      "colors": 16,
+      "rawText": 0,
+      "rawTextTokens": []
+    },
     "dashboard/src/ui/matrix-a/components/CostAnalysisModal.jsx": {
       "colors": 1,
       "rawText": 1,
       "rawTextTokens": [
-        "acc + fleet.usdValue, 0 ); const totalUsdLabel = formatUsdValue(totalUsd); return ("
+        "acc + fleet.usdValue, 0); const totalUsdLabel = formatUsdValue(totalUsd); return ("
       ]
     },
     "dashboard/src/ui/matrix-a/components/GithubStar.jsx": {
@@ -140,7 +150,7 @@
       ]
     },
     "dashboard/src/ui/matrix-a/views/LandingView.jsx": {
-      "colors": 7,
+      "colors": 41,
       "rawText": 1,
       "rawTextTokens": [
         "); return ("

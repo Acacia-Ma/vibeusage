@@ -21,22 +21,37 @@ landing.handle.default,landing,LandingPage,LandingPage,handle_default,"VIBE_USER
 landing.handle.special,landing,LandingPage,LandingPage,handle_special,"VOLT",,active
 landing.hero.title_primary,landing,LandingPage,LandingPage,hero_title_primary,"MORE_TOKENS.",,active
 landing.hero.title_secondary,landing,LandingPage,LandingPage,hero_title_secondary,"MORE_VIBE.",,active
-landing.hero.tagline,landing,LandingPage,LandingPage,hero_tagline,"CODEX / CLAUDE CODE / GEMINI CLI TRACKER",,active
-landing.hero.subtagline,landing,LandingPage,LandingPage,hero_subtagline,"Track Codex, Claude Code & Gemini CLI usage in real time.",,active
+landing.hero.tagline,landing,LandingPage,LandingPage,hero_tagline,"AI AGENT TOKEN TRACKER",,active
+landing.hero.subtagline,landing,LandingPage,LandingPage,hero_subtagline,"Track Codex, Claude Code, OpenCode, Gemini, and OpenClaw with minimal data collection and auditable metrics.",,active
 landing.screenshot.alt,landing,LandingPage,LandingPage,screenshot_alt,"VibeUsage dashboard screenshot",,active
+landing.screenshot.title,landing,LandingPage,LandingPage,screenshot_title,"DASHBOARD PREVIEW",,active
 landing.nav.login,landing,LandingPage,LandingPage,nav_login,"LOGIN",,active
 landing.nav.signup,landing,LandingPage,LandingPage,nav_signup,"SIGN UP",,active
-landing.seo.title,landing,LandingPage,LandingPage,seo_title,"Quantify Codex, Claude Code & Gemini CLI Usage",,active
-landing.seo.summary,landing,LandingPage,LandingPage,seo_summary,"VibeUsage is a token usage tracker built for AI CLI users (Codex, Claude, Gemini) who want a fast, reliable view of token spend.",,active
-landing.meta.title,landing,LandingPage,Meta,title,"VibeUsage",,active
-landing.meta.description,landing,LandingPage,Meta,description,"Track Codex, Claude Code & Gemini CLI usage in real time.",,active
+landing.nav.login_signup,landing,LandingPage,LandingPage,nav_login_signup,"SIGN IN / SIGN UP",,active
+landing.seo.title,landing,LandingPage,LandingPage,seo_title,"Secure Token Usage Tracking for AI Agent Clients",,active
+landing.features.title,landing,LandingPage,LandingPage,features_title,"FEATURE BRIEF",,active
+landing.seo.summary,landing,LandingPage,LandingPage,seo_summary,"VibeUsage tracks token usage across AI agent clients (Codex, Claude Code, OpenCode, Gemini, OpenClaw) with minimal data collection and auditable metrics.",,active
+landing.install.title,landing,LandingPage,LandingPage,install_title,"INSTALL IN ONE COMMAND",,active
+landing.install.prompt,landing,LandingPage,LandingPage,install_prompt,"Run this in your terminal:",,active
+landing.install.command,landing,LandingPage,LandingPage,install_command,"npx --yes vibeusage init",,active
+landing.install.helper,landing,LandingPage,LandingPage,install_helper,"Then connect your account and start syncing usage.",,active
+landing.install.action.copy,landing,LandingPage,LandingPage,install_copy,"COPY COMMAND",,active
+landing.install.action.copied,landing,LandingPage,LandingPage,install_copied,"COPIED",,active
+landing.ai_agent.title,landing,LandingPage,LandingPage,ai_agent_title,"LET AI INSTALL FOR YOU",,active
+landing.ai_agent.description,landing,LandingPage,LandingPage,ai_agent_description,"Copy this guide and paste to ChatGPT, Claude, or any AI assistant. It will install VibeUsage automatically.",,active
+landing.ai_agent.command,landing,LandingPage,LandingPage,ai_agent_command,"https://github.com/victorGPT/vibeusage/blob/main/docs/AI_AGENT_INSTALL.md",,active
+landing.ai_agent.copy_label,landing,LandingPage,LandingPage,ai_agent_copy_label,"Copy Guide Link",,active
+landing.ai_agent.helper,landing,LandingPage,LandingPage,ai_agent_helper,"Or click to open the guide and copy manually.",,active
+landing.ai_agent.guide_url,landing,LandingPage,LandingPage,ai_agent_guide_url,"https://github.com/victorGPT/vibeusage/blob/main/docs/AI_AGENT_INSTALL.md",,active
+landing.meta.title,landing,LandingPage,Meta,title,"VibeUsage — Token Usage Tracker for AI Agent CLIs",,active
+landing.meta.description,landing,LandingPage,Meta,description,"Track token usage across AI agent clients: Codex, Claude Code, OpenCode, Gemini, and OpenClaw.",,active
 landing.meta.og_site_name,landing,LandingPage,Meta,og_site_name,"VibeUsage",,active
 landing.meta.og_type,landing,LandingPage,Meta,og_type,"website",,active
 landing.meta.og_image,landing,LandingPage,Meta,og_image,"https://www.vibeusage.cc/og-image.jpg",,active
 landing.meta.og_url,landing,LandingPage,Meta,og_url,"https://www.vibeusage.cc/",,active
 landing.meta.twitter_card,landing,LandingPage,Meta,twitter_card,"summary_large_image",,active
 share.meta.title,share,SharePage,Meta,title,"VibeUsage Share",,active
-share.meta.description,share,SharePage,Meta,description,"Shareable VibeUsage dashboard snapshot.",,active
+share.meta.description,share,SharePage,Meta,description,"Share a VibeUsage dashboard snapshot with token usage insights across models, projects, and time windows.",,active
 share.meta.og_site_name,share,SharePage,Meta,og_site_name,"VibeUsage",,active
 share.meta.og_type,share,SharePage,Meta,og_type,"website",,active
 share.meta.og_image,share,SharePage,Meta,og_image,"https://www.vibeusage.cc/share-dashboard.jpg",,active
@@ -57,6 +72,7 @@ landing.cta.initialize,landing,LandingPage,LandingPage,cta_primary,">> INITIALIZ
 landing.cta.subtext,landing,LandingPage,LandingPage,cta_subtext,"Connect with GitHub // Enter the System",,active
 landing.cta.primary,landing,LandingPage,LandingPage,cta_primary,">> INITIALIZE_LINK <<",,active
 landing.cta.secondary,landing,LandingPage,LandingPage,cta_secondary,"Connect with GitHub // Enter the System",,active
+landing.cta.login_signup,landing,LandingPage,LandingPage,cta_login_signup,">> ENTER SYSTEM <<",,active
 landing.footer.link.manifesto,landing,LandingPage,LandingPage,footer_link_manifesto,"Manifesto",,active
 landing.footer.link.docs,landing,LandingPage,LandingPage,footer_link_docs,"Docs",,active
 landing.footer.link.security,landing,LandingPage,LandingPage,footer_link_security,"Security",,active
@@ -99,6 +115,8 @@ identity_card.rank_label,ui,IdentityCard,IdentityCard,rank_label,"START",,active
 identity_card.streak_label,ui,IdentityCard,IdentityCard,streak_label,"ACTIVE",,active
 identity_card.rank_placeholder,ui,IdentityCard,IdentityCard,rank_placeholder,"—",,active
 identity_card.streak_value,ui,IdentityCard,IdentityCard,streak_value,"{{days}} DAY",,active
+identity_card.subscriptions_label,ui,IdentityCard,IdentityCard,subscriptions_label,"SUBSCRIPTIONS",,active
+identity_card.subscription_item,ui,IdentityCard,IdentityCard,subscription_item,"{{tool}} {{plan}}",,active
 
 identity_panel.badge,ui,IdentityPanel,IdentityPanel,badge,"VU",,active
 identity_panel.level,ui,IdentityPanel,IdentityPanel,level,"Lvl_05",,active
@@ -128,11 +146,26 @@ usage.cost_info.icon,ui,UsagePanel,UsagePanel,cost_info_icon,"[ KEY ]",,active
 usage.cost_info.label,ui,UsagePanel,UsagePanel,cost_info_label,"Detail",,active
 usage.range_label,ui,UsagePanel,UsagePanel,range_label,"Range: {{range}}",,active
 
+dashboard.rolling.title,ui,RollingUsagePanel,RollingUsagePanel,title,"RECENT_USAGE",,active
+dashboard.rolling.last_7d,ui,RollingUsagePanel,RollingUsagePanel,label_last_7d,"LAST_7_DAYS",,active
+dashboard.rolling.last_30d,ui,RollingUsagePanel,RollingUsagePanel,label_last_30d,"LAST_30_DAYS",,active
+dashboard.rolling.avg_active_day,ui,RollingUsagePanel,RollingUsagePanel,label_avg_active_day,"AVG_30_DAY",,active
+
 dashboard.model_breakdown.title,ui,NeuralDivergenceMap,NeuralDivergenceMap,title,"Model Breakdown",,active
 dashboard.model_breakdown.footer,ui,NeuralDivergenceMap,NeuralDivergenceMap,footer,"Multi-Engine Load Balancing // Active Session",,active
 dashboard.model_breakdown.usage_label,ui,NeuralAdaptiveFleet,NeuralAdaptiveFleet,usage_label,"USAGE: {{value}}",,active
 dashboard.top_models.title,ui,TopModelsPanel,TopModelsPanel,title,"Top Models",,active
 dashboard.top_models.subtitle,ui,TopModelsPanel,TopModelsPanel,subtitle,"All_Scores",,active
+dashboard.projects.title,ui,ProjectUsagePanel,ProjectUsagePanel,title,"Project Usage",,active
+dashboard.projects.subtitle,ui,ProjectUsagePanel,ProjectUsagePanel,subtitle,"Repositories",,active
+dashboard.projects.tokens_label,ui,ProjectUsagePanel,ProjectUsagePanel,tokens_label,"TOKENS",,active
+dashboard.projects.stars_label,ui,ProjectUsagePanel,ProjectUsagePanel,stars_label,"STAR",,active
+dashboard.projects.limit_label,ui,ProjectUsagePanel,ProjectUsagePanel,limit_label,"SHOW",,active
+dashboard.projects.limit_aria,ui,ProjectUsagePanel,ProjectUsagePanel,limit_aria,"Select repository limit",,active
+dashboard.projects.limit_top_3,ui,ProjectUsagePanel,ProjectUsagePanel,limit_top_3,"TOP 3",,active
+dashboard.projects.limit_top_6,ui,ProjectUsagePanel,ProjectUsagePanel,limit_top_6,"TOP 6",,active
+dashboard.projects.limit_top_10,ui,ProjectUsagePanel,ProjectUsagePanel,limit_top_10,"TOP 10",,active
+dashboard.projects.empty,ui,ProjectUsagePanel,ProjectUsagePanel,empty,"NO_PUBLIC_REPOS",,active
 dashboard.upgrade_alert.title,ui,UpgradeAlertModal,UpgradeAlertModal,title,"Update available",,active
 dashboard.upgrade_alert.subtitle,ui,UpgradeAlertModal,UpgradeAlertModal,subtitle,"VibeUsage Tracker v{{required}} is now available.",,active
 dashboard.upgrade_alert.subtitle_generic,ui,UpgradeAlertModal,UpgradeAlertModal,subtitle_generic,"A new version of VibeUsage Tracker is available.",,active
@@ -148,12 +181,6 @@ dashboard.cost_breakdown.calc_prefix,ui,CostAnalysisModal,CostAnalysisModal,calc
 dashboard.cost_breakdown.calc_dynamic,ui,CostAnalysisModal,CostAnalysisModal,calc_dynamic,"DYNAMIC",,active
 dashboard.cost_breakdown.close,ui,CostAnalysisModal,CostAnalysisModal,close_label,"[ ESC ] CLOSE",,active
 dashboard.cost_breakdown.footer,ui,CostAnalysisModal,CostAnalysisModal,footer,"Algorithm Build: v9.4.2",,active
-
-leaderboard.panel.title,ui,LeaderboardPanel,LeaderboardPanel,title,"CORE_INDEX",,active
-leaderboard.period.cycle_24h,ui,LeaderboardPanel,LeaderboardPanel,period_label,"Cycle_24h",,active
-leaderboard.period.legacy_all,ui,LeaderboardPanel,LeaderboardPanel,period_label,"Legacy_All",,active
-leaderboard.load_more,ui,LeaderboardPanel,LeaderboardPanel,load_more,"-- LOAD_NEXT_BATCH --",,active
-leaderboard.empty,ui,LeaderboardPanel,LeaderboardPanel,empty_state,"No leaderboard data.",,active
 
 trend.chart.unit_label,ui,TrendChart,TrendChart,unit_label,"TKNS",,active
 trend.chart.left_label,ui,TrendChart,TrendChart,left_label,"T-24H",,active
@@ -246,6 +273,54 @@ details.pagination.next,dashboard,DashboardPage,DailyTable,pagination_next,"Next
 details.pagination.page,dashboard,DashboardPage,DailyTable,pagination_label,"Page {{page}}/{{total}}",,active
 
 
+leaderboard.nav.open,dashboard,DashboardPage,Header,nav_leaderboard,"$ leaderboard",,active
+
+leaderboard.nav.back,dashboard,LeaderboardPage,Header,nav_back,"$ dashboard",,active
+leaderboard.profile.nav.back,dashboard,LeaderboardProfilePage,Header,nav_back,"$ leaderboard",,active
+leaderboard.title,dashboard,LeaderboardPage,LeaderboardPage,title,"LEADERBOARD",,active
+leaderboard.range,dashboard,LeaderboardPage,LeaderboardPage,range,"UTC_{{period}}: {{from}}..{{to}}",,active
+leaderboard.range_loading,dashboard,LeaderboardPage,LeaderboardPage,range_loading,"UTC_{{period}}: ...",,active
+leaderboard.range.total,dashboard,LeaderboardPage,LeaderboardPage,range_total,"ALL TIME",,active
+leaderboard.generated_at,dashboard,LeaderboardPage,LeaderboardPage,generated_at,"UPDATED_AT: {{ts}}",,active
+leaderboard.period.week,dashboard,LeaderboardPage,LeaderboardPage,period_week,"WEEK",,active
+leaderboard.period.month,dashboard,LeaderboardPage,LeaderboardPage,period_month,"MONTH",,active
+leaderboard.period.total,dashboard,LeaderboardPage,LeaderboardPage,period_total,"ALL",,active
+leaderboard.metric.all,dashboard,LeaderboardPage,LeaderboardPage,metric_all,"ALL",,active
+leaderboard.metric.gpt,dashboard,LeaderboardPage,LeaderboardPage,metric_gpt,"GPT",,active
+leaderboard.metric.claude,dashboard,LeaderboardPage,LeaderboardPage,metric_claude,"CLAUDE",,active
+
+leaderboard.me_label,dashboard,LeaderboardPage,LeaderboardPage,me_label,"YOU",,active
+leaderboard.anon_label,dashboard,LeaderboardPage,LeaderboardPage,anon_label,"Anonymous",,active
+leaderboard.public_profile.label,dashboard,LeaderboardPage,LeaderboardPage,public_profile_label,"PUBLIC PROFILE",,active
+leaderboard.public_profile.status.enabled,dashboard,LeaderboardPage,LeaderboardPage,public_profile_status,"PUBLIC_ON",,active
+leaderboard.public_profile.status.disabled,dashboard,LeaderboardPage,LeaderboardPage,public_profile_status,"PUBLIC_OFF",,active
+leaderboard.error.unknown,dashboard,LeaderboardPage,LeaderboardPage,error_unknown,"UNKNOWN_ERROR",,active
+leaderboard.me_card.title,dashboard,LeaderboardPage,AsciiBox,me_card_title,"MY_RANK",,active
+leaderboard.me_card.subtitle,dashboard,LeaderboardPage,AsciiBox,me_card_subtitle,"WEEKLY",,active
+
+leaderboard.profile.card.title,dashboard,LeaderboardProfilePage,AsciiBox,card_title,"PROFILE",,active
+leaderboard.profile.card.subtitle,dashboard,LeaderboardProfilePage,AsciiBox,card_subtitle,"{{period}}",,active
+
+leaderboard.top10.title,dashboard,LeaderboardPage,AsciiBox,top10_title,"TOP_10",,active
+leaderboard.top10.subtitle,dashboard,LeaderboardPage,AsciiBox,top10_subtitle,"TOP_9_PLUS_YOU",,active
+leaderboard.table.title,dashboard,LeaderboardPage,AsciiBox,table_title,"ALL_RANKS",,active
+leaderboard.table.subtitle,dashboard,LeaderboardPage,AsciiBox,table_subtitle,"PAGED",,active
+
+leaderboard.loading,dashboard,LeaderboardPage,LeaderboardPage,state_loading,"LOADING...",,active
+leaderboard.empty,dashboard,LeaderboardPage,LeaderboardPage,state_empty,"NO_DATA",,active
+
+leaderboard.column.rank,dashboard,LeaderboardPage,LeaderboardPage,column_rank,"RANK",,active
+leaderboard.column.user,dashboard,LeaderboardPage,LeaderboardPage,column_user,"USER",,active
+leaderboard.column.total,dashboard,LeaderboardPage,LeaderboardPage,column_total,"TOTAL",,active
+leaderboard.column.gpt,dashboard,LeaderboardPage,LeaderboardPage,column_gpt,"GPT_MODEL",,active
+leaderboard.column.claude,dashboard,LeaderboardPage,LeaderboardPage,column_claude,"CLAUDE_MODEL",,active
+leaderboard.column.other,dashboard,LeaderboardPage,LeaderboardPage,column_other,"OTHER_MODELS",,active
+
+leaderboard.pagination.prev,dashboard,LeaderboardPage,LeaderboardPage,pagination_prev,"PREV",,active
+leaderboard.pagination.next,dashboard,LeaderboardPage,LeaderboardPage,pagination_next,"NEXT",,active
+leaderboard.pagination.ellipsis,dashboard,LeaderboardPage,LeaderboardPage,pagination_ellipsis,"...",,active
+leaderboard.pagination.page_unknown,dashboard,LeaderboardPage,LeaderboardPage,pagination_unknown,"PAGE {{page}}",,active
+
 dashboard.sign_out,dashboard,DashboardPage,Header,sign_out,"Sign out",,active
 dashboard.not_signed_in,dashboard,DashboardPage,Header,not_signed_in,"Not signed in",,active
 
@@ -280,13 +355,13 @@ dashboard.install.link_code.loading,dashboard,DashboardPage,AsciiBox,install_sta
 dashboard.install.link_code.failed,dashboard,DashboardPage,AsciiBox,install_status,"Private code unavailable",,active
 dashboard.install.cmd.sync,dashboard,DashboardPage,AsciiBox,install_cmd,"npx --yes vibeusage sync",,active
 
-dashboard.public_view.title,dashboard,DashboardPage,AsciiBox,title,"Public View",,active
-dashboard.public_view.status.enabled,dashboard,DashboardPage,AsciiBox,status,"LINK_ACTIVE",,active
-dashboard.public_view.status.disabled,dashboard,DashboardPage,AsciiBox,status,"LINK_DISABLED",,active
+dashboard.public_view.title,dashboard,DashboardPage,AsciiBox,title,"PUBLIC PROFILE",,active
+dashboard.public_view.status.enabled,dashboard,DashboardPage,AsciiBox,status,"PUBLIC_ON",,active
+dashboard.public_view.status.disabled,dashboard,DashboardPage,AsciiBox,status,"PUBLIC_OFF",,active
 dashboard.public_view.action.copy,dashboard,DashboardPage,AsciiBox,action_label,"Copy share link",,active
 dashboard.public_view.action.copied,dashboard,DashboardPage,AsciiBox,action_label,"Copied",,active
-dashboard.public_view.action.enable,dashboard,DashboardPage,AsciiBox,action_label,"Enable public link",,active
-dashboard.public_view.action.disable,dashboard,DashboardPage,AsciiBox,action_label,"Disable public link",,active
+dashboard.public_view.action.enable,dashboard,DashboardPage,AsciiBox,action_label,"Enable public profile",,active
+dashboard.public_view.action.disable,dashboard,DashboardPage,AsciiBox,action_label,"Disable public profile",,active
 dashboard.public_view.invalid.title,dashboard,DashboardPage,AsciiBox,title,"Link_Invalid",,active
 dashboard.public_view.invalid.body,dashboard,DashboardPage,AsciiBox,body,"This public link is invalid or has been revoked.",,active
 

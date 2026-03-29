@@ -1,14 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isAccessTokenReady, resolveAuthAccessToken } from "../lib/auth-token";
 import {
-  getUsageDaily,
-  getUsageHourly,
-  getUsageMonthly,
-} from "../lib/vibeusage-api";
+  buildDashboardCacheKey,
+  clearDashboardCache,
+  readDashboardCache,
+  writeDashboardCache,
+} from "../lib/dashboard-cache";
+import {
+  readDashboardLiveSnapshot,
+  writeDashboardLiveSnapshot,
+} from "../lib/dashboard-live-snapshot";
 import { formatDateLocal, formatDateUTC } from "../lib/date-range";
 import { isMockEnabled } from "../lib/mock-data";
-import { isAccessTokenReady, resolveAuthAccessToken } from "../lib/auth-token";
 import { getLocalDayKey, getTimeZoneCacheKey } from "../lib/timezone";
+import { getUsageDaily, getUsageHourly, getUsageMonthly } from "../lib/vibeusage-api";
 
 const DEFAULT_MONTHS = 24;
 type AnyRecord = Record<string, any>;
@@ -25,21 +30,18 @@ export function useTrendData({
   timeZone,
   tzOffsetMinutes,
   now,
-  sharedRows,
-  sharedRange,
 }: any = {}) {
   const [rows, setRows] = useState<any[]>([]);
   const [range, setRange] = useState<{ from?: any; to?: any }>(() => ({ from, to }));
   const [source, setSource] = useState<string>("edge");
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resolvedStorageKey, setResolvedStorageKey] = useState<string | null>(null);
   const mockEnabled = isMockEnabled();
   const tokenReady = isAccessTokenReady(accessToken);
   const cacheAllowed = !guestAllowed;
-  const sharedEnabled = Array.isArray(sharedRows);
-  const sharedFrom = sharedRange?.from || from;
-  const sharedTo = sharedRange?.to || to;
 
   const mode = useMemo(() => {
     if (period === "day") return "hourly";
@@ -47,70 +49,86 @@ export function useTrendData({
     return "daily";
   }, [period]);
 
-  const storageKey = (() => {
-    if (!cacheKey) return null;
-    const host = safeHost(baseUrl) || "default";
-    const tzKey = getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes });
-    if (mode === "hourly") {
-      const dayKey = to || from || "day";
-      return `vibeusage.trend.${cacheKey}.${host}.hourly.${dayKey}.${tzKey}`;
-    }
-    if (mode === "monthly") {
-      const toKey = to || "today";
-      return `vibeusage.trend.${cacheKey}.${host}.monthly.${months}.${toKey}.${tzKey}`;
-    }
-    const rangeKey = `${from || ""}.${to || ""}`;
-    return `vibeusage.trend.${cacheKey}.${host}.daily.${rangeKey}.${tzKey}`;
-  })();
+  const storageKey = buildDashboardCacheKey({
+    scope: "trend",
+    cacheKey,
+    baseUrl,
+    segments:
+      mode === "hourly"
+        ? ["hourly", to || from || "day", getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes })]
+        : mode === "monthly"
+          ? [
+              "monthly",
+              months,
+              to || "today",
+              getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes }),
+            ]
+          : ["daily", from || "", to || "", getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes })],
+  });
+  const liveSnapshot = storageKey ? readDashboardLiveSnapshot("trend", storageKey) : null;
 
   const readCache = useCallback(() => {
-    if (!storageKey || typeof window === "undefined") return null;
-    try {
-      const raw = window.localStorage.getItem(storageKey);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed || !Array.isArray(parsed.rows)) return null;
-      return parsed;
-    } catch (_e) {
-      return null;
-    }
+    return readDashboardCache(storageKey, (parsed) => Array.isArray(parsed?.rows));
   }, [storageKey]);
 
   const writeCache = useCallback(
     (payload: any) => {
-      if (!storageKey || typeof window === "undefined") return;
-      try {
-        window.localStorage.setItem(storageKey, JSON.stringify(payload));
-      } catch (_e) {
-        // ignore write errors
-      }
+      writeDashboardCache(storageKey, payload, { source: "edge" });
     },
-    [storageKey]
+    [storageKey],
   );
 
   const clearCache = useCallback(() => {
-    if (!storageKey || typeof window === "undefined") return;
-    try {
-      window.localStorage.removeItem(storageKey);
-    } catch (_e) {
-      // ignore remove errors
-    }
+    clearDashboardCache(storageKey);
   }, [storageKey]);
 
-  const refresh = useCallback(async () => {
-    if (sharedEnabled) {
-      setRows(Array.isArray(sharedRows) ? sharedRows : []);
-      setRange({ from: sharedFrom, to: sharedTo });
-      setSource("shared");
-      setFetchedAt(null);
-      setLoading(false);
-      setError(null);
-      return;
+  const visibleStateRef = useRef(false);
+  useEffect(() => {
+    visibleStateRef.current = rows.length > 0;
+  }, [rows.length]);
+
+  const applySnapshot = useCallback((snapshot: any) => {
+    if (!snapshot) return;
+    setRows(Array.isArray(snapshot.rows) ? snapshot.rows : []);
+    setRange({ from: snapshot.from || from, to: snapshot.to || to });
+    setFetchedAt(snapshot.fetchedAt || null);
+    setSource("edge");
+    setResolvedStorageKey(storageKey);
+  }, [from, storageKey, to]);
+
+  const snapshotRows = Array.isArray(liveSnapshot?.rows) ? liveSnapshot.rows : [];
+  const hasImmediateSnapshot =
+    resolvedStorageKey !== storageKey &&
+    Boolean(storageKey) &&
+    snapshotRows.length > 0;
+  const visibleRows = hasImmediateSnapshot ? snapshotRows : rows;
+  const visibleRange = hasImmediateSnapshot
+    ? { from: liveSnapshot?.from || from, to: liveSnapshot?.to || to }
+    : range;
+  const visibleFetchedAt = hasImmediateSnapshot ? liveSnapshot?.fetchedAt || null : fetchedAt;
+  const visibleSource = hasImmediateSnapshot ? "edge" : source;
+  const visibleLoading = hasImmediateSnapshot ? false : loading;
+  const visibleRefreshing = hasImmediateSnapshot ? true : refreshing;
+  const visibleError = hasImmediateSnapshot ? null : error;
+
+  const refresh = useCallback(async ({ signal }: any = {}) => {
+    const snapshot = readDashboardLiveSnapshot("trend", storageKey);
+    if (snapshot?.rows) {
+      applySnapshot(snapshot);
     }
-    const resolvedToken = await resolveAuthAccessToken(accessToken);
-    if (!resolvedToken && !guestAllowed && !mockEnabled) return;
-    setLoading(true);
+    const hasVisibleState = Array.isArray(snapshot?.rows) ? true : visibleStateRef.current;
+    setLoading(!hasVisibleState);
+    setRefreshing(hasVisibleState);
     setError(null);
+    const resolvedToken = await resolveAuthAccessToken(accessToken);
+    if (!resolvedToken && !mockEnabled) {
+      if (!signal?.aborted) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
+    if (!resolvedToken && !mockEnabled) return;
+    if (signal?.aborted) return;
     try {
       let response;
       if (mode === "hourly") {
@@ -121,6 +139,7 @@ export function useTrendData({
           day,
           timeZone,
           tzOffsetMinutes,
+          signal,
         });
       } else if (mode === "monthly") {
         response = await getUsageMonthly({
@@ -130,6 +149,7 @@ export function useTrendData({
           to,
           timeZone,
           tzOffsetMinutes,
+          signal,
         });
       } else {
         response = await getUsageDaily({
@@ -139,8 +159,10 @@ export function useTrendData({
           to,
           timeZone,
           tzOffsetMinutes,
+          signal,
         });
       }
+      if (signal?.aborted) return;
 
       const nextFrom = response?.from || from || response?.day || null;
       const nextTo = response?.to || to || response?.day || null;
@@ -165,11 +187,19 @@ export function useTrendData({
         });
       }
       const nowIso = new Date().toISOString();
+      if (signal?.aborted) return;
 
       setRows(nextRows);
       setRange({ from: nextFrom, to: nextTo });
       setSource("edge");
       setFetchedAt(nowIso);
+      setResolvedStorageKey(storageKey);
+      writeDashboardLiveSnapshot("trend", storageKey, {
+        rows: nextRows,
+        from: nextFrom,
+        to: nextTo,
+        fetchedAt: nowIso,
+      });
 
       if (cacheAllowed) {
         writeCache({
@@ -183,6 +213,7 @@ export function useTrendData({
         clearCache();
       }
     } catch (e) {
+      if (signal?.aborted || (e as any)?.name === "AbortError") return;
       if (cacheAllowed) {
         const cached = readCache();
         if (cached?.rows) {
@@ -194,8 +225,8 @@ export function useTrendData({
                   now,
                 })
               : Array.isArray(cached.rows)
-              ? cached.rows
-              : [];
+                ? cached.rows
+                : [];
           if (mode === "hourly") {
             filledRows = markHourlyFuture(filledRows, {
               timeZone,
@@ -214,27 +245,27 @@ export function useTrendData({
           setSource("cache");
           setFetchedAt(cached.fetchedAt || null);
           setError(null);
+          setResolvedStorageKey(storageKey);
         } else {
-          setRows([]);
-          setRange({ from, to });
           setSource("edge");
           setFetchedAt(null);
           const err = e as any;
           setError(err?.message || String(err));
         }
       } else {
-        setRows([]);
-        setRange({ from, to });
         setSource("edge");
         setFetchedAt(null);
         const err = e as any;
         setError(err?.message || String(err));
       }
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
+      setRefreshing(false);
     }
   }, [
     accessToken,
+    applySnapshot,
     baseUrl,
     from,
     mockEnabled,
@@ -243,114 +274,57 @@ export function useTrendData({
     mode,
     months,
     readCache,
-    tokenReady,
-    sharedEnabled,
-    sharedFrom,
-    sharedRows,
-    sharedTo,
     timeZone,
     to,
     tzOffsetMinutes,
     now,
     clearCache,
+    storageKey,
     writeCache,
   ]);
 
   useEffect(() => {
-    if (sharedEnabled) {
-      setRows(Array.isArray(sharedRows) ? sharedRows : []);
-      setRange({ from: sharedFrom, to: sharedTo });
-      setSource("shared");
-      setFetchedAt(null);
-      setLoading(false);
-      setError(null);
-      return;
-    }
     if (!tokenReady && !guestAllowed && !mockEnabled) {
       setRows([]);
       setRange({ from, to });
       setError(null);
       setLoading(false);
+      setRefreshing(false);
       setSource("edge");
       setFetchedAt(null);
+      setResolvedStorageKey(storageKey);
       return;
     }
-    if (!cacheAllowed) {
-      clearCache();
-      setRows([]);
-      setRange({ from, to });
-      setError(null);
-      setSource("edge");
-      setFetchedAt(null);
-    } else {
-      const cached = readCache();
-      if (cached?.rows) {
-        let filledRows =
-          mode === "daily"
-          ? fillDailyGaps(cached.rows || [], cached.from || from, cached.to || to, {
-              timeZone,
-              offsetMinutes: tzOffsetMinutes,
-              now,
-            })
-          : Array.isArray(cached.rows)
-          ? cached.rows
-          : [];
-        if (mode === "hourly") {
-          filledRows = markHourlyFuture(filledRows, {
-            timeZone,
-            offsetMinutes: tzOffsetMinutes,
-            now,
-          });
-        } else if (mode === "monthly") {
-          filledRows = markMonthlyFuture(filledRows, {
-            timeZone,
-            offsetMinutes: tzOffsetMinutes,
-            now,
-          });
-        }
-        setRows(filledRows);
-        setRange({ from: cached.from || from, to: cached.to || to });
-        setSource("cache");
-        setFetchedAt(cached.fetchedAt || null);
-      }
-    }
-    refresh();
+    setLoading(true);
+    if (!cacheAllowed) clearCache();
+    setError(null);
+    setSource("edge");
+    const controller = new AbortController();
+    refresh({ signal: controller.signal });
+    return () => {
+      controller.abort();
+    };
   }, [
     accessToken,
     mockEnabled,
-    readCache,
     refresh,
-    sharedEnabled,
-    sharedFrom,
-    sharedRows,
-    sharedTo,
     tokenReady,
     guestAllowed,
     cacheAllowed,
     clearCache,
   ]);
 
-  const normalizedSource = mockEnabled ? "mock" : source;
-
   return {
-    rows,
-    from: range.from || from,
-    to: range.to || to,
-    source: normalizedSource,
-    fetchedAt,
-    loading,
-    error,
+    rows: visibleRows,
+    from: visibleRange.from || from,
+    to: visibleRange.to || to,
+    source: mockEnabled ? "mock" : visibleSource,
+    fetchedAt: visibleFetchedAt,
+    loading: visibleLoading,
+    refreshing: visibleRefreshing,
+    error: visibleError,
     refresh,
   };
-}
-
-function safeHost(baseUrl: any) {
-  try {
-    const u = new URL(baseUrl);
-    return u.host;
-  } catch (_e) {
-    return null;
-  }
 }
 
 function parseUtcDate(yyyyMmDd: any) {
@@ -370,23 +344,20 @@ function parseUtcDate(yyyyMmDd: any) {
 }
 
 function addUtcDays(date: Date, days: number) {
-  return new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days)
-  );
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days));
 }
 
 function fillDailyGaps(
   rows: any[],
   from: any,
   to: any,
-  { timeZone, offsetMinutes, now }: any = {}
+  { timeZone, offsetMinutes, now }: any = {},
 ) {
   const start = parseUtcDate(from);
   const end = parseUtcDate(to);
   if (!start || !end || end < start) return Array.isArray(rows) ? rows : [];
 
-  const baseDate =
-    now instanceof Date && Number.isFinite(now.getTime()) ? now : new Date();
+  const baseDate = now instanceof Date && Number.isFinite(now.getTime()) ? now : new Date();
   const todayKey = getLocalDayKey({ timeZone, offsetMinutes, date: baseDate });
   const today = parseUtcDate(todayKey);
   const todayTime = today ? today.getTime() : baseDate.getTime();
@@ -458,8 +429,7 @@ function markMonthlyFuture(rows: any[], { timeZone, offsetMinutes, now }: any = 
 }
 
 function getNowParts({ timeZone, offsetMinutes, now }: any = {}) {
-  const baseDate =
-    now instanceof Date && Number.isFinite(now.getTime()) ? now : new Date();
+  const baseDate = now instanceof Date && Number.isFinite(now.getTime()) ? now : new Date();
   if (timeZone && typeof Intl !== "undefined" && Intl.DateTimeFormat) {
     try {
       const formatter = new Intl.DateTimeFormat("en-CA", {

@@ -1,18 +1,14 @@
+import { Button } from "@base-ui/react/button";
+import { Input } from "@base-ui/react/input";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { copy } from "../../../lib/copy";
-import {
-  safeGetItem,
-  safeSetItem,
-  safeWriteClipboard,
-} from "../../../lib/safe-browser";
+import { safeGetItem, safeSetItem, safeWriteClipboard } from "../../../lib/safe-browser";
 
 export function UpgradeAlertModal({ requiredVersion, installCommand, onClose }) {
-  const normalizedRequired =
-    typeof requiredVersion === "string" ? requiredVersion.trim() : "";
+  const normalizedRequired = typeof requiredVersion === "string" ? requiredVersion.trim() : "";
   const hasVersion = normalizedRequired.length > 0;
   const unknownDismissKey = "vibeusage_upgrade_dismissed_unknown";
-  const resolvedInstallCommand =
-    installCommand ?? copy("dashboard.upgrade_alert.install_command");
+  const resolvedInstallCommand = installCommand ?? copy("dashboard.upgrade_alert.install_command");
   const sparkleLabel = copy("dashboard.upgrade_alert.sparkle");
   const titleLabel = copy("dashboard.upgrade_alert.title");
   const subtitleLabel = hasVersion
@@ -26,11 +22,8 @@ export function UpgradeAlertModal({ requiredVersion, installCommand, onClose }) 
   const ignoreLabel = copy("dashboard.upgrade_alert.ignore");
   const [copied, setCopied] = useState(false);
   const storageKey = useMemo(
-    () =>
-      hasVersion
-        ? `vibeusage_upgrade_dismissed_${normalizedRequired}`
-        : unknownDismissKey,
-    [hasVersion, normalizedRequired, unknownDismissKey]
+    () => (hasVersion ? `vibeusage_upgrade_dismissed_${normalizedRequired}` : unknownDismissKey),
+    [hasVersion, normalizedRequired, unknownDismissKey],
   );
   const [isVisible, setIsVisible] = useState(() => {
     // If running on server, default to true (or handle hydration mismatch)
@@ -96,40 +89,36 @@ export function UpgradeAlertModal({ requiredVersion, installCommand, onClose }) 
             <h3 className="text-gold font-black text-heading uppercase leading-none">
               {titleLabel}
             </h3>
-            <p className="text-caption text-gold/60 uppercase mt-1">
-              {subtitleLabel}
-            </p>
+            <p className="text-caption text-gold/60 uppercase mt-1">{subtitleLabel}</p>
           </div>
         </div>
 
         {/* Middle: Command Area */}
         <div className="flex-1 flex items-center justify-center max-w-xl w-full">
           <div className="flex items-center w-full bg-matrix-panel border border-gold/20 pl-3 rounded-sm group hover:border-gold/40 transition-all overflow-hidden">
-            <span className="text-caption text-gold/80 shrink-0">
-              {promptLabel}
-            </span>
-            <input
+            <span className="text-caption text-gold/80 shrink-0">{promptLabel}</span>
+            <Input
               readOnly
               value={resolvedInstallCommand}
               className="bg-transparent border-none text-body text-gray-300 w-full px-2 py-1 outline-none pointer-events-none"
             />
-            <button
+            <Button
               onClick={handleCopy}
               className="shrink-0 bg-gold/10 hover:bg-gold/20 border-l border-gold/20 px-3 py-1.5 text-caption font-black uppercase text-gold transition-all"
             >
               {copied ? copiedLabel : copyLabel}
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Right Side: Actions */}
         <div className="flex items-center space-x-4">
-          <button
+          <Button
             onClick={handleDismiss}
             className="text-caption font-black uppercase text-gold/40 hover:text-gold transition-all tracking-[0.2em]"
           >
             {ignoreLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

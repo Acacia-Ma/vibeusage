@@ -1,0 +1,25 @@
+id: ARCH-001
+title: Replace architecture canvas workflow with repo sitemap
+status: done
+owner: codex-main
+touches:
+  - AGENTS.md
+  - README.md
+  - package.json
+  - docs/tdd/README.md
+  - docs/repo-sitemap.md
+  - docs/architecture-canvas.md
+  - scripts/ops/architecture-canvas.cjs
+  - test/architecture-canvas.test.js
+  - architecture.canvas
+  - docs/coordination/index.yaml
+  - docs/coordination/tasks/ARCH-001.yaml
+  - openspec/changes/2026-03-28-replace-canvas-with-repo-sitemap/
+notes:
+  - "DECISION: Replace the live architecture-canvas workflow with a plain Markdown repo sitemap as the only active navigation source of truth."
+  - "DECISION: Update only live workflow references; leave historical plans, retrospectives, and archived changes untouched."
+  - "EVIDENCE: docs/repo-sitemap.md is now the active repository navigation source of truth and the live Canvas script/test/artifact were removed."
+  - "EVIDENCE: npm test, npm run ci:local, and openspec validate 2026-03-28-replace-canvas-with-repo-sitemap --strict all passed."
+  - "NEXT: Historical plans and retrospectives may still mention architecture.canvas, but active workflows no longer depend on it."
+commit_refs:
+  - be82894d

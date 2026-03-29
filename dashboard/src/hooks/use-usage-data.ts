@@ -1,10 +1,19 @@
-import { useCallback, useEffect, useState } from "react";
-
-import { getUsageDaily, getUsageSummary } from "../lib/vibeusage-api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { isAccessTokenReady, resolveAuthAccessToken } from "../lib/auth-token";
+import {
+  buildDashboardCacheKey,
+  clearDashboardCache,
+  readDashboardCache,
+  writeDashboardCache,
+} from "../lib/dashboard-cache";
+import {
+  readDashboardLiveSnapshot,
+  writeDashboardLiveSnapshot,
+} from "../lib/dashboard-live-snapshot";
 import { formatDateLocal, formatDateUTC } from "../lib/date-range";
 import { isMockEnabled } from "../lib/mock-data";
-import { isAccessTokenReady, resolveAuthAccessToken } from "../lib/auth-token";
 import { getLocalDayKey, getTimeZoneCacheKey } from "../lib/timezone";
+import { getUsageDaily, getUsageSummary } from "../lib/vibeusage-api";
 
 export function useUsageData({
   baseUrl,
@@ -20,73 +29,133 @@ export function useUsageData({
 }: any = {}) {
   const [daily, setDaily] = useState<any[]>([]);
   const [summary, setSummary] = useState<any | null>(null);
+  const [rolling, setRolling] = useState<any | null>(null);
   const [source, setSource] = useState<string>("edge");
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resolvedStorageKey, setResolvedStorageKey] = useState<string | null>(null);
   const mockEnabled = isMockEnabled();
   const tokenReady = isAccessTokenReady(accessToken);
   const cacheAllowed = !guestAllowed;
 
-  const storageKey = (() => {
-    if (!cacheKey) return null;
-    const host = safeHost(baseUrl) || "default";
-    const dailyKey = includeDaily ? "daily" : "summary";
-    const tzKey = getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes });
-    return `vibeusage.usage.${cacheKey}.${host}.${from}.${to}.${dailyKey}.${tzKey}`;
-  })();
+  const storageKey = buildDashboardCacheKey({
+    scope: "usage",
+    cacheKey,
+    baseUrl,
+    segments: [
+      from,
+      to,
+      includeDaily ? "daily" : "summary",
+      getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes }),
+    ],
+  });
+  const liveSnapshot = storageKey ? readDashboardLiveSnapshot("usage", storageKey) : null;
 
   const readCache = useCallback(() => {
-    if (!storageKey || typeof window === "undefined") return null;
-    try {
-      const raw = window.localStorage.getItem(storageKey);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed || !parsed.summary) return null;
-      return parsed;
-    } catch (_e) {
-      return null;
-    }
+    return readDashboardCache(storageKey, (parsed) => Boolean(parsed?.summary));
   }, [storageKey]);
 
   const writeCache = useCallback(
     (payload: any) => {
-      if (!storageKey || typeof window === "undefined") return;
-      try {
-        window.localStorage.setItem(storageKey, JSON.stringify(payload));
-      } catch (_e) {
-        // ignore write errors (quota/private mode)
-      }
+      writeDashboardCache(storageKey, payload, { source: "edge" });
     },
-    [storageKey]
+    [storageKey],
   );
 
   const clearCache = useCallback(() => {
-    if (!storageKey || typeof window === "undefined") return;
-    try {
-      window.localStorage.removeItem(storageKey);
-    } catch (_e) {
-      // ignore remove errors (quota/private mode)
-    }
+    clearDashboardCache(storageKey);
   }, [storageKey]);
 
-  const refresh = useCallback(async () => {
-    const resolvedToken = await resolveAuthAccessToken(accessToken);
-    if (!resolvedToken && !guestAllowed && !mockEnabled) return;
-    setLoading(true);
+  const visibleStateRef = useRef(false);
+  useEffect(() => {
+    visibleStateRef.current = Boolean(summary) || Boolean(rolling) || daily.length > 0;
+  }, [daily.length, rolling, summary]);
+
+  const applySnapshot = useCallback((snapshot: any) => {
+    if (!snapshot) return;
+    setDaily(Array.isArray(snapshot.daily) ? snapshot.daily : []);
+    setSummary(snapshot.summary || null);
+    setRolling(snapshot.rolling || null);
+    setFetchedAt(snapshot.fetchedAt || null);
+    setSource("edge");
+    setResolvedStorageKey(storageKey);
+  }, [storageKey]);
+
+  const snapshotDaily = Array.isArray(liveSnapshot?.daily) ? liveSnapshot.daily : [];
+  const hasImmediateSnapshot =
+    resolvedStorageKey !== storageKey &&
+    Boolean(storageKey) &&
+    (Boolean(liveSnapshot?.summary) || Boolean(liveSnapshot?.rolling) || snapshotDaily.length > 0);
+  const visibleDaily = hasImmediateSnapshot ? snapshotDaily : daily;
+  const visibleSummary = hasImmediateSnapshot ? liveSnapshot?.summary || null : summary;
+  const visibleRolling = hasImmediateSnapshot ? liveSnapshot?.rolling || null : rolling;
+  const visibleFetchedAt = hasImmediateSnapshot ? liveSnapshot?.fetchedAt || null : fetchedAt;
+  const visibleSource = hasImmediateSnapshot ? "edge" : source;
+  const visibleLoading = hasImmediateSnapshot ? false : loading;
+  const visibleRefreshing = hasImmediateSnapshot ? true : refreshing;
+  const visibleError = hasImmediateSnapshot ? null : error;
+
+  const refresh = useCallback(async ({ signal }: any = {}) => {
+    const snapshot = readDashboardLiveSnapshot("usage", storageKey);
+    if (snapshot?.summary || snapshot?.rolling || Array.isArray(snapshot?.daily)) {
+      applySnapshot(snapshot);
+    }
+    const hasVisibleState =
+      Boolean(snapshot?.summary) || Boolean(snapshot?.rolling) || Array.isArray(snapshot?.daily)
+        ? true
+        : visibleStateRef.current;
+    setLoading(!hasVisibleState);
+    setRefreshing(hasVisibleState);
     setError(null);
+    const resolvedToken = await resolveAuthAccessToken(accessToken);
+    if (!resolvedToken && !mockEnabled) {
+      if (!signal?.aborted) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
+    if (!resolvedToken && !mockEnabled) return;
+    if (signal?.aborted) return;
     try {
       let dailyRes = null;
       let summaryRes = null;
       if (includeDaily) {
-        dailyRes = await getUsageDaily({
+        const dailyPromise = getUsageDaily({
           baseUrl,
           accessToken: resolvedToken,
           from,
           to,
           timeZone,
           tzOffsetMinutes,
+          signal,
         });
+        const summaryPromise = getUsageSummary({
+          baseUrl,
+          accessToken: resolvedToken,
+          from,
+          to,
+          timeZone,
+          tzOffsetMinutes,
+          signal,
+        });
+        const summaryResult = await summaryPromise.then(
+          (value) => ({ status: "fulfilled" as const, value }),
+          (reason) => ({ status: "rejected" as const, reason }),
+        );
+        if (signal?.aborted) return;
+        if (summaryResult.status === "fulfilled") {
+          summaryRes = summaryResult.value;
+          setSummary(summaryRes?.totals || null);
+          setRolling(summaryRes?.rolling || null);
+          setSource("edge");
+          setLoading(false);
+          setRefreshing(false);
+          setResolvedStorageKey(storageKey);
+        }
+        dailyRes = await dailyPromise;
+        if (signal?.aborted) return;
       } else {
         summaryRes = await getUsageSummary({
           baseUrl,
@@ -95,11 +164,11 @@ export function useUsageData({
           to,
           timeZone,
           tzOffsetMinutes,
+          signal,
         });
       }
 
-      let nextDaily =
-        includeDaily && Array.isArray(dailyRes?.data) ? dailyRes.data : [];
+      let nextDaily = includeDaily && Array.isArray(dailyRes?.data) ? dailyRes.data : [];
       if (includeDaily) {
         nextDaily = fillDailyGaps(nextDaily, from, to, {
           timeZone,
@@ -108,27 +177,46 @@ export function useUsageData({
         });
       }
       let nextSummary = summaryRes?.totals || dailyRes?.summary?.totals || null;
-      if (includeDaily && !nextSummary) {
-        const fallback = await getUsageSummary({
-          baseUrl,
-          accessToken: resolvedToken,
-          from,
-          to,
-          timeZone,
-          tzOffsetMinutes,
-        });
-        nextSummary = fallback?.totals || null;
+      let nextRolling = summaryRes?.rolling || dailyRes?.summary?.rolling || null;
+      if (includeDaily && !nextSummary && !summaryRes) {
+        try {
+          const fallback = await getUsageSummary({
+            baseUrl,
+            accessToken: resolvedToken,
+            from,
+            to,
+            timeZone,
+            tzOffsetMinutes,
+            signal,
+          });
+          nextSummary = fallback?.totals || null;
+          nextRolling = fallback?.rolling || nextRolling;
+        } catch (_e) {
+          // Ignore summary fallback errors when daily data is available.
+        }
       }
       const nowIso = new Date().toISOString();
+      if (signal?.aborted) return;
 
       setDaily(nextDaily);
       setSummary(nextSummary);
+      setRolling(nextRolling);
       setSource("edge");
       setFetchedAt(nowIso);
+      setLoading(false);
+      setRefreshing(false);
+      setResolvedStorageKey(storageKey);
+      writeDashboardLiveSnapshot("usage", storageKey, {
+        summary: nextSummary,
+        rolling: nextRolling,
+        daily: nextDaily,
+        fetchedAt: nowIso,
+      });
 
       if (nextSummary && cacheAllowed) {
         writeCache({
           summary: nextSummary,
+          rolling: nextRolling,
           daily: nextDaily,
           from,
           to,
@@ -139,10 +227,12 @@ export function useUsageData({
         clearCache();
       }
     } catch (e) {
+      if (signal?.aborted || (e as any)?.name === "AbortError") return;
       if (cacheAllowed) {
         const cached = readCache();
         if (cached?.summary) {
           setSummary(cached.summary);
+          setRolling(cached.rolling || null);
           const cachedDaily = Array.isArray(cached.daily) ? cached.daily : [];
           const filledDaily = includeDaily
             ? fillDailyGaps(cachedDaily, cached.from || from, cached.to || to, {
@@ -155,26 +245,26 @@ export function useUsageData({
           setSource("cache");
           setFetchedAt(cached.fetchedAt || null);
           setError(null);
+          setResolvedStorageKey(storageKey);
         } else {
           const err = e as any;
           setError(err?.message || String(err));
-          setDaily([]);
-          setSummary(null);
           setSource("edge");
           setFetchedAt(null);
         }
       } else {
         const err = e as any;
         setError(err?.message || String(err));
-        setDaily([]);
-        setSummary(null);
         setSource("edge");
         setFetchedAt(null);
       }
     } finally {
+      setRefreshing(false);
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, [
+    applySnapshot,
     accessToken,
     baseUrl,
     from,
@@ -189,6 +279,7 @@ export function useUsageData({
     to,
     tzOffsetMinutes,
     clearCache,
+    storageKey,
     writeCache,
   ]);
 
@@ -196,37 +287,24 @@ export function useUsageData({
     if (!tokenReady && !guestAllowed && !mockEnabled) {
       setDaily([]);
       setSummary(null);
+      setRolling(null);
       setError(null);
       setLoading(false);
+      setRefreshing(false);
       setSource("edge");
       setFetchedAt(null);
+      setResolvedStorageKey(storageKey);
       return;
     }
-    if (!cacheAllowed) {
-      clearCache();
-      setDaily([]);
-      setSummary(null);
-      setError(null);
-      setSource("edge");
-      setFetchedAt(null);
-    } else {
-      const cached = readCache();
-      if (cached?.summary) {
-        setSummary(cached.summary);
-        const cachedDaily = Array.isArray(cached.daily) ? cached.daily : [];
-        const filledDaily = includeDaily
-          ? fillDailyGaps(cachedDaily, cached.from || from, cached.to || to, {
-              timeZone,
-              offsetMinutes: tzOffsetMinutes,
-              now,
-            })
-          : cachedDaily;
-        setDaily(filledDaily);
-        setSource("cache");
-        setFetchedAt(cached.fetchedAt || null);
-      }
-    }
-    refresh();
+    setLoading(true);
+    if (!cacheAllowed) clearCache();
+    setError(null);
+    setSource("edge");
+    const controller = new AbortController();
+    refresh({ signal: controller.signal });
+    return () => {
+      controller.abort();
+    };
   }, [
     accessToken,
     mockEnabled,
@@ -241,23 +319,16 @@ export function useUsageData({
   const normalizedSource = mockEnabled ? "mock" : source;
 
   return {
-    daily,
-    summary,
-    source: normalizedSource,
-    fetchedAt,
-    loading,
-    error,
+    daily: visibleDaily,
+    summary: visibleSummary,
+    rolling: visibleRolling,
+    source: mockEnabled ? "mock" : visibleSource,
+    fetchedAt: visibleFetchedAt,
+    loading: visibleLoading,
+    refreshing: visibleRefreshing,
+    error: visibleError,
     refresh,
   };
-}
-
-function safeHost(baseUrl: any) {
-  try {
-    const u = new URL(baseUrl);
-    return u.host;
-  } catch (_e) {
-    return null;
-  }
 }
 
 function parseUtcDate(yyyyMmDd: any) {
@@ -277,23 +348,20 @@ function parseUtcDate(yyyyMmDd: any) {
 }
 
 function addUtcDays(date: Date, days: number) {
-  return new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days)
-  );
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days));
 }
 
 function fillDailyGaps(
   rows: any[],
   from: any,
   to: any,
-  { timeZone, offsetMinutes, now }: any = {}
+  { timeZone, offsetMinutes, now }: any = {},
 ) {
   const start = parseUtcDate(from);
   const end = parseUtcDate(to);
   if (!start || !end || end < start) return Array.isArray(rows) ? rows : [];
 
-  const baseDate =
-    now instanceof Date && Number.isFinite(now.getTime()) ? now : new Date();
+  const baseDate = now instanceof Date && Number.isFinite(now.getTime()) ? now : new Date();
   const todayKey = getLocalDayKey({ timeZone, offsetMinutes, date: baseDate });
   const today = parseUtcDate(todayKey);
   const todayTime = today ? today.getTime() : baseDate.getTime();

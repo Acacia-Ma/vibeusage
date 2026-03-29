@@ -1,8 +1,9 @@
-import { createInsforgeClient } from "./insforge-client";
 import { clearSessionSoftExpired, markSessionSoftExpired } from "./auth-storage";
 import { normalizeAccessToken, resolveAuthAccessToken } from "./auth-token";
 import { formatDateLocal } from "./date-range";
-import { insforgeAuthClient } from "./insforge-auth-client";
+import { refreshInsforgeSession } from "./insforge-auth-client";
+import { createInsforgeClient } from "./insforge-client";
+import vibeusageFunctionContract from "../../../src/shared/vibeusage-function-contract.cjs";
 import {
   getMockUsageDaily,
   getMockUsageHourly,
@@ -10,35 +11,27 @@ import {
   getMockUsageMonthly,
   getMockUsageModelBreakdown,
   getMockUsageSummary,
+  getMockProjectUsageSummary,
+  getMockLeaderboard,
   isMockEnabled,
 } from "./mock-data";
 
-const BACKEND_RUNTIME_UNAVAILABLE =
-  "Backend runtime unavailable (InsForge). Please retry later.";
-
-const PATHS = {
-  usageSummary: "vibeusage-usage-summary",
-  usageDaily: "vibeusage-usage-daily",
-  usageHourly: "vibeusage-usage-hourly",
-  usageMonthly: "vibeusage-usage-monthly",
-  usageHeatmap: "vibeusage-usage-heatmap",
-  usageModelBreakdown: "vibeusage-usage-model-breakdown",
-  linkCodeInit: "vibeusage-link-code-init",
-  publicViewStatus: "vibeusage-public-view-status",
-  publicViewIssue: "vibeusage-public-view-issue",
-  publicViewRevoke: "vibeusage-public-view-revoke",
-  publicViewProfile: "vibeusage-public-view-profile",
-};
-
-const FUNCTION_PREFIX = "/functions";
-const LEGACY_FUNCTION_PREFIX = "/api/functions";
+const {
+  BACKEND_RUNTIME_UNAVAILABLE_MESSAGE: BACKEND_RUNTIME_UNAVAILABLE,
+  FUNCTION_PREFIX,
+  FUNCTION_SLUGS: PATHS,
+  LEGACY_FUNCTION_PREFIX,
+} = vibeusageFunctionContract as any;
 const REQUEST_KIND = {
   business: "business",
   probe: "probe",
 };
 type AnyRecord = Record<string, any>;
 
-let refreshInFlight: Promise<any> | null = null;
+const inFlightGetRequests = new Map<string, Promise<any>>();
+const queuedFunctionRequests: Array<() => void> = [];
+let activeFunctionRequests = 0;
+const MAX_CONCURRENT_FUNCTION_REQUESTS = 1;
 
 async function resolveAccessToken(accessToken: any) {
   return await resolveAuthAccessToken(accessToken);
@@ -68,18 +61,219 @@ export async function getUsageSummary({
   model,
   timeZone,
   tzOffsetMinutes,
+  signal,
+  rolling = false,
 }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   if (isMockEnabled()) {
-    return getMockUsageSummary({ from, to, seed: resolvedAccessToken });
+    return getMockUsageSummary({ from, to, seed: resolvedAccessToken, rolling });
   }
   const tzParams = buildTimeZoneParams({ timeZone, tzOffsetMinutes });
   const filterParams = buildFilterParams({ source, model });
+  const rollingParams = rolling ? { rolling: "1" } : {};
   return requestJson({
     baseUrl,
     accessToken: resolvedAccessToken,
     slug: PATHS.usageSummary,
-    params: { from, to, ...filterParams, ...tzParams },
+    params: { from, to, ...filterParams, ...tzParams, ...rollingParams },
+    fetchOptions: buildSignalFetchOptions(signal),
+  });
+}
+
+export async function getProjectUsageSummary({
+  baseUrl,
+  accessToken,
+  from,
+  to,
+  source,
+  limit,
+  timeZone,
+  tzOffsetMinutes,
+  signal,
+}: AnyRecord = {}) {
+  const resolvedAccessToken = await resolveAccessToken(accessToken);
+  if (isMockEnabled()) {
+    return getMockProjectUsageSummary({ seed: resolvedAccessToken, limit });
+  }
+  const tzParams = buildTimeZoneParams({ timeZone, tzOffsetMinutes });
+  const filterParams = buildFilterParams({ source });
+  const params: AnyRecord = { ...filterParams, ...tzParams };
+  if (from) params.from = from;
+  if (to) params.to = to;
+  if (limit != null) params.limit = String(limit);
+  return requestJson({
+    baseUrl,
+    accessToken: resolvedAccessToken,
+    slug: PATHS.projectUsageSummary,
+    params,
+    fetchOptions: buildSignalFetchOptions(signal),
+  });
+}
+
+export async function getLeaderboard({
+  baseUrl,
+  accessToken,
+  period,
+  metric,
+  limit,
+  offset,
+  signal,
+}: AnyRecord = {}) {
+  const resolvedAccessToken = await resolveAccessToken(accessToken);
+  if (isMockEnabled()) {
+    return getMockLeaderboard({ seed: resolvedAccessToken, period, metric, limit, offset });
+  }
+  const rawPeriod = typeof period === "string" ? period : "week";
+  const safePeriod = rawPeriod.trim().toLowerCase();
+  const normalizedPeriod =
+    safePeriod === "month" || safePeriod === "total" || safePeriod === "week" ? safePeriod : "week";
+  const params: AnyRecord = { period: normalizedPeriod };
+  if (metric) params.metric = String(metric);
+  if (limit != null) params.limit = String(limit);
+  if (offset != null) params.offset = String(offset);
+  return requestJson({
+    baseUrl,
+    accessToken: resolvedAccessToken,
+    slug: PATHS.leaderboard,
+    params,
+    fetchOptions: buildSignalFetchOptions(signal),
+  });
+}
+
+export async function getPublicVisibility({ baseUrl, accessToken, signal }: AnyRecord = {}) {
+  const resolvedAccessToken = await resolveAccessToken(accessToken);
+  if (isMockEnabled()) {
+    return { enabled: false, updated_at: null, share_token: null };
+  }
+  return requestJson({
+    baseUrl,
+    accessToken: resolvedAccessToken,
+    slug: PATHS.publicVisibility,
+    fetchOptions: buildSignalFetchOptions(signal),
+  });
+}
+
+export async function setPublicVisibility({
+  baseUrl,
+  accessToken,
+  enabled,
+  signal,
+}: AnyRecord = {}) {
+  const resolvedAccessToken = await resolveAccessToken(accessToken);
+  if (isMockEnabled()) {
+    return {
+      enabled: Boolean(enabled),
+      updated_at: new Date().toISOString(),
+      share_token: enabled ? "pv1-mock-token" : null,
+    };
+  }
+  return requestPostJson({
+    baseUrl,
+    accessToken: resolvedAccessToken,
+    slug: PATHS.publicVisibility,
+    body: { enabled: Boolean(enabled) },
+    fetchOptions: buildSignalFetchOptions(signal),
+  });
+}
+
+export async function getLeaderboardProfile({
+  baseUrl,
+  accessToken,
+  userId,
+  period,
+  signal,
+}: AnyRecord = {}) {
+  const resolvedAccessToken = await resolveAccessToken(accessToken);
+  if (isMockEnabled()) {
+    const mock = getMockLeaderboard({
+      seed: resolvedAccessToken,
+      period,
+      metric: "all",
+      limit: 250,
+      offset: 0,
+    });
+    const entries = Array.isArray(mock?.entries) ? mock.entries : [];
+    const match = entries.find((entry: any) => entry?.user_id === userId) || null;
+    return {
+      period: mock?.period ?? "week",
+      from: mock?.from ?? null,
+      to: mock?.to ?? null,
+      generated_at: mock?.generated_at ?? new Date().toISOString(),
+      entry: match
+        ? {
+            user_id: match.user_id ?? null,
+            display_name: match.display_name ?? null,
+            avatar_url: match.avatar_url ?? null,
+            rank: match.rank ?? null,
+            gpt_tokens: match.gpt_tokens ?? "0",
+            claude_tokens: match.claude_tokens ?? "0",
+            other_tokens: match.other_tokens ?? "0",
+            total_tokens: match.total_tokens ?? "0",
+          }
+        : null,
+    };
+  }
+  return requestJson({
+    baseUrl,
+    accessToken: resolvedAccessToken,
+    slug: PATHS.leaderboardProfile,
+    params: { user_id: String(userId || ""), period: String(period || "") },
+    fetchOptions: buildSignalFetchOptions(signal),
+  });
+}
+
+export async function getUserStatus({ baseUrl, accessToken, signal }: AnyRecord = {}) {
+  const resolvedAccessToken = await resolveAccessToken(accessToken);
+  if (isMockEnabled()) {
+    const now = new Date().toISOString();
+    return {
+      user_id: "mock-user",
+      created_at: now,
+      pro: {
+        active: true,
+        sources: ["mock"],
+        expires_at: null,
+        partial: false,
+        as_of: now,
+      },
+      subscriptions: {
+        partial: false,
+        as_of: now,
+        items: [
+          {
+            tool: "codex",
+            provider: "openai",
+            product: "chatgpt",
+            plan_type: "pro",
+            updated_at: now,
+          },
+          {
+            tool: "claude",
+            provider: "anthropic",
+            product: "subscription",
+            plan_type: "max",
+            rate_limit_tier: "default_claude_max_5x",
+            updated_at: now,
+          },
+        ],
+      },
+      install: {
+        partial: false,
+        as_of: now,
+        has_active_device_token: false,
+        has_active_device: false,
+        active_device_tokens: 0,
+        active_devices: 0,
+        latest_token_activity_at: null,
+        latest_device_seen_at: null,
+      },
+    };
+  }
+  return requestJson({
+    baseUrl,
+    accessToken: resolvedAccessToken,
+    slug: PATHS.userStatus,
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
@@ -91,6 +285,7 @@ export async function getUsageModelBreakdown({
   source,
   timeZone,
   tzOffsetMinutes,
+  signal,
 }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   if (isMockEnabled()) {
@@ -103,6 +298,7 @@ export async function getUsageModelBreakdown({
     accessToken: resolvedAccessToken,
     slug: PATHS.usageModelBreakdown,
     params: { from, to, ...filterParams, ...tzParams },
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
@@ -115,6 +311,7 @@ export async function getUsageDaily({
   model,
   timeZone,
   tzOffsetMinutes,
+  signal,
 }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   if (isMockEnabled()) {
@@ -127,6 +324,7 @@ export async function getUsageDaily({
     accessToken: resolvedAccessToken,
     slug: PATHS.usageDaily,
     params: { from, to, ...filterParams, ...tzParams },
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
@@ -138,6 +336,7 @@ export async function getUsageHourly({
   model,
   timeZone,
   tzOffsetMinutes,
+  signal,
 }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   if (isMockEnabled()) {
@@ -150,6 +349,7 @@ export async function getUsageHourly({
     accessToken: resolvedAccessToken,
     slug: PATHS.usageHourly,
     params: day ? { day, ...filterParams, ...tzParams } : { ...filterParams, ...tzParams },
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
@@ -162,6 +362,7 @@ export async function getUsageMonthly({
   model,
   timeZone,
   tzOffsetMinutes,
+  signal,
 }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   if (isMockEnabled()) {
@@ -179,6 +380,7 @@ export async function getUsageMonthly({
       ...filterParams,
       ...tzParams,
     },
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
@@ -192,6 +394,7 @@ export async function getUsageHeatmap({
   model,
   timeZone,
   tzOffsetMinutes,
+  signal,
 }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   if (isMockEnabled()) {
@@ -215,10 +418,15 @@ export async function getUsageHeatmap({
       ...filterParams,
       ...tzParams,
     },
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
-export async function requestInstallLinkCode({ baseUrl, accessToken }: AnyRecord = {}) {
+export async function requestInstallLinkCode({
+  baseUrl,
+  accessToken,
+  signal,
+}: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   if (isMockEnabled()) {
     return {
@@ -231,47 +439,34 @@ export async function requestInstallLinkCode({ baseUrl, accessToken }: AnyRecord
     accessToken: resolvedAccessToken,
     slug: PATHS.linkCodeInit,
     body: {},
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
-export async function getPublicViewStatus({ baseUrl, accessToken }: AnyRecord = {}) {
-  const resolvedAccessToken = await resolveAccessToken(accessToken);
-  return requestJson({
-    baseUrl,
-    accessToken: resolvedAccessToken,
-    slug: PATHS.publicViewStatus,
-  });
-}
-
-export async function getPublicViewProfile({ baseUrl, accessToken }: AnyRecord = {}) {
+export async function getPublicViewProfile({ baseUrl, accessToken, signal }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
   return requestJson({
     baseUrl,
     accessToken: resolvedAccessToken,
     slug: PATHS.publicViewProfile,
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
-export async function issuePublicViewToken({ baseUrl, accessToken }: AnyRecord = {}) {
+export async function getViewerIdentity({ baseUrl, accessToken, signal }: AnyRecord = {}) {
   const resolvedAccessToken = await resolveAccessToken(accessToken);
-  return requestPostJson({
+  return requestJson({
     baseUrl,
     accessToken: resolvedAccessToken,
-    slug: PATHS.publicViewIssue,
-    body: {},
+    slug: PATHS.viewerIdentity,
+    fetchOptions: buildSignalFetchOptions(signal),
   });
 }
 
-export async function revokePublicViewToken({ baseUrl, accessToken }: AnyRecord = {}) {
-  const resolvedAccessToken = await resolveAccessToken(accessToken);
-  return requestPostJson({
-    baseUrl,
-    accessToken: resolvedAccessToken,
-    slug: PATHS.publicViewRevoke,
-    body: {},
-  });
+function buildSignalFetchOptions(signal: AnyRecord) {
+  if (!signal) return undefined;
+  return { signal };
 }
-
 function buildTimeZoneParams({ timeZone, tzOffsetMinutes }: AnyRecord = {}) {
   const params: AnyRecord = {};
   const tz = typeof timeZone === "string" ? timeZone.trim() : "";
@@ -313,104 +508,138 @@ async function requestJson({
   const normalizedRequestKind = skipSessionExpiry ? REQUEST_KIND.probe : requestKind;
   let attempt = 0;
   const { primaryPath, fallbackPath } = buildFunctionPaths(slug);
+  const requestKey = buildInFlightGetKey({
+    baseUrl,
+    accessToken: activeAccessToken,
+    primaryPath,
+    fallbackPath,
+    params,
+    requestKind: normalizedRequestKind,
+    fetchOptions,
+  });
 
-  while (true) {
-    try {
-      const result = await requestWithFallback({
-        http,
-        primaryPath,
-        fallbackPath,
-        params,
-        fetchOptions,
-      });
-      clearSessionSoftExpiredIfNeeded({
-        hadAccessToken,
-        accessToken: activeAccessToken,
-      });
-      return result;
-    } catch (e) {
-      const errInput = e as any;
-      if (errInput?.name === "AbortError") throw e;
-      let err: any = null;
-      const status = errInput?.statusCode ?? errInput?.status;
-      if (
-        allowRefresh &&
-        shouldAttemptSessionRefresh({
-          status,
-          requestKind: normalizedRequestKind,
+  const executeRequest = async () => {
+    while (true) {
+      try {
+        const result = await requestWithFallback({
+          http,
+          primaryPath,
+          fallbackPath,
+          params,
+          fetchOptions,
+        });
+        clearSessionSoftExpiredIfNeeded({
           hadAccessToken,
           accessToken: activeAccessToken,
-        })
-      ) {
-        const refreshedSession = await refreshSessionOnce();
-        const refreshedToken = refreshedSession?.accessToken ?? null;
-        if (hasAccessTokenValue(refreshedToken)) {
-          const retryClient = createInsforgeClient({
-            baseUrl,
-            accessToken: refreshedToken,
-          });
-          const retryHttp = retryClient.getHttpClient();
-          activeAccessToken = refreshedToken;
-          hadAccessToken = true;
-          http = retryHttp;
-          try {
-            const retryResult = await requestWithFallback({
-              http: retryHttp,
-              primaryPath,
-              fallbackPath,
-              params,
-              fetchOptions,
-            });
-            clearSessionSoftExpiredIfNeeded({
-              hadAccessToken: true,
-              accessToken: refreshedToken,
-            });
-            return retryResult;
-          } catch (retryErr) {
-            const retryStatus = (retryErr as any)?.statusCode ?? (retryErr as any)?.status;
-            if (
-              shouldMarkSessionSoftExpired({
-                status: retryStatus,
-                hadAccessToken: true,
-                accessToken: refreshedToken,
-                skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
-              })
-            ) {
-              markSessionSoftExpired();
-            }
-            err = normalizeSdkError(retryErr, {
-              errorPrefix,
-              hadAccessToken: true,
-              accessToken: refreshedToken,
-              skipSessionExpiry: true,
-            });
-          }
-        } else if (
-          canSetSessionSoftExpired({
+        });
+        return result;
+      } catch (e) {
+        const errInput = e as any;
+        if (errInput?.name === "AbortError") throw e;
+        let err: any = null;
+        const status = errInput?.statusCode ?? errInput?.status;
+        if (
+          allowRefresh &&
+          shouldAttemptSessionRefresh({
+            status,
+            message: errInput?.message,
+            error: errInput?.error,
+            requestKind: normalizedRequestKind,
             hadAccessToken,
             accessToken: activeAccessToken,
-            skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
           })
         ) {
-          markSessionSoftExpired();
+          const refreshedSession = await refreshSessionOnce();
+          const refreshedToken = refreshedSession?.accessToken ?? null;
+          if (hasAccessTokenValue(refreshedToken)) {
+            const retryClient = createInsforgeClient({
+              baseUrl,
+              accessToken: refreshedToken,
+            });
+            const retryHttp = retryClient.getHttpClient();
+            activeAccessToken = refreshedToken;
+            hadAccessToken = true;
+            http = retryHttp;
+            try {
+              const retryResult = await requestWithFallback({
+                http: retryHttp,
+                primaryPath,
+                fallbackPath,
+                params,
+                fetchOptions,
+              });
+              clearSessionSoftExpiredIfNeeded({
+                hadAccessToken: true,
+                accessToken: refreshedToken,
+              });
+              return retryResult;
+            } catch (retryErr) {
+              const retryStatus = (retryErr as any)?.statusCode ?? (retryErr as any)?.status;
+              if (
+                shouldMarkSessionSoftExpiredAfterRefreshFailure({
+                  status: retryStatus,
+                  message: (retryErr as any)?.message,
+                  error: (retryErr as any)?.error,
+                  hadAccessToken: true,
+                  accessToken: refreshedToken,
+                  skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
+                })
+              ) {
+                markSessionSoftExpired(refreshedToken);
+              }
+              err = normalizeSdkError(retryErr, {
+                errorPrefix,
+                hadAccessToken: true,
+                accessToken: refreshedToken,
+                skipSessionExpiry: true,
+              });
+            }
+          } else if (
+            canSetSessionSoftExpired({
+              hadAccessToken,
+              accessToken: activeAccessToken,
+              skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
+            })
+          ) {
+            markSessionSoftExpired(activeAccessToken);
+          }
+          err ??= normalizeSdkError(errInput, {
+            errorPrefix,
+            hadAccessToken,
+            accessToken: activeAccessToken,
+            skipSessionExpiry: true,
+          });
         }
         err ??= normalizeSdkError(errInput, {
           errorPrefix,
           hadAccessToken,
           accessToken: activeAccessToken,
-          skipSessionExpiry: true,
+          skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
         });
+        if (!shouldRetry({ err, attempt, retryOptions })) throw err;
+        const delayMs = computeRetryDelayMs({ retryOptions, attempt });
+        await sleep(delayMs);
+        attempt += 1;
       }
-      err ??= normalizeSdkError(errInput, {
-        errorPrefix,
-        hadAccessToken,
-        accessToken: activeAccessToken,
-        skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
-      });
-      if (!shouldRetry({ err, attempt, retryOptions })) throw err;
-      const delayMs = computeRetryDelayMs({ retryOptions, attempt });
-      await sleep(delayMs);
-      attempt += 1;
+    }
+  };
+
+  if (!requestKey) {
+    return await executeRequest();
+  }
+
+  const existing = inFlightGetRequests.get(requestKey);
+  if (existing) {
+    return await existing;
+  }
+
+  const pending = executeRequest();
+  inFlightGetRequests.set(requestKey, pending);
+  try {
+    return await pending;
+  } finally {
+    if (inFlightGetRequests.get(requestKey) === pending) {
+      inFlightGetRequests.delete(requestKey);
     }
   }
 }
@@ -438,105 +667,111 @@ async function requestPostJson({
   let attempt = 0;
   const { primaryPath, fallbackPath } = buildFunctionPaths(slug);
 
-  while (true) {
-    try {
-      const result = await requestWithFallbackPost({
-        http,
-        primaryPath,
-        fallbackPath,
-        body,
-        fetchOptions,
-      });
-      clearSessionSoftExpiredIfNeeded({
-        hadAccessToken,
-        accessToken: activeAccessToken,
-      });
-      return result;
-    } catch (e) {
-      const errInput = e as any;
-      if (errInput?.name === "AbortError") throw e;
-      let err: any = null;
-      const status = errInput?.statusCode ?? errInput?.status;
-      if (
-        allowRefresh &&
-        shouldAttemptSessionRefresh({
-          status,
-          requestKind: normalizedRequestKind,
+  return await scheduleFunctionRequest(async () => {
+    while (true) {
+      try {
+        const result = await requestWithFallbackPost({
+          http,
+          primaryPath,
+          fallbackPath,
+          body,
+          fetchOptions,
+        });
+        clearSessionSoftExpiredIfNeeded({
           hadAccessToken,
           accessToken: activeAccessToken,
-        })
-      ) {
-        const refreshedSession = await refreshSessionOnce();
-        const refreshedToken = refreshedSession?.accessToken ?? null;
-        if (hasAccessTokenValue(refreshedToken)) {
-          const retryClient = createInsforgeClient({
-            baseUrl,
-            accessToken: refreshedToken,
-          });
-          const retryHttp = retryClient.getHttpClient();
-          activeAccessToken = refreshedToken;
-          hadAccessToken = true;
-          http = retryHttp;
-          try {
-            const retryResult = await requestWithFallbackPost({
-              http: retryHttp,
-              primaryPath,
-              fallbackPath,
-              body,
-              fetchOptions,
-            });
-            clearSessionSoftExpiredIfNeeded({
-              hadAccessToken: true,
-              accessToken: refreshedToken,
-            });
-            return retryResult;
-          } catch (retryErr) {
-            const retryStatus = (retryErr as any)?.statusCode ?? (retryErr as any)?.status;
-            if (
-              shouldMarkSessionSoftExpired({
-                status: retryStatus,
-                hadAccessToken: true,
-                accessToken: refreshedToken,
-                skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
-              })
-            ) {
-              markSessionSoftExpired();
-            }
-            err = normalizeSdkError(retryErr, {
-              errorPrefix,
-              hadAccessToken: true,
-              accessToken: refreshedToken,
-              skipSessionExpiry: true,
-            });
-          }
-        } else if (
-          canSetSessionSoftExpired({
+        });
+        return result;
+      } catch (e) {
+        const errInput = e as any;
+        if (errInput?.name === "AbortError") throw e;
+        let err: any = null;
+        const status = errInput?.statusCode ?? errInput?.status;
+        if (
+          allowRefresh &&
+          shouldAttemptSessionRefresh({
+            status,
+            message: errInput?.message,
+            error: errInput?.error,
+            requestKind: normalizedRequestKind,
             hadAccessToken,
             accessToken: activeAccessToken,
-            skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
           })
         ) {
-          markSessionSoftExpired();
+          const refreshedSession = await refreshSessionOnce();
+          const refreshedToken = refreshedSession?.accessToken ?? null;
+          if (hasAccessTokenValue(refreshedToken)) {
+            const retryClient = createInsforgeClient({
+              baseUrl,
+              accessToken: refreshedToken,
+            });
+            const retryHttp = retryClient.getHttpClient();
+            activeAccessToken = refreshedToken;
+            hadAccessToken = true;
+            http = retryHttp;
+            try {
+              const retryResult = await requestWithFallbackPost({
+                http: retryHttp,
+                primaryPath,
+                fallbackPath,
+                body,
+                fetchOptions,
+              });
+              clearSessionSoftExpiredIfNeeded({
+                hadAccessToken: true,
+                accessToken: refreshedToken,
+              });
+              return retryResult;
+            } catch (retryErr) {
+              const retryStatus = (retryErr as any)?.statusCode ?? (retryErr as any)?.status;
+              if (
+                shouldMarkSessionSoftExpiredAfterRefreshFailure({
+                  status: retryStatus,
+                  message: (retryErr as any)?.message,
+                  error: (retryErr as any)?.error,
+                  hadAccessToken: true,
+                  accessToken: refreshedToken,
+                  skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
+                })
+              ) {
+                markSessionSoftExpired(refreshedToken);
+              }
+              err = normalizeSdkError(retryErr, {
+                errorPrefix,
+                hadAccessToken: true,
+                accessToken: refreshedToken,
+                skipSessionExpiry: true,
+              });
+            }
+          } else if (
+            canSetSessionSoftExpired({
+              hadAccessToken,
+              accessToken: activeAccessToken,
+              skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
+            })
+          ) {
+            markSessionSoftExpired(activeAccessToken);
+          }
+          err ??= normalizeSdkError(errInput, {
+            errorPrefix,
+            hadAccessToken,
+            accessToken: activeAccessToken,
+            skipSessionExpiry: true,
+          });
         }
         err ??= normalizeSdkError(errInput, {
           errorPrefix,
           hadAccessToken,
           accessToken: activeAccessToken,
-          skipSessionExpiry: true,
+          skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
         });
+        if (!shouldRetry({ err, attempt, retryOptions })) throw err;
+        const delayMs = computeRetryDelayMs({ retryOptions, attempt });
+        await sleep(delayMs);
+        attempt += 1;
       }
-      err ??= normalizeSdkError(errInput, {
-        errorPrefix,
-        hadAccessToken,
-        accessToken: activeAccessToken,
-        skipSessionExpiry: normalizedRequestKind === REQUEST_KIND.probe,
-      });
-      if (!shouldRetry({ err, attempt, retryOptions })) throw err;
-      const delayMs = computeRetryDelayMs({ retryOptions, attempt });
-      await sleep(delayMs);
-      attempt += 1;
     }
-  }
+  }, fetchOptions?.signal);
 }
 
 function buildFunctionPaths(slug: any) {
@@ -546,9 +781,100 @@ function buildFunctionPaths(slug: any) {
   return { primaryPath, fallbackPath };
 }
 
+function buildInFlightGetKey({
+  baseUrl,
+  accessToken,
+  primaryPath,
+  fallbackPath,
+  params,
+  requestKind,
+  fetchOptions,
+}: AnyRecord = {}) {
+  if (fetchOptions?.signal) return null;
+  const normalizedBaseUrl = typeof baseUrl === "string" ? baseUrl.trim() : "";
+  const normalizedToken = hasAccessTokenValue(accessToken) ? String(accessToken) : "";
+  const normalizedPrimaryPath = typeof primaryPath === "string" ? primaryPath : "";
+  const normalizedFallbackPath = typeof fallbackPath === "string" ? fallbackPath : "";
+  const normalizedRequestKind = typeof requestKind === "string" ? requestKind : REQUEST_KIND.business;
+  const normalizedParams = serializeRequestParams(params);
+  return [
+    normalizedBaseUrl,
+    normalizedToken,
+    normalizedRequestKind,
+    normalizedPrimaryPath,
+    normalizedFallbackPath,
+    normalizedParams,
+  ].join("::");
+}
+
+function serializeRequestParams(params: AnyRecord = {}) {
+  if (!params || typeof params !== "object") return "";
+  return Object.keys(params)
+    .sort()
+    .map((key) => `${key}=${String(params[key] ?? "")}`)
+    .join("&");
+}
+
 function normalizeFunctionSlug(slug: any) {
   const raw = typeof slug === "string" ? slug.trim() : "";
   return raw.replace(/^\/+/, "");
+}
+
+function scheduleFunctionRequest<T>(task: () => Promise<T>, signal?: AbortSignal) {
+  return new Promise<T>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(createAbortError());
+      return;
+    }
+
+    let settled = false;
+    const finalize = (settle: (value: any) => void, value: any) => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener("abort", onAbort);
+      settle(value);
+    };
+
+    const onAbort = () => {
+      const queueIndex = queuedFunctionRequests.indexOf(run);
+      if (queueIndex >= 0) {
+        queuedFunctionRequests.splice(queueIndex, 1);
+        finalize(reject, createAbortError());
+      }
+    };
+
+    const run = () => {
+      if (signal?.aborted) {
+        finalize(reject, createAbortError());
+        flushQueuedFunctionRequests();
+        return;
+      }
+      activeFunctionRequests += 1;
+      Promise.resolve()
+        .then(task)
+        .then(
+          (value) => finalize(resolve, value),
+          (error) => finalize(reject, error),
+        )
+        .finally(() => {
+          activeFunctionRequests = Math.max(0, activeFunctionRequests - 1);
+          flushQueuedFunctionRequests();
+        });
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    queuedFunctionRequests.push(run);
+    flushQueuedFunctionRequests();
+  });
+}
+
+function flushQueuedFunctionRequests() {
+  while (
+    activeFunctionRequests < MAX_CONCURRENT_FUNCTION_REQUESTS &&
+    queuedFunctionRequests.length > 0
+  ) {
+    const next = queuedFunctionRequests.shift();
+    next?.();
+  }
 }
 
 function normalizePrefix(prefix: any) {
@@ -596,12 +922,7 @@ async function requestWithFallbackPost({
   }
 }
 
-async function requestWithAuthRetryPost({
-  http,
-  path,
-  body,
-  fetchOptions,
-}: AnyRecord = {}) {
+async function requestWithAuthRetryPost({ http, path, body, fetchOptions }: AnyRecord = {}) {
   return await http.post(path, body, { ...(fetchOptions || {}) });
 }
 
@@ -615,9 +936,12 @@ function shouldFallbackToLegacy(error: any, primaryPath: any) {
 
 function normalizeSdkError(
   error: any,
-  { errorPrefix, hadAccessToken, accessToken, skipSessionExpiry }: AnyRecord = {}
+  { errorPrefix, hadAccessToken, accessToken, skipSessionExpiry }: AnyRecord = {},
 ) {
-  const raw = error?.message || String(error || "Unknown error");
+  // InsForgeError may have an empty `message` but a meaningful `error` field.
+  const rawMessage = typeof error?.message === "string" ? error.message.trim() : "";
+  const rawError = typeof error?.error === "string" ? error.error.trim() : "";
+  const raw = rawMessage || rawError || String(error || "Unknown error");
   const msg = normalizeBackendErrorMessage(raw);
   const err: any = new Error(errorPrefix ? `${errorPrefix}: ${msg}` : msg);
   err.cause = error;
@@ -625,12 +949,14 @@ function normalizeSdkError(
   if (
     shouldMarkSessionSoftExpired({
       status,
+      message: rawMessage,
+      error: rawError,
       hadAccessToken,
       accessToken,
       skipSessionExpiry,
     })
   ) {
-    markSessionSoftExpired();
+    markSessionSoftExpired(accessToken);
   }
   if (typeof status === "number") {
     err.status = status;
@@ -656,25 +982,33 @@ function canSetSessionSoftExpired({
 
 function shouldMarkSessionSoftExpired({
   status,
+  message,
+  error,
   hadAccessToken,
   accessToken,
   skipSessionExpiry,
 }: AnyRecord = {}) {
-  if (status !== 401) return false;
+  if (!isSessionAuthFailure({ status, message, error })) return false;
   return canSetSessionSoftExpired({ hadAccessToken, accessToken, skipSessionExpiry });
 }
 
-function shouldClearSessionSoftExpired({
+function shouldMarkSessionSoftExpiredAfterRefreshFailure({
+  status,
+  message,
+  error,
   hadAccessToken,
   accessToken,
+  skipSessionExpiry,
 }: AnyRecord = {}) {
+  if (!isSessionAuthFailure({ status, message, error })) return false;
+  return canSetSessionSoftExpired({ hadAccessToken, accessToken, skipSessionExpiry });
+}
+
+function shouldClearSessionSoftExpired({ hadAccessToken, accessToken }: AnyRecord = {}) {
   return canSetSessionSoftExpired({ hadAccessToken, accessToken });
 }
 
-function clearSessionSoftExpiredIfNeeded({
-  hadAccessToken,
-  accessToken,
-}: AnyRecord = {}) {
+function clearSessionSoftExpiredIfNeeded({ hadAccessToken, accessToken }: AnyRecord = {}) {
   if (!shouldClearSessionSoftExpired({ hadAccessToken, accessToken })) return;
   clearSessionSoftExpired();
 }
@@ -691,42 +1025,44 @@ function isBackendRuntimeDownMessage(message: any) {
   if (s.includes("econnreset") || s.includes("econnrefused")) return true;
   if (s.includes("etimedout")) return true;
   if (s.includes("timeout") && s.includes("request")) return true;
-  if (s.includes("upstream") && (s.includes("deno") || s.includes("connect")))
-    return true;
+  if (s.includes("upstream") && (s.includes("deno") || s.includes("connect"))) return true;
   return false;
 }
 
 function shouldAttemptSessionRefresh({
   status,
+  message,
+  error,
   requestKind,
   hadAccessToken,
   accessToken,
 }: AnyRecord = {}) {
-  if (status !== 401) return false;
+  if (!isSessionAuthFailure({ status, message, error })) return false;
   if (requestKind !== REQUEST_KIND.business) return false;
   return canSetSessionSoftExpired({ hadAccessToken, accessToken });
 }
 
 async function refreshSessionOnce() {
-  if (refreshInFlight) return refreshInFlight;
-  refreshInFlight = insforgeAuthClient.auth
-    .getCurrentSession()
-    .then(({ data }: AnyRecord) => data?.session ?? null)
-    .catch(() => null)
-    .finally(() => {
-      refreshInFlight = null;
-    });
-  return refreshInFlight;
+  return await refreshInsforgeSession();
+}
+
+function isSessionAuthFailure({ status, message, error }: AnyRecord = {}) {
+  if (status === 401) return true;
+  if (status !== 500) return false;
+  const raw = `${message || ""} ${error || ""}`.toLowerCase();
+  if (!raw) return false;
+  return raw.includes("jwsinvalidsignature") || raw.includes("invalid signature");
 }
 
 function isRetryableStatus(status: any) {
-  return status === 502 || status === 503 || status === 504;
+  return status === 429 || status === 502 || status === 503 || status === 504;
 }
 
 function isRetryableMessage(message: any) {
   const s = String(message || "").toLowerCase();
   if (!s) return false;
   if (isBackendRuntimeDownMessage(s)) return true;
+  if (s.includes("too many requests") || s.includes("rate limit")) return true;
   if (s.includes("econnreset") || s.includes("econnrefused")) return true;
   if (s.includes("etimedout") || s.includes("timeout")) return true;
   if (s.includes("networkerror") || s.includes("failed to fetch")) return true;
@@ -746,11 +1082,7 @@ function normalizeRetryOptions(retry: any, method: any) {
 
   const maxRetries = clampInt(retry.maxRetries ?? defaultRetry.maxRetries, 0, 10);
   const baseDelayMs = clampInt(retry.baseDelayMs ?? defaultRetry.baseDelayMs, 50, 60_000);
-  const maxDelayMs = clampInt(
-    retry.maxDelayMs ?? defaultRetry.maxDelayMs,
-    baseDelayMs,
-    120_000
-  );
+  const maxDelayMs = clampInt(retry.maxDelayMs ?? defaultRetry.maxDelayMs, baseDelayMs, 120_000);
   const jitterRatio =
     typeof retry.jitterRatio === "number"
       ? Math.max(0, Math.min(0.5, retry.jitterRatio))
@@ -792,4 +1124,10 @@ function clampInt(value: any, min: number, max: number) {
 function sleep(ms: number) {
   if (!ms || ms <= 0) return Promise.resolve();
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function createAbortError() {
+  const error = new Error("Request aborted");
+  error.name = "AbortError";
+  return error;
 }

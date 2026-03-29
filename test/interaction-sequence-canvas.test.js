@@ -36,14 +36,14 @@ async function setupTrackerSyncFixtures(rootDir) {
   await writeFixture(rootDir, "src/lib/rollout.js", "module.exports = {};\n");
   await writeFixture(rootDir, "src/lib/uploader.js", "module.exports = {};\n");
   await writeFixture(rootDir, "src/lib/vibeusage-api.js", "module.exports = {};\n");
-  await writeFixture(rootDir, "insforge-src/functions/vibeusage-ingest.js", "export {};\n");
-  await writeFixture(rootDir, "insforge-src/functions/vibeusage-sync-ping.js", "export {};\n");
+  await writeFixture(rootDir, "insforge-src/functions-esm/vibeusage-ingest.js", "export {};\n");
+  await writeFixture(rootDir, "insforge-src/functions-esm/vibeusage-sync-ping.js", "export {};\n");
 }
 
 async function setupLinkCodeFixtures(rootDir) {
   await writeFixture(rootDir, "src/commands/init.js", "module.exports = {};\n");
-  await writeFixture(rootDir, "insforge-src/functions/vibeusage-link-code-init.js", "export {};\n");
-  await writeFixture(rootDir, "insforge-src/functions/vibeusage-link-code-exchange.js", "export {};\n");
+  await writeFixture(rootDir, "insforge-src/functions-esm/vibeusage-link-code-init.js", "export {};\n");
+  await writeFixture(rootDir, "insforge-src/functions-esm/vibeusage-link-code-exchange.js", "export {};\n");
 }
 
 test("interaction sequence canvas includes pinned tracker sync scenario", async () => {
@@ -69,7 +69,10 @@ test("interaction sequence canvas includes pinned tracker sync scenario", async 
   assert.ok(canvas.edges.length > 0);
 
   const groupNode = canvas.nodes.find(
-    (node) => node.type === "group" && typeof node.label === "string" && node.label.includes("Tracker Sync")
+    (node) =>
+      node.type === "group" &&
+      typeof node.label === "string" &&
+      node.label.includes("Tracker Sync"),
   );
   assert.ok(groupNode, "expected pinned scenario group to exist");
 });
@@ -92,7 +95,8 @@ test("interaction sequence canvas honors exclude list", async () => {
 
   const canvas = await readCanvas(outPath);
   const excluded = canvas.nodes.find(
-    (node) => node.type === "group" && typeof node.label === "string" && node.label.includes("Link Code")
+    (node) =>
+      node.type === "group" && typeof node.label === "string" && node.label.includes("Link Code"),
   );
   assert.equal(excluded, undefined);
 });

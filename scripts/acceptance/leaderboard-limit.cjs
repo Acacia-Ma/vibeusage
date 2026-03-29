@@ -1,7 +1,9 @@
 #!/usr/bin/env node
-'use strict';
+"use strict";
 
-const assert = require('node:assert/strict');
+const assert = require("node:assert/strict");
+const { loadEdgeFunction } = require("../lib/load-edge-function.cjs");
+const { createTestUserJwt } = require("./_lib/test-user-jwt.cjs");
 
 class QueryStub {
   constructor(parent, table) {
@@ -17,20 +19,24 @@ class QueryStub {
     return this;
   }
 
-  limit(value) {
-    this.parent.limits.set(this.table, value);
-    return { data: this.parent.entries, error: null };
+  range(from, to) {
+    this.parent.ranges.set(this.table, { from, to });
+    const rows = this.parent.entries.slice(from, to + 1);
+    return { data: rows, error: null };
   }
 
   maybeSingle() {
-    return { data: { rank: 2, total_tokens: '99' }, error: null };
+    return {
+      data: { rank: 2, gpt_tokens: "40", claude_tokens: "59", total_tokens: "99" },
+      error: null,
+    };
   }
 }
 
 class DatabaseStub {
   constructor(entries) {
     this.entries = entries;
-    this.limits = new Map();
+    this.ranges = new Map();
   }
 
   from(table) {
@@ -39,60 +45,81 @@ class DatabaseStub {
 }
 
 async function main() {
-  process.env.INSFORGE_INTERNAL_URL = 'http://insforge:7130';
-  process.env.INSFORGE_ANON_KEY = 'anon';
-  process.env.INSFORGE_SERVICE_ROLE_KEY = '';
+  process.env.INSFORGE_INTERNAL_URL = "http://insforge:7130";
+  process.env.INSFORGE_ANON_KEY = "anon";
+  process.env.INSFORGE_SERVICE_ROLE_KEY = "";
 
   global.Deno = {
     env: {
       get(key) {
         const v = process.env[key];
-        return v == null || v === '' ? null : v;
-      }
-    }
+        return v == null || v === "" ? null : v;
+      },
+    },
   };
 
   const entries = [
-    { rank: 1, is_me: true, display_name: 'Alpha', avatar_url: null, total_tokens: '10' },
-    { rank: 2, is_me: false, display_name: 'Beta', avatar_url: null, total_tokens: '9' }
+    {
+      rank: 1,
+      is_me: true,
+      display_name: "Alpha",
+      avatar_url: null,
+      gpt_tokens: "6",
+      claude_tokens: "4",
+      total_tokens: "10",
+    },
+    {
+      rank: 2,
+      is_me: false,
+      display_name: "Beta",
+      avatar_url: null,
+      gpt_tokens: "5",
+      claude_tokens: "4",
+      total_tokens: "9",
+    },
   ];
 
   const db = new DatabaseStub(entries);
+  const userJwt = createTestUserJwt();
 
   global.createClient = () => ({
     auth: {
       async getCurrentUser() {
-        return { data: { user: { id: 'user-id' } }, error: null };
-      }
+        return { data: { user: { id: "user-id" } }, error: null };
+      },
     },
-    database: db
+    database: db,
   });
 
-  const leaderboard = require('../../insforge-src/functions/vibeusage-leaderboard.js');
+  const leaderboard = await loadEdgeFunction("vibeusage-leaderboard");
   const res = await leaderboard(
-    new Request('http://local/functions/vibeusage-leaderboard?period=day&limit=1', {
-      method: 'GET',
-      headers: { Authorization: 'Bearer user-jwt' }
-    })
+    new Request(
+      "http://local/functions/vibeusage-leaderboard?period=week&metric=gpt&limit=1&offset=0",
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${userJwt}` },
+      },
+    ),
   );
 
   const body = await res.json();
   assert.equal(res.status, 200);
+  assert.equal(body.metric, "gpt");
   assert.equal(body.entries.length, 1);
 
-  const entriesView = 'vibeusage_leaderboard_day_current';
-  assert.equal(db.limits.get(entriesView), 1);
+  const entriesView = "vibeusage_leaderboard_gpt_week_current";
+  assert.deepEqual(db.ranges.get(entriesView), { from: 0, to: 0 });
 
   process.stdout.write(
     JSON.stringify(
       {
         ok: true,
-        limit: db.limits.get(entriesView),
-        entries: body.entries
+        range: db.ranges.get(entriesView),
+        entries: body.entries,
       },
       null,
-      2
-    ) + '\n'
+      2,
+    ) + "\n",
   );
 }
 

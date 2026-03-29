@@ -1,27 +1,16 @@
+import { Button } from "@base-ui/react/button";
 import React from "react";
-
 import { copy } from "../../../lib/copy";
 
 export function BootScreen({ onSkip }) {
   const canSkip = Boolean(onSkip);
 
-  return (
-    <div
-      className={`min-h-screen bg-matrix-dark text-matrix-primary font-matrix flex flex-col items-center justify-center p-8 text-center text-body ${
-        canSkip ? "cursor-pointer" : ""
-      }`}
-      onClick={canSkip ? onSkip : undefined}
-      role={canSkip ? "button" : undefined}
-      tabIndex={canSkip ? 0 : undefined}
-      onKeyDown={
-        canSkip
-          ? (e) => {
-              if (e.key === "Enter" || e.key === " ") onSkip?.();
-            }
-          : undefined
-      }
-      aria-label={canSkip ? copy("boot.skip_aria") : undefined}
-    >
+  const className = `min-h-screen bg-matrix-dark text-matrix-primary font-matrix flex flex-col items-center justify-center p-8 text-center text-body ${
+    canSkip ? "cursor-pointer" : ""
+  }`;
+
+  const content = (
+    <>
       <pre className="text-caption leading-[1.2] mb-6 text-matrix-muted select-none">
         {copy("boot.ascii_art")}
       </pre>
@@ -32,11 +21,28 @@ export function BootScreen({ onSkip }) {
         <div className="absolute inset-0 bg-matrix-primary animate-[loader_2s_linear_infinite]"></div>
       </div>
       {canSkip ? (
-        <p className="mt-6 text-caption text-matrix-muted uppercase">
-          {copy("boot.skip_hint")}
-        </p>
+        <p className="mt-6 text-caption text-matrix-muted uppercase">{copy("boot.skip_hint")}</p>
       ) : null}
       <style>{`@keyframes loader { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>
-    </div>
+    </>
+  );
+
+  if (!canSkip) {
+    return <div className={className}>{content}</div>;
+  }
+
+  return (
+    <Button
+      className={className}
+      onClick={onSkip}
+      aria-label={copy("boot.skip_aria")}
+      nativeButton={false}
+      render={(renderProps) => {
+        const { children, ...rest } = renderProps;
+        return <div {...rest}>{children}</div>;
+      }}
+    >
+      {content}
+    </Button>
   );
 }

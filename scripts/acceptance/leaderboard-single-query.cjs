@@ -1,7 +1,9 @@
 #!/usr/bin/env node
-'use strict';
+"use strict";
 
-const assert = require('node:assert/strict');
+const assert = require("node:assert/strict");
+const { loadEdgeFunction } = require("../lib/load-edge-function.cjs");
+const { createTestUserJwt } = require("./_lib/test-user-jwt.cjs");
 
 class QueryStub {
   constructor(parent, table) {
@@ -22,16 +24,17 @@ class QueryStub {
   order() {
     if (this.table === this.parent.entriesView && this._or) {
       if (this.parent.singleError) {
-        return { data: null, error: new Error('or not supported') };
+        return { data: null, error: new Error("or not supported") };
       }
       return { data: this.parent.singleRows, error: null };
     }
     return this;
   }
 
-  limit(value) {
-    this.parent.limitValue = value;
-    return { data: this.parent.fallbackEntries, error: null };
+  range(from, to) {
+    this.parent.rangeValue = { from, to };
+    const rows = this.parent.fallbackEntries.slice(from, to + 1);
+    return { data: rows, error: null };
   }
 
   maybeSingle() {
@@ -47,7 +50,7 @@ class DatabaseStub {
     this.fallbackEntries = fallbackEntries;
     this.meRow = meRow;
     this.singleError = singleError;
-    this.limitValue = null;
+    this.rangeValue = null;
     this.tables = [];
   }
 
@@ -61,27 +64,51 @@ function createClientStub(db) {
   return {
     auth: {
       async getCurrentUser() {
-        return { data: { user: { id: 'user-id' } }, error: null };
-      }
+        return { data: { user: { id: "user-id" } }, error: null };
+      },
     },
-    database: db
+    database: db,
   };
 }
 
 async function runScenario({ name, singleError }) {
-  const entriesView = 'vibeusage_leaderboard_day_current';
-  const meView = 'vibeusage_leaderboard_me_day_current';
+  const entriesView = "vibeusage_leaderboard_week_current";
+  const meView = "vibeusage_leaderboard_me_week_current";
 
   const singleRows = [
-    { rank: 1, is_me: false, display_name: 'Alpha', avatar_url: null, total_tokens: '10' },
-    { rank: 99, is_me: true, display_name: 'Me', avatar_url: null, total_tokens: '9' }
+    {
+      rank: 1,
+      is_me: false,
+      display_name: "Alpha",
+      avatar_url: null,
+      gpt_tokens: "6",
+      claude_tokens: "4",
+      total_tokens: "10",
+    },
+    {
+      rank: 99,
+      is_me: true,
+      display_name: "Me",
+      avatar_url: null,
+      gpt_tokens: "7",
+      claude_tokens: "2",
+      total_tokens: "9",
+    },
   ];
 
   const fallbackEntries = [
-    { rank: 1, is_me: false, display_name: 'Alpha', avatar_url: null, total_tokens: '10' }
+    {
+      rank: 1,
+      is_me: false,
+      display_name: "Alpha",
+      avatar_url: null,
+      gpt_tokens: "6",
+      claude_tokens: "4",
+      total_tokens: "10",
+    },
   ];
 
-  const meRow = { rank: 99, total_tokens: '9' };
+  const meRow = { rank: 99, gpt_tokens: "7", claude_tokens: "2", total_tokens: "9" };
 
   const db = new DatabaseStub({
     entriesView,
@@ -89,26 +116,27 @@ async function runScenario({ name, singleError }) {
     singleRows,
     fallbackEntries,
     meRow,
-    singleError
+    singleError,
   });
+  const userJwt = createTestUserJwt();
 
   global.createClient = () => createClientStub(db);
-  delete require.cache[require.resolve('../../insforge-src/functions/vibeusage-leaderboard.js')];
-  const leaderboard = require('../../insforge-src/functions/vibeusage-leaderboard.js');
+  const leaderboard = await loadEdgeFunction("vibeusage-leaderboard");
 
   const res = await leaderboard(
-    new Request('http://local/functions/vibeusage-leaderboard?period=day&limit=1', {
-      method: 'GET',
-      headers: { Authorization: 'Bearer user-jwt' }
-    })
+    new Request("http://local/functions/vibeusage-leaderboard?period=week&limit=1&offset=0", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${userJwt}` },
+    }),
   );
 
   const body = await res.json();
   assert.equal(res.status, 200, `${name}: status`);
+  assert.equal(body.metric, "all", `${name}: metric`);
 
   if (singleError) {
     assert.ok(db.tables.includes(meView), `${name}: fallback should query me view`);
-    assert.equal(db.limitValue, 1, `${name}: limit should be applied`);
+    assert.deepEqual(db.rangeValue, { from: 0, to: 0 }, `${name}: range should be applied`);
     assert.equal(body.entries.length, 1, `${name}: entries length`);
     assert.equal(body.me.rank, 99, `${name}: me rank`);
   } else {
@@ -121,35 +149,35 @@ async function runScenario({ name, singleError }) {
 }
 
 async function main() {
-  process.env.INSFORGE_INTERNAL_URL = 'http://insforge:7130';
-  process.env.INSFORGE_ANON_KEY = 'anon';
-  process.env.INSFORGE_SERVICE_ROLE_KEY = '';
-  process.env.SERVICE_ROLE_KEY = '';
-  process.env.INSFORGE_API_KEY = '';
-  process.env.API_KEY = '';
+  process.env.INSFORGE_INTERNAL_URL = "http://insforge:7130";
+  process.env.INSFORGE_ANON_KEY = "anon";
+  process.env.INSFORGE_SERVICE_ROLE_KEY = "";
+  process.env.SERVICE_ROLE_KEY = "";
+  process.env.INSFORGE_API_KEY = "";
+  process.env.API_KEY = "";
 
   global.Deno = {
     env: {
       get(key) {
         const v = process.env[key];
-        return v == null || v === '' ? null : v;
-      }
-    }
+        return v == null || v === "" ? null : v;
+      },
+    },
   };
 
-  const single = await runScenario({ name: 'single', singleError: false });
-  const fallback = await runScenario({ name: 'fallback', singleError: true });
+  const single = await runScenario({ name: "single", singleError: false });
+  const fallback = await runScenario({ name: "fallback", singleError: true });
 
   process.stdout.write(
     JSON.stringify(
       {
         ok: true,
         single: single.entries,
-        fallback: fallback.entries
+        fallback: fallback.entries,
       },
       null,
-      2
-    ) + '\n'
+      2,
+    ) + "\n",
   );
 }
 

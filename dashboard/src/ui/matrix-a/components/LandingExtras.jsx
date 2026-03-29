@@ -1,9 +1,9 @@
+import { Input } from "@base-ui/react/input";
 import React from "react";
-
-import { MatrixAvatar } from "../../foundation/MatrixAvatar.jsx";
-import { LiveSniffer } from "./LiveSniffer.jsx";
-import { SignalBox } from "../../foundation/SignalBox.jsx";
 import { copy } from "../../../lib/copy.js";
+import { MatrixAvatar } from "../../foundation/MatrixAvatar.jsx";
+import { SignalBox } from "../../foundation/SignalBox.jsx";
+import { LiveSniffer } from "./LiveSniffer.jsx";
 
 export function LandingExtras({
   handle,
@@ -16,17 +16,13 @@ export function LandingExtras({
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-3xl">
       <SignalBox title={copy("landing.signal.identity_probe")} className="h-44">
         <div className="flex items-center space-x-6 h-full">
-          <MatrixAvatar
-            name={handle}
-            size={80}
-            isTheOne={handle === specialHandle}
-          />
+          <MatrixAvatar name={handle} size={80} isTheOne={handle === specialHandle} />
           <div className="flex-1 text-left space-y-3">
             <div className="flex flex-col">
               <label className="text-caption text-matrix-muted uppercase mb-2 font-bold">
                 {copy("landing.handle.label")}
               </label>
-              <input
+              <Input
                 type="text"
                 value={handle}
                 onChange={onHandleChange}

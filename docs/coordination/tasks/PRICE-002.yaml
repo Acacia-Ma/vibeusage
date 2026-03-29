@@ -1,0 +1,25 @@
+id: PRICE-002
+title: Reduce safe residual pricing fallbacks
+status: done
+owner: codex-main
+touches:
+  - insforge-src/functions-esm/vibeusage-pricing-sync.js
+  - insforge-src/functions-esm/shared/model.js
+  - insforge-functions/vibeusage-pricing-sync.js
+  - scripts/lib/load-edge-function.cjs
+  - scripts/acceptance/openrouter-pricing-sync.cjs
+  - test/pricing-sync-auto-alias.test.js
+  - test/insforge-esm-artifacts.test.js
+  - test/usage-pagination-order.test.js
+  - openspec/changes/2026-03-28-refactor-pricing-sync-esm/tasks.md
+notes:
+  - "DECISION: This follow-up only reduces residual fallbacks that still have a single unambiguous pricing target."
+  - "DECISION: Ambiguous names such as kimi-for-coding and gemini-3-pro stay on fallback until the upstream usage name becomes specific enough."
+  - "EVIDENCE: Local coverage now adds deterministic handling for zai-org/glm-4.6 and mimo-v2-pro-free while keeping gemini preview aliases on fallback."
+  - "EVIDENCE: The pricing-sync source of truth now lives at insforge-src/functions-esm/vibeusage-pricing-sync.js and emits a non-CommonJS deploy artifact."
+  - "EVIDENCE: GitHub Actions run 23654687282 completed successfully against the live endpoint with HTTP 200, models_processed=344, aliases_generated=28, aliases_upserted=28."
+  - "EVIDENCE: Post-deploy diagnostics show 30-day coverage at direct=37, alias=39, fallback=9; deterministic follow-up fallbacks dropped from 11 to 9."
+  - "NEXT: Remaining fallback models are still the ambiguous or unsupported names, led by kimi-for-coding and gemini-3-pro."
+commit_refs:
+  - e166a83d
+  - c37273cf

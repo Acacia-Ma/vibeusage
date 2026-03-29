@@ -1,0 +1,20 @@
+id: PRICE-001
+title: Deploy pricing alias automation and run production smoke
+status: done
+owner: codex-main
+touches:
+  - insforge-src/functions-esm/vibeusage-pricing-sync.js
+  - insforge-functions/vibeusage-pricing-sync.js
+  - scripts/ops/pricing-sync-health.sql
+  - scripts/ops/pricing-alias-diagnostics.sql
+  - docs/ops/pricing-sync-health.md
+notes:
+  - "DECISION: Pricing alias generation is now automated during the pricing sync flow."
+  - "DECISION: Live function deployment succeeded using an ESM deploy artifact because the current CJS deploy format fails Insforge2 type checks."
+  - "EVIDENCE: GitHub Actions run 23653207644 completed successfully against the live endpoint with HTTP 200, models_processed=344, aliases_generated=31, aliases_upserted=31."
+  - "EVIDENCE: Post-deploy diagnostics show 30-day coverage at direct=37, alias=37, fallback=11, down from the previous 34 fallback models."
+  - "NEXT: Remaining high-volume fallbacks include kimi-for-coding and gemini-3-pro; handle them in a separate follow-up task rather than reopening this deployment task."
+commit_refs:
+  - ba334cc4
+  - db1ca99a
+  - b90be08d
