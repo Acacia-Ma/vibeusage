@@ -109,6 +109,7 @@ This document is the single source of truth for repository navigation. Use it to
   - `scripts/acceptance/`
   - `scripts/smoke/`
 - Policy and validation:
+  - `scripts/ops/pr-risk-layer-gate.cjs`
   - `scripts/validate-architecture-guardrails.cjs`
   - `scripts/validate-copy-registry.cjs`
   - `scripts/validate-retros.cjs`
@@ -126,6 +127,7 @@ This document is the single source of truth for repository navigation. Use it to
   - `BACKEND_API.md`
 - Workflow and runbooks:
   - `docs/ops/`
+  - `docs/ops/pr-review-preflight.md`
   - `docs/tdd/README.md`
 - Coordination:
   - `docs/coordination/index.yaml`
