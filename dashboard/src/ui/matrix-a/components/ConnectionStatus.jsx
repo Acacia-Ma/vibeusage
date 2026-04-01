@@ -24,16 +24,16 @@ export function ConnectionStatus({ status = "STABLE", title, className = "" }) {
 
   const configs = {
     STABLE: {
-      color: "text-matrix-primary",
-      indicator: bit,
+      color: "var(--win-green)",
+      label: "Connected",
     },
     UNSTABLE: {
-      color: "text-yellow-400",
-      indicator: "!",
+      color: "#b87800",
+      label: "Unstable",
     },
     LOST: {
-      color: "text-red-500/90",
-      indicator: "×",
+      color: "#cc0000",
+      label: "Disconnected",
     },
   };
 
@@ -42,21 +42,28 @@ export function ConnectionStatus({ status = "STABLE", title, className = "" }) {
   return (
     <div
       title={title}
-      className={[
-        "matrix-header-chip matrix-header-chip--bare font-matrix transition-all duration-700",
-        current.color,
-        className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
+      className={className}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        fontFamily: '"Tahoma", sans-serif',
+        fontSize: 11,
+        color: "var(--win-text)",
+      }}
     >
-      <div className="flex items-center">
-        <span className="text-caption text-matrix-dim mr-1">[</span>
-        <span className="text-caption w-[10px] inline-block text-center font-black">
-          {current.indicator}
-        </span>
-        <span className="text-caption text-matrix-dim ml-1">]</span>
-      </div>
+      <span
+        style={{
+          display: "inline-block",
+          width: 10,
+          height: 10,
+          borderRadius: "50%",
+          background: current.color,
+          border: "1px solid var(--win-btn-dark-shadow)",
+          flexShrink: 0,
+        }}
+      />
+      <span>{current.label}</span>
     </div>
   );
 }

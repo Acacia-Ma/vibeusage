@@ -39,16 +39,26 @@ export const RollingUsagePanel = React.memo(function RollingUsagePanel({
 
   return (
     <AsciiBox title={copy("dashboard.rolling.title")} className={className} bodyClassName="py-4">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((item) => (
           <div
             key={item.key}
-            className="flex flex-col items-center text-center gap-2 border border-matrix-ghost px-3 py-4"
+            className="flex flex-col items-center text-center gap-1 px-3 py-3"
+            style={{
+              background: "var(--win-sunken)",
+              borderTop: "1px solid var(--win-btn-dark-shadow)",
+              borderLeft: "1px solid var(--win-btn-dark-shadow)",
+              borderBottom: "1px solid var(--win-btn-highlight)",
+              borderRight: "1px solid var(--win-btn-highlight)",
+            }}
           >
-            <span className="text-caption uppercase font-bold text-matrix-muted tracking-[0.2em]">
+            <span style={{ fontSize: 10, color: "var(--win-dark)" }}>
               {item.label}
             </span>
-            <span className="text-2xl md:text-3xl font-black text-matrix-bright tabular-nums">
+            <span
+              className="tabular-nums font-bold"
+              style={{ fontSize: "clamp(18px, 3vw, 26px)", color: "var(--win-navy, #000080)" }}
+            >
               {item.value}
             </span>
           </div>

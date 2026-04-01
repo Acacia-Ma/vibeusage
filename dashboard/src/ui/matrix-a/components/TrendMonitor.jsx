@@ -7,7 +7,7 @@ import { AsciiBox } from "../../foundation/AsciiBox.jsx";
 export function TrendMonitor({
   rows,
   data = [],
-  color = "#00FF41",
+  color = "#000080",
   label = copy("trend.monitor.label"),
   from,
   to,
@@ -342,26 +342,33 @@ export function TrendMonitor({
 
   return (
     <AsciiBox title={label} className={`w-full ${className}`} bodyClassName="flex flex-col gap-3">
-      <div className="flex items-center justify-between text-caption text-matrix-muted px-1">
+      <div className="flex items-center justify-between px-1 pt-1" style={{ fontSize: 9, color: "var(--win-dark)", fontFamily: '"Tahoma", sans-serif', borderTop: "1px solid var(--win-btn-shadow)" }}>
         <div className="flex gap-3">
           <span>{copy("trend.monitor.max_label", { value: Math.round(max) })}</span>
           <span>{copy("trend.monitor.avg_label", { value: Math.round(avg) })}</span>
         </div>
       </div>
 
-      <div className="flex-1 relative overflow-hidden border border-matrix-ghost bg-matrix-panel">
+      <div
+        className="flex-1 relative overflow-hidden"
+        style={{
+          background: "var(--win-sunken)",
+          borderTop: "1px solid var(--win-btn-dark-shadow)",
+          borderLeft: "1px solid var(--win-btn-dark-shadow)",
+          borderBottom: "1px solid var(--win-btn-highlight)",
+          borderRight: "1px solid var(--win-btn-highlight)",
+        }}
+      >
         <div
           className="absolute inset-0 opacity-10 pointer-events-none"
           style={{
             backgroundImage: `
-              linear-gradient(to right, ${color} 1px, transparent 1px),
-              linear-gradient(to bottom, ${color} 1px, transparent 1px)
+              linear-gradient(to right, #808080 1px, transparent 1px),
+              linear-gradient(to bottom, #808080 1px, transparent 1px)
             `,
             backgroundSize: "20px 20px",
           }}
         />
-
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#00FF41]/10 to-transparent w-[50%] h-full animate-[scan-x_3s_linear_infinite] pointer-events-none mix-blend-screen" />
 
         <svg
           viewBox={`0 0 ${width} ${height}`}
@@ -413,7 +420,14 @@ export function TrendMonitor({
 
         <div
           ref={axisRef}
-          className="absolute right-0 top-0 bottom-0 flex flex-col justify-between py-1 px-1 text-caption text-matrix-muted pointer-events-none bg-matrix-panelStrong border-l border-matrix-ghost w-10 text-right"
+          className="absolute right-0 top-0 bottom-0 flex flex-col justify-between py-1 px-1 pointer-events-none w-10 text-right"
+          style={{
+            background: "var(--win-btn-face)",
+            borderLeft: "1px solid var(--win-btn-shadow)",
+            fontSize: 9,
+            color: "var(--win-dark)",
+            fontFamily: '"Tahoma", sans-serif',
+          }}
         >
           <span>{formatCompact(max)}</span>
           <span>{formatCompact(max * 0.75)}</span>
@@ -445,10 +459,16 @@ export function TrendMonitor({
               ></div>
             </div>
             <div
-              className="absolute z-30 px-3 py-2 text-caption bg-matrix-panelStrong border border-matrix-ghost text-matrix-bright pointer-events-none"
+              className="absolute z-30 px-2 py-1 pointer-events-none"
               style={{
                 left: Math.min(hover.x + 10, hover.rectWidth - hover.axisWidthPx - 120),
                 top: Math.max(hover.y - 24, 6),
+                background: "#ffffe1",
+                border: "1px solid #000000",
+                fontSize: 10,
+                fontFamily: '"Tahoma", sans-serif',
+                color: "#000000",
+                boxShadow: "2px 2px 2px rgba(0,0,0,0.4)",
               }}
             >
               <div className="text-matrix-muted">{formatTooltipLabel(hover.label)}</div>
@@ -467,14 +487,14 @@ export function TrendMonitor({
         ) : null}
       </div>
 
-      <div className="h-5 flex justify-between items-center px-1 text-caption text-matrix-muted border-t border-matrix-ghost pt-2">
+      <div className="h-5 flex justify-between items-center px-1 pt-1" style={{ fontSize: 9, color: "var(--win-dark)", fontFamily: '"Tahoma", sans-serif', borderTop: "1px solid var(--win-btn-shadow)" }}>
         {xLabels.map((labelText, idx) => (
           <span
             key={`${labelText}-${idx}`}
-            className={
+            style={
               labelText === copy("trend.monitor.now_label")
-                ? "text-matrix-primary font-bold animate-pulse"
-                : ""
+                ? { color: "var(--win-navy, #000080)", fontWeight: "bold" }
+                : {}
             }
           >
             {labelText}

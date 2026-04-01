@@ -24,60 +24,84 @@ export const NeuralAdaptiveFleet = React.memo(function NeuralAdaptiveFleet({
   });
 
   return (
-    <div className="w-full space-y-4">
-      <div className="flex justify-between items-baseline border-b border-matrix-ghost pb-2">
+    <div className="w-full" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div
+        className="flex justify-between items-baseline pb-1"
+        style={{
+          borderBottom: "1px solid var(--win-btn-shadow)",
+          paddingBottom: 4,
+          marginBottom: 4,
+        }}
+      >
         <div className="flex items-baseline gap-2">
-          <span className="text-heading font-black text-matrix-primary uppercase">{label}</span>
-          <span className="text-caption text-matrix-muted">{usageLabel}</span>
+          <span style={{ fontWeight: "bold", fontSize: 11, color: "var(--win-text)" }}>{label}</span>
+          <span style={{ fontSize: 10, color: "var(--win-dark)" }}>{usageLabel}</span>
         </div>
-        <div className="flex items-baseline space-x-1">
-          <span className="text-body font-black text-matrix-primary">{totalPercent}</span>
-          <span className="text-caption text-matrix-dim font-bold">{percentSymbol}</span>
+        <div className="flex items-baseline gap-1">
+          <span style={{ fontWeight: "bold", fontSize: 13, color: "var(--win-navy, #000080)" }}>{totalPercent}</span>
+          <span style={{ fontSize: 10, color: "var(--win-dark)" }}>{percentSymbol}</span>
         </div>
       </div>
 
-      <div className="h-1 w-full bg-matrix-panel flex overflow-hidden relative">
+      {/* Win2K progress bar style */}
+      <div
+        style={{
+          height: 14,
+          width: "100%",
+          display: "flex",
+          overflow: "hidden",
+          borderTop: "1px solid var(--win-btn-dark-shadow)",
+          borderLeft: "1px solid var(--win-btn-dark-shadow)",
+          borderBottom: "1px solid var(--win-btn-highlight)",
+          borderRight: "1px solid var(--win-btn-highlight)",
+          background: "#ffffff",
+        }}
+      >
         {models.map((model, index) => {
           const styleConfig = TEXTURES[index % TEXTURES.length];
           const modelKey = model?.id ? String(model.id) : `${model.name}-${index}`;
           return (
             <div
               key={modelKey}
-              className="h-full relative transition-all duration-1000 ease-out border-r border-black last:border-none"
               style={{
                 width: `${model.share}%`,
+                height: "100%",
                 backgroundColor: styleConfig.bg,
                 backgroundImage: styleConfig.pattern,
                 backgroundSize: styleConfig.size || "auto",
-                boxShadow: index === 0 ? "0 0 10px rgba(0,255,65,0.2)" : "none",
+                borderRight: index < models.length - 1 ? "1px solid #ffffff" : "none",
+                transition: "width 0.5s ease-out",
               }}
             />
           );
         })}
       </div>
 
-      <div className="grid grid-cols-2 gap-y-2 gap-x-6 pl-1">
+      <div className="grid grid-cols-2" style={{ gap: "4px 16px" }}>
         {models.map((model, index) => {
           const styleConfig = TEXTURES[index % TEXTURES.length];
           const modelKey = model?.id ? String(model.id) : `${model.name}-${index}`;
           return (
-            <div key={modelKey} className="flex items-center space-x-2">
+            <div key={modelKey} className="flex items-center" style={{ gap: 4 }}>
               <div
-                className="w-2 h-2 border border-matrix-ghost shrink-0"
                 style={{
+                  width: 10,
+                  height: 10,
+                  flexShrink: 0,
                   backgroundColor: styleConfig.bg,
                   backgroundImage: styleConfig.pattern,
                   backgroundSize: styleConfig.size || "auto",
+                  border: "1px solid var(--win-btn-dark-shadow)",
                 }}
               />
-              <div className="flex items-baseline space-x-2 min-w-0">
+              <div className="flex items-baseline min-w-0" style={{ gap: 4 }}>
                 <span
-                  className="text-caption truncate uppercase text-matrix-primary font-bold"
+                  style={{ fontSize: 10, color: "var(--win-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: "bold" }}
                   title={model.name}
                 >
                   {model.name}
                 </span>
-                <span className="text-caption text-matrix-muted font-bold">
+                <span style={{ fontSize: 10, color: "var(--win-dark)", whiteSpace: "nowrap" }}>
                   {model.share}
                   {percentSymbol}
                 </span>
