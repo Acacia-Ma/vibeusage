@@ -182,13 +182,13 @@ export function DashboardView(props) {
                     <div className="flex flex-col gap-1">
                       <span
                         className="font-bold leading-none"
-                        style={{ fontSize: "clamp(24px, 4vw, 36px)", color: "var(--win-navy, #000080)" }}
+                        style={{ fontSize: "clamp(24px, 4vw, 36px)", color: "var(--win-navy)" }}
                       >
                         {screenshotTitleLine1}
                       </span>
                       <span
                         className="font-bold leading-none"
-                        style={{ fontSize: "clamp(18px, 3vw, 28px)", color: "var(--win-navy, #000080)" }}
+                        style={{ fontSize: "clamp(18px, 3vw, 28px)", color: "var(--win-navy)" }}
                       >
                         {screenshotTitleLine2}
                       </span>
@@ -260,7 +260,7 @@ export function DashboardView(props) {
                           {copy("dashboard.install.link_code.loading")}
                         </span>
                       ) : linkCodeError ? (
-                        <span style={{ fontSize: 11, color: "#cc0000" }}>
+                        <span style={{ fontSize: 11, color: "var(--win-danger)" }}>
                           {copy("dashboard.install.link_code.failed")}
                         </span>
                       ) : null}

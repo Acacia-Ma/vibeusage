@@ -24,7 +24,7 @@ export function BootScreen({ onSkip }) {
         }}
       >
         <div className="win-titlebar" style={{ fontSize: 11, padding: "3px 6px" }}>
-          <span style={{ flex: 1, fontWeight: "bold" }}>VibeUsage</span>
+          <span style={{ flex: 1, fontWeight: "bold" }}>{copy("shared.brand.name")}</span>
           <div className="win-titlebar-btn" style={{ fontSize: 8 }}>_</div>
           <div className="win-titlebar-btn" style={{ fontSize: 8 }}>▫</div>
           <div className="win-titlebar-btn" style={{ fontSize: 9, fontWeight: "bold" }}>✕</div>

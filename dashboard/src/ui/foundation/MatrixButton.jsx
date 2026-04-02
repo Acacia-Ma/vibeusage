@@ -34,7 +34,7 @@ export function MatrixButton({
     textTransform: "none",
     letterSpacing: 0,
     fontWeight: primary ? "bold" : "normal",
-    outline: primary ? "1px solid #000000" : "none",
+    outline: primary ? "1px solid var(--win-darkest)" : "none",
     outlineOffset: primary ? "1px" : "0",
   };
 

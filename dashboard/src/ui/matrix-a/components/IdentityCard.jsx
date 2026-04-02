@@ -38,7 +38,9 @@ function Win2KAvatar({ name, size = 56 }) {
   const initials = (name || "?")
     .split(/\s+/)
     .slice(0, 2)
-    .map((w) => w[0])
+    .map((word) => {
+      return word[0];
+    })
     .join("")
     .toUpperCase();
   return (
@@ -55,7 +57,7 @@ function Win2KAvatar({ name, size = 56 }) {
         fontFamily: '"Tahoma", sans-serif',
         fontWeight: "bold",
         fontSize: Math.round(size * 0.36),
-        color: "#ffffff",
+        color: "var(--win-titlebar-text)",
         userSelect: "none",
       }}
     >
@@ -166,7 +168,7 @@ export function IdentityCard({
                 </div>
                 <div
                   className="font-bold"
-                  style={{ fontSize: 12, color: "var(--win-navy, #000080)" }}
+                  style={{ fontSize: 12, color: "var(--win-navy)" }}
                 >
                   {rankValue}
                 </div>
@@ -186,7 +188,7 @@ export function IdentityCard({
                 </div>
                 <div
                   className="font-bold"
-                  style={{ fontSize: 12, color: "var(--win-navy, #000080)" }}
+                  style={{ fontSize: 12, color: "var(--win-navy)" }}
                 >
                   {streakValue}
                 </div>
@@ -210,7 +212,7 @@ export function IdentityCard({
                       padding: "1px 5px",
                       fontSize: 10,
                       background: "var(--win-titlebar)",
-                      color: "#ffffff",
+                      color: "var(--win-titlebar-text)",
                       border: "1px solid var(--win-btn-dark-shadow)",
                     }}
                   >

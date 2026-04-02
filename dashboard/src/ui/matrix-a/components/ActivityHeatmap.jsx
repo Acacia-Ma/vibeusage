@@ -95,6 +95,12 @@ function buildFullYearMonthMarkers({ weeksCount, to, weekStartsOn }) {
   return markers;
 }
 
+function getHeatmapCellColor(level) {
+  if (level === 0) return "rgb(var(--win-bg-rgb) / 0.5)";
+  const opacity = OPACITY_BY_LEVEL[level] ?? 0.3;
+  return `rgb(var(--win-accent-rgb) / ${opacity})`;
+}
+
 export function ActivityHeatmap({
   heatmap,
   timeZoneLabel,
@@ -453,9 +459,7 @@ export function ActivityHeatmap({
                     }
 
                     const level = Number(cell.level) || 0;
-                    const opacity = OPACITY_BY_LEVEL[level] ?? 0.3;
-                    // Win2K blue heatmap colors
-                    const color = level === 0 ? "rgba(192,192,192,0.5)" : `rgba(0,0,128,${opacity})`;
+                    const color = getHeatmapCellColor(level);
 
                     const tzDetail =
                       timeZoneLabel || timeZoneShortLabel || copy("heatmap.legend.utc");
@@ -493,7 +497,7 @@ export function ActivityHeatmap({
         className="relative overflow-visible mt-1 transition-opacity duration-150"
         style={{
           height: 10,
-          background: "#c8c8c8",
+          background: "var(--win-scroll-track)",
           border: "1px solid var(--win-btn-shadow)",
           opacity: showScrollbar ? 1 : 0,
           pointerEvents: showScrollbar ? "auto" : "none",
@@ -535,7 +539,7 @@ export function ActivityHeatmap({
                     width: 8,
                     height: 8,
                     display: "inline-block",
-                    background: level === 0 ? "rgba(192,192,192,0.5)" : `rgba(0,0,128,${OPACITY_BY_LEVEL[level]})`,
+                    background: getHeatmapCellColor(level),
                     border: "1px solid var(--win-btn-shadow)",
                   }}
                 />

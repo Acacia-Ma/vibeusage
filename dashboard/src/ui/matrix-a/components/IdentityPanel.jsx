@@ -27,7 +27,7 @@ export function IdentityPanel({ auth, streakDays = 0, rankLabel }) {
           alignItems: "center",
           justifyContent: "center",
           flexShrink: 0,
-          color: "#ffffff",
+          color: "var(--win-titlebar-text)",
           fontWeight: "bold",
           fontSize: 16,
           fontFamily: '"Tahoma", sans-serif',
@@ -75,7 +75,7 @@ export function IdentityPanel({ auth, streakDays = 0, rankLabel }) {
             <div style={{ fontSize: 9, color: "var(--win-dark)" }}>
               {copy("identity_panel.rank_label")}
             </div>
-            <div style={{ fontSize: 12, fontWeight: "bold", color: "var(--win-navy, #000080)" }}>
+            <div style={{ fontSize: 12, fontWeight: "bold", color: "var(--win-navy)" }}>
               {rankValue}
             </div>
           </div>
@@ -93,7 +93,7 @@ export function IdentityPanel({ auth, streakDays = 0, rankLabel }) {
             <div style={{ fontSize: 9, color: "var(--win-dark)" }}>
               {copy("identity_panel.streak_label")}
             </div>
-            <div style={{ fontSize: 12, fontWeight: "bold", color: "var(--win-navy, #000080)" }}>
+            <div style={{ fontSize: 12, fontWeight: "bold", color: "var(--win-navy)" }}>
               {streakValue}
             </div>
           </div>

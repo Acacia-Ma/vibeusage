@@ -158,7 +158,11 @@ export const UsagePanel = React.memo(function UsagePanel({
       {error ? (
         <div
           className="text-[11px] px-2 py-1 mb-2"
-          style={{ color: "#cc0000", background: "#fff0f0", border: "1px solid #cc0000" }}
+          style={{
+            color: "var(--win-danger)",
+            background: "var(--win-danger-bg)",
+            border: "1px solid var(--win-danger)",
+          }}
         >
           {copy("shared.error.prefix", { error })}
         </div>
@@ -178,7 +182,7 @@ export const UsagePanel = React.memo(function UsagePanel({
               style={{
                 fontSize: "clamp(32px, 5vw, 52px)",
                 fontWeight: "bold",
-                color: "var(--win-navy, #000080)",
+                color: "var(--win-navy)",
                 fontFamily: '"Tahoma", "MS Sans Serif", sans-serif',
               }}
             >
@@ -191,7 +195,7 @@ export const UsagePanel = React.memo(function UsagePanel({
                   style={{
                     fontSize: 18,
                     fontWeight: "bold",
-                    color: "var(--win-navy, #000080)",
+                    color: "var(--win-navy)",
                   }}
                 >
                   {summaryCostValue}
@@ -247,7 +251,7 @@ export const UsagePanel = React.memo(function UsagePanel({
                     </span>
                     <span
                       className="font-bold"
-                      style={{ fontSize: 13, color: "var(--win-navy, #000080)" }}
+                      style={{ fontSize: 13, color: "var(--win-navy)" }}
                     >
                       {row.value}
                     </span>
@@ -279,7 +283,7 @@ export const UsagePanel = React.memo(function UsagePanel({
               </div>
               <div
                 className="font-bold"
-                style={{ fontSize: 15, color: "var(--win-navy, #000080)" }}
+                style={{ fontSize: 15, color: "var(--win-navy)" }}
               >
                 {row.value}
               </div>

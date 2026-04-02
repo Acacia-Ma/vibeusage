@@ -7,7 +7,7 @@ import { AsciiBox } from "../../foundation/AsciiBox.jsx";
 export function TrendMonitor({
   rows,
   data = [],
-  color = "#000080",
+  color = "var(--win-chart-line)",
   label = copy("trend.monitor.label"),
   from,
   to,
@@ -363,8 +363,8 @@ export function TrendMonitor({
           className="absolute inset-0 opacity-10 pointer-events-none"
           style={{
             backgroundImage: `
-              linear-gradient(to right, #808080 1px, transparent 1px),
-              linear-gradient(to bottom, #808080 1px, transparent 1px)
+              linear-gradient(to right, var(--win-btn-shadow) 1px, transparent 1px),
+              linear-gradient(to bottom, var(--win-btn-shadow) 1px, transparent 1px)
             `,
             backgroundSize: "20px 20px",
           }}
@@ -399,7 +399,7 @@ export function TrendMonitor({
                   stroke={color}
                   strokeWidth="1.5"
                   vectorEffect="non-scaling-stroke"
-                  className="drop-shadow-[0_0_5px_rgba(0,255,65,0.8)]"
+                  style={{ filter: `drop-shadow(0 0 5px ${color})` }}
                 />
               </React.Fragment>
             );
@@ -450,12 +450,22 @@ export function TrendMonitor({
               style={{ right: hover.axisWidthPx }}
             >
               <div
-                className="absolute top-0 bottom-0 w-px bg-[#00FF41]/40 shadow-[0_0_6px_rgba(0,255,65,0.35)]"
-                style={{ left: hover.x }}
+                className="absolute top-0 bottom-0 w-px"
+                style={{
+                  left: hover.x,
+                  backgroundColor: color,
+                  opacity: 0.4,
+                  boxShadow: `0 0 6px ${color}`,
+                }}
               ></div>
               <div
-                className="absolute w-2 h-2 rounded-full bg-[#00FF41] shadow-[0_0_6px_rgba(0,255,65,0.8)]"
-                style={{ left: hover.x - 4, top: hover.y - 4 }}
+                className="absolute w-2 h-2 rounded-full"
+                style={{
+                  left: hover.x - 4,
+                  top: hover.y - 4,
+                  backgroundColor: color,
+                  boxShadow: `0 0 6px ${color}`,
+                }}
               ></div>
             </div>
             <div
@@ -463,12 +473,12 @@ export function TrendMonitor({
               style={{
                 left: Math.min(hover.x + 10, hover.rectWidth - hover.axisWidthPx - 120),
                 top: Math.max(hover.y - 24, 6),
-                background: "#ffffe1",
-                border: "1px solid #000000",
+                background: "var(--win-tooltip-bg)",
+                border: "1px solid var(--win-darkest)",
                 fontSize: 10,
                 fontFamily: '"Tahoma", sans-serif',
-                color: "#000000",
-                boxShadow: "2px 2px 2px rgba(0,0,0,0.4)",
+                color: "var(--win-text)",
+                boxShadow: "2px 2px 2px var(--win-overlay-shadow)",
               }}
             >
               <div className="text-matrix-muted">{formatTooltipLabel(hover.label)}</div>
@@ -493,7 +503,7 @@ export function TrendMonitor({
             key={`${labelText}-${idx}`}
             style={
               labelText === copy("trend.monitor.now_label")
-                ? { color: "var(--win-navy, #000080)", fontWeight: "bold" }
+                ? { color: "var(--win-navy)", fontWeight: "bold" }
                 : {}
             }
           >

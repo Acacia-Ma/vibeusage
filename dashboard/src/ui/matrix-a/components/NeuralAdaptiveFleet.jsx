@@ -38,7 +38,7 @@ export const NeuralAdaptiveFleet = React.memo(function NeuralAdaptiveFleet({
           <span style={{ fontSize: 10, color: "var(--win-dark)" }}>{usageLabel}</span>
         </div>
         <div className="flex items-baseline gap-1">
-          <span style={{ fontWeight: "bold", fontSize: 13, color: "var(--win-navy, #000080)" }}>{totalPercent}</span>
+          <span style={{ fontWeight: "bold", fontSize: 13, color: "var(--win-navy)" }}>{totalPercent}</span>
           <span style={{ fontSize: 10, color: "var(--win-dark)" }}>{percentSymbol}</span>
         </div>
       </div>
@@ -54,7 +54,7 @@ export const NeuralAdaptiveFleet = React.memo(function NeuralAdaptiveFleet({
           borderLeft: "1px solid var(--win-btn-dark-shadow)",
           borderBottom: "1px solid var(--win-btn-highlight)",
           borderRight: "1px solid var(--win-btn-highlight)",
-          background: "#ffffff",
+          background: "var(--win-sunken-bg)",
         }}
       >
         {models.map((model, index) => {
@@ -69,7 +69,8 @@ export const NeuralAdaptiveFleet = React.memo(function NeuralAdaptiveFleet({
                 backgroundColor: styleConfig.bg,
                 backgroundImage: styleConfig.pattern,
                 backgroundSize: styleConfig.size || "auto",
-                borderRight: index < models.length - 1 ? "1px solid #ffffff" : "none",
+                borderRight:
+                  index < models.length - 1 ? "1px solid var(--win-btn-highlight)" : "none",
                 transition: "width 0.5s ease-out",
               }}
             />

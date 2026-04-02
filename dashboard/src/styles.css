@@ -5,20 +5,25 @@
 :root {
   color-scheme: light;
   /* Win2K System Colors */
+  --win-accent-rgb: 0 0 128;
+  --win-accent: rgb(var(--win-accent-rgb));
+  --win-bg-rgb: 192 192 192;
   --win-bg: #c0c0c0;
   --win-dark: #808080;
   --win-darker: #404040;
   --win-darkest: #000000;
   --win-light: #dfdfdf;
   --win-lighter: #ffffff;
-  --win-titlebar: #000080;
+  --win-titlebar: var(--win-accent);
+  --win-titlebar-mid: #1084d0;
   --win-titlebar-inactive: #808080;
   --win-titlebar-text: #ffffff;
-  --win-highlight: #000080;
+  --win-highlight: var(--win-accent);
   --win-highlight-text: #ffffff;
   --win-text: #000000;
   --win-text-disabled: #808080;
-  --win-text-accent: #000080;
+  --win-text-accent: var(--win-accent);
+  --win-navy: var(--win-accent);
   --win-sunken-bg: #ffffff;
   --win-sunken: var(--win-sunken-bg);
   --win-btn-face: #c0c0c0;
@@ -30,8 +35,11 @@
   --win-green: #008000;
   --win-warning: #b87800;
   --win-danger: #cc0000;
+  --win-danger-bg: #fff0f0;
+  --win-scroll-track: #c8c8c8;
+  --win-tooltip-bg: #ffffe1;
   --win-overlay-shadow: rgba(0, 0, 0, 0.4);
-  --win-chart-line: #000080;
+  --win-chart-line: var(--win-accent);
 }
 
 html,
@@ -94,7 +102,12 @@ body {
 
   /* Window chrome / title bar */
   .win-titlebar {
-    background: linear-gradient(to right, var(--win-titlebar) 0%, #1084d0 50%, var(--win-titlebar) 100%);
+    background: linear-gradient(
+      to right,
+      var(--win-titlebar) 0%,
+      var(--win-titlebar-mid) 50%,
+      var(--win-titlebar) 100%
+    );
     color: var(--win-titlebar-text);
     font-weight: bold;
     font-size: 11px;

@@ -1,27 +1,27 @@
 export const COLORS = {
-  MATRIX: "#00FF41",
-  GOLD: "#FFD700",
-  DARK: "#050505",
+  PRIMARY_FILL: "rgb(var(--win-accent-rgb) / 0.6)",
+  PRIMARY_PATTERN_STRONG: "rgb(var(--win-accent-rgb) / 0.2)",
+  PRIMARY_PATTERN_SOFT: "rgb(var(--win-accent-rgb) / 0.1)",
 };
 
 export const TEXTURES = [
-  // 1. 实心块：降低不透明度，不抢眼
-  { bg: `${COLORS.MATRIX}99`, pattern: "none" },
-  // 2. 斜纹：极低透明度
+  // Solid fill with reduced opacity so the first segment does not dominate.
+  { bg: COLORS.PRIMARY_FILL, pattern: "none" },
+  // Diagonal stripes with a light tint.
   {
     bg: "transparent",
-    pattern: `repeating-linear-gradient(45deg, transparent, transparent 2px, ${COLORS.MATRIX}33 2px, ${COLORS.MATRIX}33 4px)`,
+    pattern: `repeating-linear-gradient(45deg, transparent, transparent 2px, ${COLORS.PRIMARY_PATTERN_STRONG} 2px, ${COLORS.PRIMARY_PATTERN_STRONG} 4px)`,
   },
-  // 3. 点阵：更稀疏
+  // Sparse dotted pattern for secondary differentiation.
   {
     bg: "transparent",
-    pattern: `radial-gradient(${COLORS.MATRIX}33 1px, transparent 1px)`,
+    pattern: `radial-gradient(${COLORS.PRIMARY_PATTERN_STRONG} 1px, transparent 1px)`,
     size: "4px 4px",
   },
-  // 4. 竖条：极细微的分割感
+  // Thin vertical separators as a subtle fourth texture.
   {
     bg: "transparent",
-    pattern: `linear-gradient(90deg, ${COLORS.MATRIX}1A 1px, transparent 1px)`,
+    pattern: `linear-gradient(90deg, ${COLORS.PRIMARY_PATTERN_SOFT} 1px, transparent 1px)`,
     size: "3px 100%",
   },
 ];

@@ -57,7 +57,7 @@ export const RollingUsagePanel = React.memo(function RollingUsagePanel({
             </span>
             <span
               className="tabular-nums font-bold"
-              style={{ fontSize: "clamp(18px, 3vw, 26px)", color: "var(--win-navy, #000080)" }}
+              style={{ fontSize: "clamp(18px, 3vw, 26px)", color: "var(--win-navy)" }}
             >
               {item.value}
             </span>
