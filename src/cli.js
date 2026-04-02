@@ -4,6 +4,7 @@ const { cmdStatus } = require("./commands/status");
 const { cmdDiagnostics } = require("./commands/diagnostics");
 const { cmdDoctor } = require("./commands/doctor");
 const { cmdUninstall } = require("./commands/uninstall");
+const { tryAutoHealRuntimeIntegrations } = require("./lib/runtime-auto-heal");
 
 async function run(argv) {
   const [command, ...rest] = argv;
@@ -11,6 +12,10 @@ async function run(argv) {
   if (!command || command === "-h" || command === "--help") {
     printHelp();
     return;
+  }
+
+  if (shouldAutoHeal(command)) {
+    await tryAutoHealRuntimeIntegrations();
   }
 
   switch (command) {
@@ -35,6 +40,10 @@ async function run(argv) {
     default:
       throw new Error(`Unknown command: ${command}`);
   }
+}
+
+function shouldAutoHeal(command) {
+  return command !== "init" && command !== "uninstall";
 }
 
 function printHelp() {
@@ -68,4 +77,4 @@ function printHelp() {
   );
 }
 
-module.exports = { run };
+module.exports = { run, shouldAutoHeal };
