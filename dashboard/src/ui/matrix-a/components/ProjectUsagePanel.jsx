@@ -168,7 +168,7 @@ export function ProjectUsagePanel({
                     borderTop: "2px solid var(--win-btn-highlight)",
                     borderLeft: "2px solid var(--win-btn-highlight)",
                     minWidth: 120,
-                    boxShadow: "2px 2px 4px rgba(0,0,0,0.4)",
+                    boxShadow: "2px 2px 4px var(--win-overlay-shadow)",
                   }}
                 >
                   <Select.List aria-label={limitAria} role="listbox">
@@ -271,17 +271,29 @@ function ProjectUsageCard({
       <div
         className="absolute right-2 top-2 flex items-center gap-1"
         data-card-line="stars"
+        data-star-slot="corner"
+        data-star-position="top-right"
         style={{ fontSize: 10, color: "var(--win-dark)" }}
       >
         <span className="sr-only">{starsLabel}</span>
-        <svg viewBox="0 0 16 16" style={{ width: 10, height: 10, fill: "#b87800" }} aria-hidden="true">
+        <svg
+          viewBox="0 0 16 16"
+          className="h-[1.3em] w-[1.3em]"
+          data-star-icon="true"
+          style={{ fill: "var(--win-warning)" }}
+          aria-hidden="true"
+        >
           <path d="M8 1.1 10.1 5.4l4.8.7-3.5 3.4.8 4.8L8 11.9l-4.2 2.4.8-4.8L1.1 6.1l4.8-.7L8 1.1z" />
         </svg>
         <span title={starsFull}>{starsCompact}</span>
       </div>
 
       {/* Identity row */}
-      <div className="flex items-center gap-2 pr-12" data-card-line="identity">
+      <div
+        className="flex items-center gap-2 pr-12"
+        data-card-line="identity"
+        data-owner-row="true"
+      >
         <div
           style={{
             width: 32,
@@ -298,7 +310,8 @@ function ProjectUsageCard({
           )}
         </div>
         <div
-          style={{ fontSize: 10, color: "var(--win-dark)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          className="max-w-[8rem] truncate"
+          style={{ fontSize: 10, color: "var(--win-dark)" }}
           data-card-field="owner"
         >
           {owner || placeholder}
@@ -307,9 +320,11 @@ function ProjectUsageCard({
 
       {/* Repo name */}
       <div
-        style={{ fontSize: 13, fontWeight: "bold", color: "var(--win-navy, #000080)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+        className="max-w-full truncate"
+        style={{ fontSize: 13, fontWeight: "bold", color: "var(--win-text-accent)" }}
         title={repo || repoKey}
         data-card-line="repo"
+        data-card-field="repo"
       >
         {repo || repoKey || placeholder}
       </div>
@@ -321,7 +336,7 @@ function ProjectUsageCard({
         style={{ fontSize: 10, paddingTop: 4, borderTop: "1px solid var(--win-btn-shadow)" }}
       >
         <span style={{ color: "var(--win-dark)" }}>{tokensLabel}</span>
-        <span style={{ fontWeight: "bold", color: "var(--win-navy, #000080)", fontSize: 12 }} title={tokensFull}>
+        <span style={{ fontWeight: "bold", color: "var(--win-text-accent)", fontSize: 12 }} title={tokensFull}>
           {tokensCompact}
         </span>
       </div>

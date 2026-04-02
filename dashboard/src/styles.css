@@ -20,6 +20,7 @@
   --win-text-disabled: #808080;
   --win-text-accent: #000080;
   --win-sunken-bg: #ffffff;
+  --win-sunken: var(--win-sunken-bg);
   --win-btn-face: #c0c0c0;
   --win-btn-shadow: #808080;
   --win-btn-dark-shadow: #404040;
@@ -27,6 +28,9 @@
   --win-btn-light: #dfdfdf;
   --win-statusbar-bg: #c0c0c0;
   --win-green: #008000;
+  --win-warning: #b87800;
+  --win-danger: #cc0000;
+  --win-overlay-shadow: rgba(0, 0, 0, 0.4);
   --win-chart-line: #000080;
 }
 

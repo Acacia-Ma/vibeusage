@@ -160,6 +160,12 @@ dashboard.model_breakdown.footer,ui,NeuralDivergenceMap,NeuralDivergenceMap,foot
 dashboard.model_breakdown.usage_label,ui,NeuralAdaptiveFleet,NeuralAdaptiveFleet,usage_label,"USAGE: {{value}}",,active
 dashboard.top_models.title,ui,TopModelsPanel,TopModelsPanel,title,"Top Models",,active
 dashboard.top_models.subtitle,ui,TopModelsPanel,TopModelsPanel,subtitle,"All_Scores",,active
+dashboard.top_models.column_rank,ui,TopModelsPanel,TopModelsPanel,column_rank,"#",,active
+dashboard.top_models.column_model,ui,TopModelsPanel,TopModelsPanel,column_model,"Model",,active
+dashboard.top_models.column_share,ui,TopModelsPanel,TopModelsPanel,column_share,"Share",,active
+dashboard.connection_status.connected,ui,ConnectionStatus,ConnectionStatus,connected,"Connected",,active
+dashboard.connection_status.unstable,ui,ConnectionStatus,ConnectionStatus,unstable,"Unstable",,active
+dashboard.connection_status.disconnected,ui,ConnectionStatus,ConnectionStatus,disconnected,"Disconnected",,active
 dashboard.projects.title,ui,ProjectUsagePanel,ProjectUsagePanel,title,"Project Usage",,active
 dashboard.projects.subtitle,ui,ProjectUsagePanel,ProjectUsagePanel,subtitle,"Repositories",,active
 dashboard.projects.tokens_label,ui,ProjectUsagePanel,ProjectUsagePanel,tokens_label,"TOKENS",,active

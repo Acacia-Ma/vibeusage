@@ -53,6 +53,7 @@ export function UpgradeAlertModal({ requiredVersion, installCommand, onClose }) 
     window.addEventListener("resize", updateOffset);
     return () => {
       window.removeEventListener("resize", updateOffset);
+      root.style.setProperty("--matrix-banner-offset", "0px");
     };
   }, [isVisible]);
 

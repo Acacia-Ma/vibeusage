@@ -1,39 +1,19 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { isScreenshotModeEnabled } from "../../../lib/screenshot-mode.js";
+import React from "react";
+import { copy } from "../../../lib/copy";
 
 export function ConnectionStatus({ status = "STABLE", title, className = "" }) {
-  const [bit, setBit] = useState("0");
-  const screenshotMode = useMemo(() => {
-    if (typeof window === "undefined") return false;
-    return isScreenshotModeEnabled(window.location.search);
-  }, []);
-
-  useEffect(() => {
-    let interval;
-    if (status === "STABLE") {
-      if (screenshotMode) {
-        setBit("1");
-        return undefined;
-      }
-      interval = window.setInterval(() => {
-        setBit(Math.random() > 0.5 ? "1" : "0");
-      }, 150);
-    }
-    return () => window.clearInterval(interval);
-  }, [screenshotMode, status]);
-
   const configs = {
     STABLE: {
       color: "var(--win-green)",
-      label: "Connected",
+      label: copy("dashboard.connection_status.connected"),
     },
     UNSTABLE: {
-      color: "#b87800",
-      label: "Unstable",
+      color: "var(--win-warning)",
+      label: copy("dashboard.connection_status.unstable"),
     },
     LOST: {
-      color: "#cc0000",
-      label: "Disconnected",
+      color: "var(--win-danger)",
+      label: copy("dashboard.connection_status.disconnected"),
     },
   };
 

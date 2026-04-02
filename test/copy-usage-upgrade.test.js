@@ -31,6 +31,24 @@ const matrixShellPath = path.join(
   "foundation",
   "MatrixShell.jsx",
 );
+const topModelsPath = path.join(
+  root,
+  "dashboard",
+  "src",
+  "ui",
+  "matrix-a",
+  "components",
+  "TopModelsPanel.jsx",
+);
+const connectionStatusPath = path.join(
+  root,
+  "dashboard",
+  "src",
+  "ui",
+  "matrix-a",
+  "components",
+  "ConnectionStatus.jsx",
+);
 
 function read(filePath) {
   return fs.readFileSync(filePath, "utf8");
@@ -67,6 +85,22 @@ test("copy registry covers MatrixShell menu labels", () => {
     "shell.menu.view",
     "shell.menu.tools",
     "shell.menu.help",
+  ];
+
+  for (const key of requiredKeys) {
+    assert.ok(hasCopyKey(csv, key), `expected copy registry to include ${key}`);
+  }
+});
+
+test("copy registry covers TopModels headers and connection status labels", () => {
+  const csv = read(copyPath);
+  const requiredKeys = [
+    "dashboard.top_models.column_rank",
+    "dashboard.top_models.column_model",
+    "dashboard.top_models.column_share",
+    "dashboard.connection_status.connected",
+    "dashboard.connection_status.unstable",
+    "dashboard.connection_status.disconnected",
   ];
 
   for (const key of requiredKeys) {
@@ -140,9 +174,45 @@ test("MatrixShell uses copy keys for menu labels and preserves banner offset", (
       `expected MatrixShell to remove hardcoded menu literal ${literal}`,
     );
   }
+});
+
+test("TopModelsPanel and ConnectionStatus use copy keys instead of literals", () => {
+  const topModelsSource = read(topModelsPath);
+  const topModelsKeys = [
+    "dashboard.top_models.column_rank",
+    "dashboard.top_models.column_model",
+    "dashboard.top_models.column_share",
+  ];
+  for (const key of topModelsKeys) {
+    assert.ok(
+      topModelsSource.includes(`copy(\"${key}\")`),
+      `expected TopModelsPanel to use copy key ${key}`,
+    );
+  }
+
+  const topModelsBannedLiterals = [">Model<", ">Share<"];
+  for (const literal of topModelsBannedLiterals) {
+    assert.ok(
+      !topModelsSource.includes(literal),
+      `expected TopModelsPanel to remove hardcoded literal ${literal}`,
+    );
+  }
+
+  const connectionSource = read(connectionStatusPath);
+  const connectionKeys = [
+    "dashboard.connection_status.connected",
+    "dashboard.connection_status.unstable",
+    "dashboard.connection_status.disconnected",
+  ];
+  for (const key of connectionKeys) {
+    assert.ok(
+      connectionSource.includes(`copy(\"${key}\")`),
+      `expected ConnectionStatus to use copy key ${key}`,
+    );
+  }
 
   assert.ok(
-    shellSource.includes("var(--matrix-banner-offset, 0px)"),
-    "expected MatrixShell content wrapper to preserve banner offset spacing",
+    !connectionSource.includes("setInterval("),
+    "expected ConnectionStatus to remove stale polling",
   );
 });

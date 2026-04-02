@@ -5,6 +5,9 @@ import { AsciiBox } from "../../foundation/AsciiBox.jsx";
 export const TopModelsPanel = React.memo(function TopModelsPanel({ rows = [], className = "" }) {
   const placeholder = copy("shared.placeholder.short");
   const percentSymbol = copy("shared.unit.percent");
+  const rankHeader = copy("dashboard.top_models.column_rank");
+  const modelHeader = copy("dashboard.top_models.column_model");
+  const shareHeader = copy("dashboard.top_models.column_share");
   const displayRows = Array.from({ length: 3 }, (_, index) => {
     const row = rows[index];
     if (row) return row;
@@ -25,16 +28,16 @@ export const TopModelsPanel = React.memo(function TopModelsPanel({ rows = [], cl
               className="win-listview-header"
               style={{ textAlign: "center", width: 28 }}
             >
-              #
+              {rankHeader}
             </th>
             <th className="win-listview-header" style={{ textAlign: "left" }}>
-              Model
+              {modelHeader}
             </th>
             <th
               className="win-listview-header"
               style={{ textAlign: "right", width: 56 }}
             >
-              Share
+              {shareHeader}
             </th>
           </tr>
         </thead>
@@ -75,7 +78,7 @@ export const TopModelsPanel = React.memo(function TopModelsPanel({ rows = [], cl
                     padding: "2px 6px",
                     textAlign: "right",
                     fontWeight: "bold",
-                    color: "var(--win-navy, #000080)",
+                    color: "var(--win-text-accent)",
                     whiteSpace: "nowrap",
                   }}
                 >
