@@ -111,6 +111,9 @@ npx vibeusage init
 npx vibeusage init
 ```
 
+> [!IMPORTANT]
+> 从 `vibeusage@0.3.0` 开始，只有 `init` 会修改本地集成配置。如果你是从旧版本升级，请重新执行一次 `npx vibeusage init`；`status`、`diagnostics`、`doctor`、`sync` 都不会自动修复旧 hook 布局。
+
 ### 认证方式
 
 1. **浏览器认证**（默认）- 打开浏览器进行安全认证
@@ -141,10 +144,12 @@ npx vibeusage init [选项]
 | **Every Code** | `~/.code/config.toml`（或 `CODE_HOME`） | `notify` 钩子 |
 | **Gemini CLI** | `~/.gemini/settings.json`（或 `GEMINI_HOME`） | `SessionEnd` 钩子 |
 | **Opencode** | 全局插件 | 消息解析器插件 |
-| **Claude Code** | `~/.claude/hooks/` | 钩子配置 |
-| **OpenClaw** | 安装时自动链接 | Gateway 钩子（需要重启） |
+| **Claude Code** | `~/.claude/settings.json` | `Stop` + `SessionEnd` 钩子 |
+| **OpenClaw** | 安装时自动链接 | Session plugin（需要重启） |
 
 无需进一步操作！🎉
+
+如果后续某个集成出现漂移，请重新执行 `npx vibeusage init`。只读命令不会重写本地 hook/plugin 状态。
 
 ## 💡 使用方法
 

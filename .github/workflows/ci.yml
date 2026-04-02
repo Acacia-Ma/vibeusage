@@ -30,6 +30,9 @@ jobs:
         run: npm run validate:ui-hardcode
       - name: Validate guardrails
         run: npm run validate:guardrails
+      - name: Validate PR risk layer
+        if: github.event_name == 'pull_request'
+        run: npm run validate:pr-risk-layer
       - name: Guardrail tests
         run: node --test test/architecture-guardrails.test.js
       - name: Check InsForge build outputs

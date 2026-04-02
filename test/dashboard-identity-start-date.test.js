@@ -30,7 +30,7 @@ test("DashboardPage uses active days for identity stats", () => {
   assert.ok(src.includes("active_days"), "expected active days usage");
 });
 
-test("IdentityCard renders rank value in gold", () => {
+test("IdentityCard renders rank value with Win2K navy token", () => {
   const componentPath = path.join(
     __dirname,
     "..",
@@ -42,11 +42,16 @@ test("IdentityCard renders rank value in gold", () => {
     "IdentityCard.jsx",
   );
   const src = readFile(componentPath);
-  const match = src.match(
-    /identity_card\.rank_label[\s\S]*?<div className="([^"]*)">\s*\{rankValue\}/,
+  const rankLabelIndex = src.indexOf('copy("identity_card.rank_label")');
+  assert.notEqual(rankLabelIndex, -1, "expected rank label copy usage");
+  const rankValueIndex = src.indexOf("{rankValue}", rankLabelIndex);
+  assert.notEqual(rankValueIndex, -1, "expected rank value render");
+  const rankSection = src.slice(rankLabelIndex, rankValueIndex);
+  assert.ok(rankSection.includes('className="font-bold"'), "expected rank value to stay bold");
+  assert.ok(
+    rankSection.includes('color: "var(--win-navy)"'),
+    "expected rank value to use Win2K navy token",
   );
-  assert.ok(match, "expected rank value class");
-  assert.ok(match[1].includes("text-gold"), "expected rank value to use gold color");
 });
 
 test("Dashboard identity wiring includes subscription badges", () => {

@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { test } = require("node:test");
 
-test("NeuralAdaptiveFleet renders label in primary matrix color", () => {
+test("NeuralAdaptiveFleet uses Win2K label and accent tokens", () => {
   const src = fs.readFileSync(
     path.join(__dirname, "../dashboard/src/ui/matrix-a/components/NeuralAdaptiveFleet.jsx"),
     "utf8",
@@ -11,7 +11,12 @@ test("NeuralAdaptiveFleet renders label in primary matrix color", () => {
 
   assert.match(
     src,
-    /<span\s+className="[^"]*text-matrix-primary[^"]*"\s*>\s*\{label\}/,
-    "expected label to use primary matrix color",
+    /<span style=\{\{ fontWeight: "bold", fontSize: 11, color: "var\(--win-text\)" \}\}>\{label\}<\/span>/,
+    "expected label to use the Win2K text token",
+  );
+  assert.match(
+    src,
+    /<span style=\{\{ fontWeight: "bold", fontSize: 13, color: "var\(--win-navy\)" \}\}>\{totalPercent\}<\/span>/,
+    "expected totalPercent to use the Win2K accent token",
   );
 });
