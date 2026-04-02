@@ -3,56 +3,63 @@ const path = require("node:path");
 
 const { ensureDir, readJson, writeJson } = require("./fs");
 
-const DEFAULT_EVENT = "SessionEnd";
+const DEFAULT_EVENTS = ["Stop", "SessionEnd"];
 
-async function upsertClaudeHook({ settingsPath, hookCommand, event = DEFAULT_EVENT }) {
+async function upsertClaudeHook({ settingsPath, hookCommand, events = DEFAULT_EVENTS }) {
   const existing = await readJson(settingsPath);
   const settings = normalizeSettings(existing);
   const hooks = normalizeHooks(settings.hooks);
-  const entries = normalizeEntries(hooks[event]);
+  const targetEvents = normalizeEvents(events);
+  let changed = false;
+  const nextHooks = { ...hooks };
 
-  const normalized = normalizeEntriesForCommand(entries, hookCommand);
-  if (normalized.changed) {
-    const nextHooks = { ...hooks, [event]: normalized.entries };
-    const nextSettings = { ...settings, hooks: nextHooks };
-    const backupPath = await writeClaudeSettings({ settingsPath, settings: nextSettings });
-    return { changed: true, backupPath };
+  for (const event of targetEvents) {
+    const entries = normalizeEntries(nextHooks[event]);
+    const normalized = normalizeEntriesForCommand(entries, hookCommand);
+    if (normalized.changed) {
+      nextHooks[event] = normalized.entries;
+      changed = true;
+      continue;
+    }
+
+    if (hasHook(entries, hookCommand)) continue;
+
+    nextHooks[event] = entries.concat([{ hooks: [{ type: "command", command: hookCommand }] }]);
+    changed = true;
   }
 
-  if (hasHook(entries, hookCommand)) {
-    return { changed: false, backupPath: null };
-  }
+  if (!changed) return { changed: false, backupPath: null };
 
-  const nextEntries = entries.concat([{ hooks: [{ type: "command", command: hookCommand }] }]);
-  const nextHooks = { ...hooks, [event]: nextEntries };
   const nextSettings = { ...settings, hooks: nextHooks };
-
   const backupPath = await writeClaudeSettings({ settingsPath, settings: nextSettings });
   return { changed: true, backupPath };
 }
 
-async function removeClaudeHook({ settingsPath, hookCommand, event = DEFAULT_EVENT }) {
+async function removeClaudeHook({ settingsPath, hookCommand, events = DEFAULT_EVENTS }) {
   const existing = await readJson(settingsPath);
   if (!existing) return { removed: false, skippedReason: "settings-missing" };
 
   const settings = normalizeSettings(existing);
   const hooks = normalizeHooks(settings.hooks);
-  const entries = normalizeEntries(hooks[event]);
-  if (entries.length === 0) return { removed: false, skippedReason: "hook-missing" };
-
+  const targetEvents = normalizeEvents(events);
   let removed = false;
-  const nextEntries = [];
-  for (const entry of entries) {
-    const res = stripHookFromEntry(entry, hookCommand);
-    if (res.removed) removed = true;
-    if (res.entry) nextEntries.push(res.entry);
+  const nextHooks = { ...hooks };
+  for (const event of targetEvents) {
+    const entries = normalizeEntries(hooks[event]);
+    if (entries.length === 0) continue;
+
+    const nextEntries = [];
+    for (const entry of entries) {
+      const res = stripHookFromEntry(entry, hookCommand);
+      if (res.removed) removed = true;
+      if (res.entry) nextEntries.push(res.entry);
+    }
+
+    if (nextEntries.length > 0) nextHooks[event] = nextEntries;
+    else delete nextHooks[event];
   }
 
   if (!removed) return { removed: false, skippedReason: "hook-missing" };
-
-  const nextHooks = { ...hooks };
-  if (nextEntries.length > 0) nextHooks[event] = nextEntries;
-  else delete nextHooks[event];
 
   const nextSettings = { ...settings };
   if (Object.keys(nextHooks).length > 0) nextSettings.hooks = nextHooks;
@@ -62,13 +69,13 @@ async function removeClaudeHook({ settingsPath, hookCommand, event = DEFAULT_EVE
   return { removed: true, skippedReason: null, backupPath };
 }
 
-async function isClaudeHookConfigured({ settingsPath, hookCommand, event = DEFAULT_EVENT }) {
+async function isClaudeHookConfigured({ settingsPath, hookCommand, events = DEFAULT_EVENTS }) {
   const settings = await readJson(settingsPath);
   if (!settings || typeof settings !== "object") return false;
   const hooks = settings.hooks;
   if (!hooks || typeof hooks !== "object") return false;
-  const entries = normalizeEntries(hooks[event]);
-  return hasHook(entries, hookCommand);
+  const targetEvents = normalizeEvents(events);
+  return targetEvents.every((event) => hasHook(normalizeEntries(hooks[event]), hookCommand));
 }
 
 function buildClaudeHookCommand(notifyPath) {
@@ -86,6 +93,18 @@ function normalizeHooks(raw) {
 
 function normalizeEntries(raw) {
   return Array.isArray(raw) ? raw.slice() : [];
+}
+
+function normalizeEvents(raw) {
+  const values = Array.isArray(raw) ? raw : [raw];
+  const out = [];
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const normalized = value.trim();
+    if (!normalized || out.includes(normalized)) continue;
+    out.push(normalized);
+  }
+  return out.length > 0 ? out : DEFAULT_EVENTS.slice();
 }
 
 function normalizeCommand(cmd) {
@@ -183,6 +202,7 @@ async function writeClaudeSettings({ settingsPath, settings }) {
 }
 
 module.exports = {
+  DEFAULT_EVENTS,
   upsertClaudeHook,
   removeClaudeHook,
   isClaudeHookConfigured,

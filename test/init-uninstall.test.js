@@ -365,18 +365,33 @@ test("init then uninstall manages Claude hooks without removing existing hooks",
     const installed = JSON.parse(installedRaw);
     const hookCommand = buildClaudeHookCommand(path.join(tmp, ".vibeusage", "bin", "notify.cjs"));
     const sessionEnd = installed?.hooks?.SessionEnd || [];
-    const allCommands = sessionEnd
+    const stop = installed?.hooks?.Stop || [];
+    const sessionEndCommands = sessionEnd
       .flatMap((entry) => (Array.isArray(entry?.hooks) ? entry.hooks : [entry]))
       .map((h) => h?.command);
-    assert.ok(allCommands.includes(existingCommand), "expected existing Claude hook to remain");
-    assert.ok(allCommands.includes(hookCommand), "expected tracker Claude hook to be added");
+    const stopCommands = stop
+      .flatMap((entry) => (Array.isArray(entry?.hooks) ? entry.hooks : [entry]))
+      .map((h) => h?.command);
+    assert.ok(
+      sessionEndCommands.includes(existingCommand),
+      "expected existing Claude hook to remain",
+    );
+    assert.ok(
+      sessionEndCommands.includes(hookCommand),
+      "expected tracker Claude SessionEnd hook to be added",
+    );
+    assert.ok(stopCommands.includes(hookCommand), "expected tracker Claude Stop hook to be added");
 
     await cmdUninstall([]);
 
     const restoredRaw = await fs.readFile(settingsPath, "utf8");
     const restored = JSON.parse(restoredRaw);
     const restoredSessionEnd = restored?.hooks?.SessionEnd || [];
+    const restoredStop = restored?.hooks?.Stop || [];
     const restoredCommands = restoredSessionEnd
+      .flatMap((entry) => (Array.isArray(entry?.hooks) ? entry.hooks : [entry]))
+      .map((h) => h?.command);
+    const restoredStopCommands = restoredStop
       .flatMap((entry) => (Array.isArray(entry?.hooks) ? entry.hooks : [entry]))
       .map((h) => h?.command);
     assert.ok(
@@ -385,7 +400,11 @@ test("init then uninstall manages Claude hooks without removing existing hooks",
     );
     assert.ok(
       !restoredCommands.includes(hookCommand),
-      "expected tracker Claude hook to be removed",
+      "expected tracker Claude SessionEnd hook to be removed",
+    );
+    assert.ok(
+      !restoredStopCommands.includes(hookCommand),
+      "expected tracker Claude Stop hook to be removed",
     );
   } finally {
     process.stdout.write = prevWrite;

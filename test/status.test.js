@@ -163,3 +163,58 @@ test("status does not migrate legacy tracker directory", async () => {
     await fs.rm(tmp, { recursive: true, force: true });
   }
 });
+
+test("status reports Claude hooks unset when only SessionEnd is configured", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-status-claude-"));
+  const prevHome = process.env.HOME;
+  const prevCodexHome = process.env.CODEX_HOME;
+  const prevWrite = process.stdout.write;
+
+  try {
+    process.env.HOME = tmp;
+    process.env.CODEX_HOME = path.join(tmp, ".codex");
+
+    const trackerDir = path.join(tmp, ".vibeusage", "tracker");
+    const binDir = path.join(tmp, ".vibeusage", "bin");
+    const claudeDir = path.join(tmp, ".claude");
+    await fs.mkdir(trackerDir, { recursive: true });
+    await fs.mkdir(binDir, { recursive: true });
+    await fs.mkdir(claudeDir, { recursive: true });
+    await fs.mkdir(process.env.CODEX_HOME, { recursive: true });
+
+    const notifyPath = path.join(binDir, "notify.cjs");
+    const hookCommand = `/usr/bin/env node "${notifyPath}" --source=claude`;
+    await fs.writeFile(notifyPath, "// noop\n", "utf8");
+    await fs.writeFile(
+      path.join(claudeDir, "settings.json"),
+      JSON.stringify(
+        {
+          hooks: {
+            SessionEnd: [{ hooks: [{ type: "command", command: hookCommand }] }],
+          },
+        },
+        null,
+        2,
+      ) + "\n",
+      "utf8",
+    );
+
+    let out = "";
+    process.stdout.write = (chunk, enc, cb) => {
+      out += typeof chunk === "string" ? chunk : chunk.toString(enc || "utf8");
+      if (typeof cb === "function") cb();
+      return true;
+    };
+
+    await cmdStatus();
+
+    assert.match(out, /- Claude hooks: unset/);
+  } finally {
+    process.stdout.write = prevWrite;
+    if (prevHome === undefined) delete process.env.HOME;
+    else process.env.HOME = prevHome;
+    if (prevCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = prevCodexHome;
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
