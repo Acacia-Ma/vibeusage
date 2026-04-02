@@ -178,17 +178,26 @@ function loadBodyFromFile(bodyFile) {
 function loadBodyFromEvent(eventFile) {
   const raw = fs.readFileSync(eventFile, "utf8");
   const payload = JSON.parse(raw);
-  return payload.pull_request?.body || payload.issue?.body || "";
+  if (
+    payload.pull_request &&
+    Object.prototype.hasOwnProperty.call(payload.pull_request, "body")
+  ) {
+    return payload.pull_request.body ?? "";
+  }
+  if (payload.issue && Object.prototype.hasOwnProperty.call(payload.issue, "body")) {
+    return payload.issue.body ?? "";
+  }
+  return null;
 }
 
 function resolveBody(args) {
-  if (args.body) return args.body;
+  if (Object.prototype.hasOwnProperty.call(args, "body")) return args.body;
   if (args.bodyFile) return loadBodyFromFile(args.bodyFile);
 
   const eventFile = args.eventFile || process.env.GITHUB_EVENT_PATH;
   if (eventFile && fs.existsSync(eventFile)) {
     const body = loadBodyFromEvent(eventFile);
-    if (body) return body;
+    if (body !== null && body !== undefined) return body;
   }
 
   return null;
@@ -199,7 +208,7 @@ function main() {
   const config = args.config ? loadConfig(path.resolve(args.config)) : DEFAULT_CONFIG;
   const body = resolveBody(args);
 
-  if (!body) {
+  if (body === null || body === undefined) {
     if (args.requireBody) {
       console.error("PR risk layer gate failed: no PR body source provided.");
       process.exit(1);

@@ -8,7 +8,12 @@ module.exports = {
   async probe(ctx) {
     const hasConfigDir = await isDir(ctx.opencode.configDir);
     if (!hasConfigDir) {
-      return baseProbe(this, { status: "not_installed", detail: "Config not found" });
+      return baseProbe(this, {
+        status: "not_installed",
+        detail: "Config not found",
+        initPreviewStatus: "updated",
+        initPreviewDetail: "Will install plugin",
+      });
     }
     const configured = await isOpencodePluginInstalled({ configDir: ctx.opencode.configDir });
     return baseProbe(this, {

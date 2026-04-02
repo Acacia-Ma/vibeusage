@@ -53,6 +53,13 @@ function summarizeProbeForInitPreview(probe) {
     case "ready":
       return { label: probe.summaryLabel, status: "set", detail: "Already configured" };
     case "not_installed":
+      if (probe.initPreviewStatus) {
+        return {
+          label: probe.summaryLabel,
+          status: probe.initPreviewStatus,
+          detail: probe.initPreviewDetail || probe.detail,
+        };
+      }
       return { label: probe.summaryLabel, status: "skipped", detail: probe.detail };
     case "unsupported_legacy":
       return { label: probe.summaryLabel, status: "updated", detail: "Will replace legacy config" };

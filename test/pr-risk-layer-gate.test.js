@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const cp = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -178,6 +179,48 @@ test("loadBodyFromEvent reads pull request body from GitHub event payload", () =
 
   const body = loadBodyFromEvent(eventPath);
   assert.equal(body, "## Summary\n\nReusable gate body\n");
+});
+
+test("loadBodyFromEvent returns null when event has no PR or issue body source", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pr-risk-layer-missing-"));
+  const eventPath = writeTempFile(
+    root,
+    "event.json",
+    JSON.stringify({
+      repository: {
+        full_name: "victorGPT/vibeusage",
+      },
+    }),
+  );
+
+  const body = loadBodyFromEvent(eventPath);
+  assert.equal(body, null);
+});
+
+test("CLI gate treats empty PR body as invalid instead of skipping", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pr-risk-layer-empty-"));
+  const eventPath = writeTempFile(
+    root,
+    "event.json",
+    JSON.stringify({
+      pull_request: {
+        body: "",
+      },
+    }),
+  );
+
+  const result = cp.spawnSync(
+    process.execPath,
+    [path.join(repoRoot, "scripts", "ops", "pr-risk-layer-gate.cjs"), "--event-file", eventPath],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+    },
+  );
+
+  assert.equal(result.status, 1, `expected exit 1, got ${result.status}.\n${result.stdout}\n${result.stderr}`);
+  assert.match(result.stderr, /PR risk layer gate failed:/);
+  assert.match(result.stderr, /Missing required section:/);
 });
 
 test("default config headings stay aligned with PR template", () => {
