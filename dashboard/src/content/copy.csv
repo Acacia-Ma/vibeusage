@@ -81,6 +81,10 @@ landing.footer.system_ready,landing,LandingPage,LandingPage,footer_system_ready,
 
 shell.header.title,ui,MatrixShell,MatrixShell,header_title,"VIBE USAGE",,active
 shell.header.link_active,ui,MatrixShell,MatrixShell,header_link_active,"LINK_ACTIVE",,active
+shell.menu.file,ui,MatrixShell,MatrixShell,menu_file,"File",,active
+shell.menu.view,ui,MatrixShell,MatrixShell,menu_view,"View",,active
+shell.menu.tools,ui,MatrixShell,MatrixShell,menu_tools,"Tools",,active
+shell.menu.help,ui,MatrixShell,MatrixShell,menu_help,"Help",,active
 shell.footer.help,ui,MatrixShell,MatrixShell,footer_help,"[F1] Help",,active
 shell.footer.neural_index,ui,MatrixShell,MatrixShell,footer_neural_index,"CORE_INDEX: 0.942.A1",,active
 

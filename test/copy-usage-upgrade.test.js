@@ -23,6 +23,14 @@ const upgradePath = path.join(
   "components",
   "UpgradeAlertModal.jsx",
 );
+const matrixShellPath = path.join(
+  root,
+  "dashboard",
+  "src",
+  "ui",
+  "foundation",
+  "MatrixShell.jsx",
+);
 
 function read(filePath) {
   return fs.readFileSync(filePath, "utf8");
@@ -45,6 +53,20 @@ test("dashboard copy registry covers fleet usage and upgrade alert text", () => 
     "dashboard.upgrade_alert.sparkle",
     "dashboard.upgrade_alert.prompt",
     "dashboard.upgrade_alert.install_command",
+  ];
+
+  for (const key of requiredKeys) {
+    assert.ok(hasCopyKey(csv, key), `expected copy registry to include ${key}`);
+  }
+});
+
+test("copy registry covers MatrixShell menu labels", () => {
+  const csv = read(copyPath);
+  const requiredKeys = [
+    "shell.menu.file",
+    "shell.menu.view",
+    "shell.menu.tools",
+    "shell.menu.help",
   ];
 
   for (const key of requiredKeys) {
@@ -93,4 +115,34 @@ test("fleet usage and upgrade alert components use copy keys", () => {
       `expected UpgradeAlertModal to remove hardcoded text: ${literal}`,
     );
   }
+});
+
+test("MatrixShell uses copy keys for menu labels and preserves banner offset", () => {
+  const shellSource = read(matrixShellPath);
+  const requiredShellKeys = [
+    "shell.menu.file",
+    "shell.menu.view",
+    "shell.menu.tools",
+    "shell.menu.help",
+  ];
+
+  for (const key of requiredShellKeys) {
+    assert.ok(
+      shellSource.includes(`copy(\"${key}\")`),
+      `expected MatrixShell to use copy key ${key}`,
+    );
+  }
+
+  const bannedLiterals = [">File<", ">View<", ">Tools<", ">Help<"];
+  for (const literal of bannedLiterals) {
+    assert.ok(
+      !shellSource.includes(literal),
+      `expected MatrixShell to remove hardcoded menu literal ${literal}`,
+    );
+  }
+
+  assert.ok(
+    shellSource.includes("var(--matrix-banner-offset, 0px)"),
+    "expected MatrixShell content wrapper to preserve banner offset spacing",
+  );
 });

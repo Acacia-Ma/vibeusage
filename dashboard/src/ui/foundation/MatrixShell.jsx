@@ -12,6 +12,10 @@ export function MatrixShell({
   hideHeader = false,
 }) {
   const headerTitle = copy("shell.header.title");
+  const fileLabel = copy("shell.menu.file");
+  const viewLabel = copy("shell.menu.view");
+  const toolsLabel = copy("shell.menu.tools");
+  const helpLabel = copy("shell.menu.help");
 
   return (
     <div
@@ -19,7 +23,10 @@ export function MatrixShell({
       style={{ background: "var(--win-bg)", color: "var(--win-text)" }}
     >
       {/* Main window chrome */}
-      <div className="flex flex-col min-h-screen">
+      <div
+        className="flex flex-col min-h-screen"
+        style={{ marginTop: "var(--matrix-banner-offset, 0px)" }}
+      >
         {/* Window title bar */}
         {!hideHeader ? (
           <>
@@ -66,10 +73,18 @@ export function MatrixShell({
 
             {/* Menu bar */}
             <div className="win-toolbar shrink-0 text-[11px]">
-              <span className="px-2 py-0.5 hover:bg-win-titlebar hover:text-white cursor-default">File</span>
-              <span className="px-2 py-0.5 hover:bg-win-titlebar hover:text-white cursor-default">View</span>
-              <span className="px-2 py-0.5 hover:bg-win-titlebar hover:text-white cursor-default">Tools</span>
-              <span className="px-2 py-0.5 hover:bg-win-titlebar hover:text-white cursor-default">Help</span>
+              <span className="px-2 py-0.5 hover:bg-win-titlebar hover:text-white cursor-default">
+                {fileLabel}
+              </span>
+              <span className="px-2 py-0.5 hover:bg-win-titlebar hover:text-white cursor-default">
+                {viewLabel}
+              </span>
+              <span className="px-2 py-0.5 hover:bg-win-titlebar hover:text-white cursor-default">
+                {toolsLabel}
+              </span>
+              <span className="px-2 py-0.5 hover:bg-win-titlebar hover:text-white cursor-default">
+                {helpLabel}
+              </span>
             </div>
 
             {/* Toolbar with header right content */}
