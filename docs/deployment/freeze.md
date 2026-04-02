@@ -15,6 +15,21 @@
 - Cold regression step:
 - Synthetic acceptance:
 
+## 2026-04-02-release-0.2.24
+
+- Date: 2026-04-02
+- Scope: CLI publish (vibeusage@0.2.24) for Claude Code hook reliability and auto-heal on upgraded installs
+- Change ID: N/A (release)
+- CI workflow run: N/A (local-only release prep)
+- Release workflow run: N/A (local-only release prep)
+- Preflight: `node --test test/cli-auto-heal.test.js test/status.test.js test/init-uninstall.test.js` (pass); `npm test` (pass); `node scripts/acceptance/npm-install-smoke.cjs` (pass)
+- npm publish: vibeusage@0.2.24 (blocked: npm auth `401 Unauthorized` on `npm whoami`)
+- Vercel check: skipped (no dashboard changes)
+- MCP deploy: skipped (no functions changes)
+- Freeze artifact: CLI package `vibeusage@0.2.24` from local commit after release bump
+- Cold regression step: `npm test`
+- Synthetic acceptance: `node scripts/acceptance/npm-install-smoke.cjs`; after publish `VIBEUSAGE_RUN_NPX=1 node scripts/acceptance/npm-install-smoke.cjs`
+
 ## 2026-03-29-refactor-remaining-edge-functions-esm-hard-cut
 
 - Date: 2026-03-29
