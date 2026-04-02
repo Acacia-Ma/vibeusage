@@ -325,6 +325,32 @@ function buildDiagnosticsChecks(diagnostics) {
     meta: { configured: notifyConfigured },
   });
 
+  if (notify.openclaw_session_plugin_status === "unreadable") {
+    checks.push({
+      id: "notify.openclaw_session_plugin",
+      status: "warn",
+      detail: "OpenClaw session plugin config unreadable",
+      critical: false,
+      meta: {
+        status: notify.openclaw_session_plugin_status,
+        detail: notify.openclaw_session_plugin_detail || null,
+      },
+    });
+  }
+
+  if (notify.openclaw_hook_status === "unreadable") {
+    checks.push({
+      id: "notify.openclaw_hook",
+      status: "warn",
+      detail: "OpenClaw hook config unreadable",
+      critical: false,
+      meta: {
+        status: notify.openclaw_hook_status,
+        detail: notify.openclaw_hook_detail || null,
+      },
+    });
+  }
+
   const uploadError = diagnostics?.upload?.last_error || null;
   checks.push({
     id: "upload.last_error",

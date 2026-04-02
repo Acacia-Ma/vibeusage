@@ -126,10 +126,18 @@ async function collectTrackerDiagnostics({
       openclaw_session_plugin_configured: Boolean(openclawSessionProbe?.configured),
       openclaw_session_plugin_linked: Boolean(openclawSessionProbe?.linked),
       openclaw_session_plugin_enabled: Boolean(openclawSessionProbe?.enabled),
+      openclaw_session_plugin_detail:
+        typeof openclawSessionProbe?.detail === "string"
+          ? redactError(openclawSessionProbe.detail, home)
+          : null,
       openclaw_hook_status: openclawLegacyProbe?.status || "unknown",
       openclaw_hook_configured: Boolean(openclawLegacyProbe?.configured),
       openclaw_hook_linked: Boolean(openclawLegacyProbe?.linked),
       openclaw_hook_enabled: Boolean(openclawLegacyProbe?.enabled),
+      openclaw_hook_detail:
+        typeof openclawLegacyProbe?.detail === "string"
+          ? redactError(openclawLegacyProbe.detail, home)
+          : null,
     },
     upload: {
       last_success_at: lastSuccessAt,

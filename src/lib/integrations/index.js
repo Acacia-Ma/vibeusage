@@ -56,6 +56,8 @@ function summarizeProbeForInitPreview(probe) {
       return { label: probe.summaryLabel, status: "skipped", detail: probe.detail };
     case "unsupported_legacy":
       return { label: probe.summaryLabel, status: "updated", detail: "Will replace legacy config" };
+    case "unreadable":
+      return { label: probe.summaryLabel, status: "skipped", detail: probe.detail || "Config unreadable" };
     default:
       return { label: probe.summaryLabel, status: "updated", detail: "Will reconcile config" };
   }

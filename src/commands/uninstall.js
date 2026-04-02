@@ -90,6 +90,8 @@ async function cmdUninstall(argv) {
           `- OpenClaw session plugin removed: ${result.detail || result.openclawConfigPath || "unknown"}`,
         noChangeText: "- OpenClaw session plugin: no change",
         skippedText: "- OpenClaw session plugin: no change",
+        unreadableText: (result) =>
+          `- OpenClaw session plugin: skipped (${result.detail || "openclaw config unreadable"})`,
       }),
       renderHookLine({
         exists: true,
@@ -99,6 +101,8 @@ async function cmdUninstall(argv) {
           `- OpenClaw hook (legacy) removed: ${result.detail || result.openclawConfigPath || "unknown"}`,
         noChangeText: "- OpenClaw hook (legacy): no change",
         skippedText: "- OpenClaw hook (legacy): no change",
+        unreadableText: (result) =>
+          `- OpenClaw hook (legacy): skipped (${result.detail || "openclaw config unreadable"})`,
       }),
       opts.purge ? `- Purged: ${path.join(home, ".vibeusage")}` : "- Purge: skipped (use --purge)",
       "",
@@ -139,7 +143,15 @@ function renderRestoreLine({ exists, result, missingText, restoredText, noChange
   return noChangeText;
 }
 
-function renderHookLine({ exists, result, missingText, removedText, noChangeText, skippedText }) {
+function renderHookLine({
+  exists,
+  result,
+  missingText,
+  removedText,
+  noChangeText,
+  skippedText,
+  unreadableText = null,
+}) {
   if (!exists) return missingText;
   if (!result) return noChangeText;
   if (result.status === "removed" || result.status === "updated") {
@@ -153,6 +165,11 @@ function renderHookLine({ exists, result, missingText, removedText, noChangeText
   }
   if (result.skippedReason === "openclaw-config-missing") {
     return missingText;
+  }
+  if (result.skippedReason === "openclaw-config-unreadable") {
+    return typeof unreadableText === "function"
+      ? unreadableText(result)
+      : unreadableText || skippedText;
   }
   return noChangeText;
 }

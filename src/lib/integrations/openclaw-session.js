@@ -17,6 +17,16 @@ module.exports = {
     if (state?.skippedReason === "openclaw-config-missing") {
       return baseProbe(this, { status: "not_installed", detail: "OpenClaw config not found" });
     }
+    if (state?.skippedReason === "openclaw-config-unreadable") {
+      return baseProbe(this, {
+        status: "unreadable",
+        detail: state.error
+          ? `OpenClaw config unreadable: ${state.error}`
+          : "OpenClaw config unreadable",
+        linked: Boolean(state.linked),
+        enabled: Boolean(state.enabled),
+      });
+    }
     if (state?.configured) {
       return baseProbe(this, {
         status: "ready",
@@ -78,7 +88,18 @@ module.exports = {
       return action(this, "removed", true, result.openclawConfigPath);
     }
     if (result?.skippedReason === "openclaw-config-missing") {
-      return action(this, "skipped", false, "openclaw config not found");
+      return action(this, "skipped", false, "openclaw config not found", {
+        skippedReason: result.skippedReason,
+      });
+    }
+    if (result?.skippedReason === "openclaw-config-unreadable") {
+      return action(
+        this,
+        "skipped",
+        false,
+        result.error ? `openclaw config unreadable: ${result.error}` : "openclaw config unreadable",
+        { skippedReason: result.skippedReason },
+      );
     }
     return action(this, "unchanged", false, "no change");
   },
@@ -99,12 +120,13 @@ function baseProbe(descriptor, values) {
   };
 }
 
-function action(descriptor, status, changed, detail) {
+function action(descriptor, status, changed, detail, extras = {}) {
   return {
     name: descriptor.name,
     label: descriptor.summaryLabel,
     status,
     changed,
     detail,
+    ...extras,
   };
 }

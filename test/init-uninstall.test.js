@@ -289,6 +289,7 @@ test("uninstall skips notify restore when no backup and notify not installed", a
   const prevCodeHome = process.env.CODE_HOME;
   const prevOpencodeConfigDir = process.env.OPENCODE_CONFIG_DIR;
   const prevWrite = process.stdout.write;
+  let output = "";
 
   try {
     process.env.HOME = tmp;
@@ -303,13 +304,18 @@ test("uninstall skips notify restore when no backup and notify not installed", a
     await fs.writeFile(codexConfigPath, 'notify = ["echo", "custom-codex"]\n', "utf8");
     await fs.writeFile(codeConfigPath, 'notify = ["echo", "custom-code"]\n', "utf8");
 
-    process.stdout.write = () => true;
+    process.stdout.write = (chunk) => {
+      output += String(chunk);
+      return true;
+    };
     await cmdUninstall([]);
 
     const codexAfter = await fs.readFile(codexConfigPath, "utf8");
     const codeAfter = await fs.readFile(codeConfigPath, "utf8");
     assert.ok(codexAfter.includes('notify = ["echo", "custom-codex"]'));
     assert.ok(codeAfter.includes('notify = ["echo", "custom-code"]'));
+    assert.match(output, /- Codex notify: skipped \(no backup; not installed\)/);
+    assert.match(output, /- Every Code notify: skipped \(no backup; not installed\)/);
   } finally {
     process.stdout.write = prevWrite;
     if (prevHome === undefined) delete process.env.HOME;
@@ -635,6 +641,53 @@ test("init then uninstall manages Opencode plugin without removing other plugins
     await assert.rejects(fs.stat(pluginPath), /ENOENT/);
     const existing = await fs.readFile(existingPluginPath, "utf8");
     assert.ok(existing.includes("existing"));
+  } finally {
+    process.stdout.write = prevWrite;
+    if (prevHome === undefined) delete process.env.HOME;
+    else process.env.HOME = prevHome;
+    if (prevCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = prevCodexHome;
+    if (prevToken === undefined) delete process.env.VIBEUSAGE_DEVICE_TOKEN;
+    else process.env.VIBEUSAGE_DEVICE_TOKEN = prevToken;
+    if (prevOpencodeConfigDir === undefined) delete process.env.OPENCODE_CONFIG_DIR;
+    else process.env.OPENCODE_CONFIG_DIR = prevOpencodeConfigDir;
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("uninstall skips Opencode plugin removal when file content is unexpected", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-init-uninstall-"));
+  const prevHome = process.env.HOME;
+  const prevCodexHome = process.env.CODEX_HOME;
+  const prevToken = process.env.VIBEUSAGE_DEVICE_TOKEN;
+  const prevOpencodeConfigDir = process.env.OPENCODE_CONFIG_DIR;
+  const prevWrite = process.stdout.write;
+  let output = "";
+
+  try {
+    process.env.HOME = tmp;
+    process.env.CODEX_HOME = path.join(tmp, ".codex");
+    delete process.env.VIBEUSAGE_DEVICE_TOKEN;
+    process.env.OPENCODE_CONFIG_DIR = path.join(tmp, ".config", "opencode");
+    await fs.mkdir(process.env.CODEX_HOME, { recursive: true });
+
+    const codexConfigPath = path.join(process.env.CODEX_HOME, "config.toml");
+    await fs.writeFile(codexConfigPath, "# empty\n", "utf8");
+
+    const pluginDir = path.join(process.env.OPENCODE_CONFIG_DIR, "plugin");
+    await fs.mkdir(pluginDir, { recursive: true });
+    const pluginPath = path.join(pluginDir, "vibeusage-tracker.js");
+    await fs.writeFile(pluginPath, "// custom plugin without tracker marker\n", "utf8");
+
+    process.stdout.write = (chunk) => {
+      output += String(chunk);
+      return true;
+    };
+    await cmdUninstall([]);
+
+    const pluginAfter = await fs.readFile(pluginPath, "utf8");
+    assert.equal(pluginAfter, "// custom plugin without tracker marker\n");
+    assert.match(output, /- Opencode plugin: skipped \(unexpected content\)/);
   } finally {
     process.stdout.write = prevWrite;
     if (prevHome === undefined) delete process.env.HOME;

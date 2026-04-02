@@ -218,3 +218,43 @@ test("status reports Claude hooks unsupported_legacy when only SessionEnd is con
     await fs.rm(tmp, { recursive: true, force: true });
   }
 });
+
+test("status reports OpenClaw integrations as unreadable when config cannot be parsed", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-status-openclaw-"));
+  const prevHome = process.env.HOME;
+  const prevCodexHome = process.env.CODEX_HOME;
+  const prevWrite = process.stdout.write;
+
+  try {
+    process.env.HOME = tmp;
+    process.env.CODEX_HOME = path.join(tmp, ".codex");
+
+    const trackerDir = path.join(tmp, ".vibeusage", "tracker");
+    const openclawDir = path.join(tmp, ".openclaw");
+    const openclawConfigPath = path.join(openclawDir, "openclaw.json");
+    await fs.mkdir(trackerDir, { recursive: true });
+    await fs.mkdir(openclawDir, { recursive: true });
+    await fs.mkdir(process.env.CODEX_HOME, { recursive: true });
+    await fs.writeFile(openclawConfigPath, "{ bad json\n", "utf8");
+
+    let out = "";
+    process.stdout.write = (chunk, enc, cb) => {
+      out += typeof chunk === "string" ? chunk : chunk.toString(enc || "utf8");
+      if (typeof cb === "function") cb();
+      return true;
+    };
+
+    await cmdStatus();
+
+    assert.match(out, /- OpenClaw session plugin: unreadable/);
+    assert.match(out, /- OpenClaw hook \(legacy\): unreadable/);
+    assert.equal(await fs.readFile(openclawConfigPath, "utf8"), "{ bad json\n");
+  } finally {
+    process.stdout.write = prevWrite;
+    if (prevHome === undefined) delete process.env.HOME;
+    else process.env.HOME = prevHome;
+    if (prevCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = prevCodexHome;
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
