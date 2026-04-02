@@ -53,7 +53,6 @@ export function UpgradeAlertModal({ requiredVersion, installCommand, onClose }) 
     window.addEventListener("resize", updateOffset);
     return () => {
       window.removeEventListener("resize", updateOffset);
-      root.style.setProperty("--matrix-banner-offset", "0px");
     };
   }, [isVisible]);
 
@@ -75,19 +74,11 @@ export function UpgradeAlertModal({ requiredVersion, installCommand, onClose }) 
   return (
     <div
       ref={bannerRef}
-      className="fixed top-0 left-0 right-0 z-[200] border-b border-gold/30 bg-matrix-dark/95 backdrop-blur-md overflow-hidden"
-      style={{ boxShadow: "0 0 20px var(--win-overlay-shadow)" }}
+      className="fixed top-0 left-0 right-0 z-[200] border-b border-gold/30 bg-matrix-dark/95 backdrop-blur-md shadow-[0_0_20px_rgba(255,215,0,0.1)] overflow-hidden"
     >
       {/* Scanline effect */}
       <div className="absolute inset-0 pointer-events-none opacity-10">
-        <div
-          className="w-full h-full"
-          style={{
-            backgroundImage:
-              "linear-gradient(rgb(var(--win-accent-rgb) / 0) 50%, rgb(var(--win-accent-rgb) / 0.1) 50%)",
-            backgroundSize: "100% 4px",
-          }}
-        />
+        <div className="w-full h-full bg-[linear-gradient(rgba(255,215,0,0)_50%,rgba(255,215,0,0.1)_50%)] bg-[length:100%_4px]" />
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-2 relative flex flex-col md:flex-row items-center justify-between gap-4">

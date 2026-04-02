@@ -3,6 +3,7 @@ import React from "react";
 import { copy } from "../../../lib/copy";
 import { AsciiBox } from "../../foundation/AsciiBox.jsx";
 import { MatrixButton } from "../../foundation/MatrixButton.jsx";
+import { ScrambleText } from "../../foundation/ScrambleText.jsx";
 
 function normalizePeriods(periods) {
   if (!Array.isArray(periods)) return [];
@@ -53,38 +54,57 @@ export const UsagePanel = React.memo(function UsagePanel({
   const toggleAriaLabel = breakdownCollapsed ? expandAriaLabel : collapseAriaLabel;
   const showBreakdownToggle = Boolean(onToggleBreakdown && toggleLabel);
   const showSummaryLoadingPlaceholder = loading && (!summaryValue || summaryValue === "—");
-
   const costLabelText = typeof costInfoIcon === "string" ? costInfoIcon : "";
   const costLabelMatch = costLabelText.match(/^\[\s*(.+?)\s*\]$/);
   const costLabelCore = costLabelMatch ? costLabelMatch[1] : null;
-
   let summaryDisplay = summaryValue;
   if (showSummaryLoadingPlaceholder) {
     summaryDisplay = (
       <span
-        className="inline-flex items-center justify-center"
+        className="inline-flex h-12 w-24 items-center justify-center border border-matrix-ghost bg-matrix-panelStrong md:h-20 md:w-40"
         data-testid="usage-summary-loading"
         aria-label={copy("usage.button.loading")}
-        style={{
-          width: 120,
-          height: 32,
-          background: "var(--win-sunken)",
-          border: "1px solid var(--win-btn-dark-shadow)",
-        }}
       >
         <span className="sr-only">{copy("usage.button.loading")}</span>
+        <span className="h-3 w-12 bg-matrix-bright/70 md:h-4 md:w-20" />
+      </span>
+    );
+  } else if (summaryValue && summaryValue !== "—") {
+    summaryDisplay = (
+      <span className="relative inline-block leading-none">
+        {summaryAnimate ? (
+          <ScrambleText
+            text={summaryValue}
+            durationMs={summaryScrambleDurationMs}
+            startScrambled
+            respectReducedMotion
+          />
+        ) : (
+          summaryValue
+        )}
       </span>
     );
   }
-
   const breakdownRows =
     breakdown && breakdown.length
       ? breakdown
       : [
-          { key: copy("usage.metric.input"), label: copy("usage.metric.input") },
-          { key: copy("usage.metric.output"), label: copy("usage.metric.output") },
-          { key: copy("usage.metric.cached_input"), label: copy("usage.metric.cached_short") },
-          { key: copy("usage.metric.reasoning_output"), label: copy("usage.metric.reasoning_short") },
+          {
+            key: copy("usage.metric.input"),
+            label: copy("usage.metric.input"),
+          },
+          {
+            key: copy("usage.metric.output"),
+            label: copy("usage.metric.output"),
+          },
+          {
+            key: copy("usage.metric.cached_input"),
+            label: copy("usage.metric.cached_short"),
+          },
+          {
+            key: copy("usage.metric.reasoning_output"),
+            label: copy("usage.metric.reasoning_short"),
+          },
         ]
           .map((item) => {
             const match = metrics.find((row) => row.label === item.key);
@@ -96,108 +116,69 @@ export const UsagePanel = React.memo(function UsagePanel({
   return (
     <AsciiBox title={title} className={className}>
       {!hideHeader ? (
-        <div
-          className="flex flex-wrap items-center justify-between mb-2 pb-2 gap-2"
-          style={{ borderBottom: "1px solid var(--win-btn-shadow)" }}
-        >
-          {/* Period tabs — Win2K tab strip */}
-          <div className="flex items-end gap-0" style={{ borderBottom: "none" }}>
+        <div className="flex flex-wrap items-center justify-between border-b border-matrix-ghost mb-3 pb-2 gap-4 px-2">
+          <div className="flex flex-wrap gap-4">
             {tabs.map((p) => (
-              <button
+              <Button
                 key={p.key}
                 type="button"
+                className={`text-caption uppercase font-bold ${
+                  period === p.key
+                    ? "text-matrix-bright border-b-2 border-matrix-primary"
+                    : "text-matrix-muted"
+                }`}
                 onClick={() => onPeriodChange?.(p.key)}
-                className={`win-tab ${period === p.key ? "win-tab--active" : "win-tab--inactive"}`}
-                style={{
-                  fontSize: 11,
-                  fontFamily: '"Tahoma", "MS Sans Serif", sans-serif',
-                  cursor: "default",
-                }}
               >
                 {p.label}
-              </button>
+              </Button>
             ))}
           </div>
-
-          <div className="flex items-center gap-2">
-            {statusLabel ? (
-              <span
-                className="flex items-center gap-1"
-                style={{ fontSize: 11, color: "var(--win-green)" }}
-              >
-                <span
-                  style={{
-                    display: "inline-block",
-                    width: 8,
-                    height: 8,
-                    background: "var(--win-green)",
-                    border: "1px solid var(--win-btn-dark-shadow)",
-                  }}
-                />
-                {statusLabel}
-              </span>
-            ) : null}
-            {showBreakdownToggle ? (
-              <MatrixButton
-                aria-label={toggleAriaLabel}
-                title={toggleAriaLabel}
-                onClick={onToggleBreakdown}
-              >
-                {toggleLabel}
-              </MatrixButton>
-            ) : null}
-            {onRefresh ? (
-              <MatrixButton primary disabled={loading || refreshing} onClick={onRefresh}>
-                {loading || refreshing ? copy("usage.button.loading") : copy("usage.button.refresh")}
-              </MatrixButton>
-            ) : null}
-          </div>
+          {onRefresh || statusLabel ? (
+            <div className="flex items-center gap-3">
+              {statusLabel ? (
+                <span className="text-caption uppercase font-bold text-matrix-primary">
+                  {statusLabel}
+                </span>
+              ) : null}
+              {showBreakdownToggle ? (
+                <MatrixButton
+                  className="px-2 py-1"
+                  aria-label={toggleAriaLabel}
+                  title={toggleAriaLabel}
+                  onClick={onToggleBreakdown}
+                >
+                  {toggleLabel}
+                </MatrixButton>
+              ) : null}
+              {onRefresh ? (
+                <MatrixButton primary disabled={loading || refreshing} onClick={onRefresh}>
+                  {loading || refreshing
+                    ? copy("usage.button.loading")
+                    : copy("usage.button.refresh")}
+                </MatrixButton>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
       {error ? (
-        <div
-          className="text-[11px] px-2 py-1 mb-2"
-          style={{
-            color: "var(--win-danger)",
-            background: "var(--win-danger-bg)",
-            border: "1px solid var(--win-danger)",
-          }}
-        >
+        <div className="text-caption text-red-400/90 px-2 py-1">
           {copy("shared.error.prefix", { error })}
         </div>
       ) : null}
 
       {showSummary || useSummaryLayout ? (
-        <div className="flex flex-col items-center py-4 gap-4">
-          <div className="text-center">
-            <div
-              className="mb-1"
-              style={{ fontSize: 11, color: "var(--win-text)", fontWeight: "bold" }}
-            >
-              {summaryLabel}
-            </div>
-            <div
-              className="tabular-nums leading-none select-none"
-              style={{
-                fontSize: "clamp(32px, 5vw, 52px)",
-                fontWeight: "bold",
-                color: "var(--win-navy)",
-                fontFamily: '"Tahoma", "MS Sans Serif", sans-serif',
-              }}
-            >
+        <div className="flex-1 flex flex-col items-center justify-center space-y-6 opacity-90 py-4">
+          <div className="text-center relative">
+            <div className="text-heading text-matrix-muted mb-2">{summaryLabel}</div>
+            <div className="text-5xl md:text-8xl font-black text-white tracking-[-0.06em] tabular-nums leading-none glow-text select-none -translate-y-[5px]">
               {summaryDisplay}
             </div>
             {summaryCostValue ? (
-              <div className="flex items-center justify-center gap-2 mt-3">
-                <span
-                  className="leading-none"
-                  style={{
-                    fontSize: 18,
-                    fontWeight: "bold",
-                    color: "var(--win-navy)",
-                  }}
-                >
+              <div className="flex items-center justify-center gap-3 mt-4 md:mt-6">
+                <span className="sr-only">{copy("usage.metric.total_cost")}</span>
+                <span className="text-xl md:text-2xl font-bold text-gold leading-none drop-shadow-[0_0_10px_rgba(255,215,0,0.5)]">
                   {summaryCostValue}
                 </span>
                 {onCostInfo ? (
@@ -206,53 +187,45 @@ export const UsagePanel = React.memo(function UsagePanel({
                     onClick={onCostInfo}
                     title={costInfoLabel}
                     aria-label={costInfoLabel}
-                    className="win-btn"
-                    style={{
-                      fontSize: 10,
-                      minWidth: 0,
-                      padding: "1px 6px",
-                      minHeight: 18,
-                      background: "var(--win-btn-face)",
-                      fontFamily: '"Tahoma", sans-serif',
-                    }}
+                    className="group inline-flex items-center gap-1 text-[10px] uppercase font-black text-gold tracking-[0.25em] transition-all hover:text-gold/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
                   >
-                    {costLabelCore || costInfoIcon}
+                    {costLabelCore ? (
+                      <>
+                        <span className="transition-transform duration-150 group-hover:-translate-x-0.5">
+                          [
+                        </span>
+                        <span className="group-hover:animate-pulse">{costLabelCore}</span>
+                        <span className="transition-transform duration-150 group-hover:translate-x-0.5">
+                          ]
+                        </span>
+                      </>
+                    ) : (
+                      <span>{costInfoIcon}</span>
+                    )}
                   </Button>
                 ) : null}
               </div>
             ) : null}
             {summarySubLabel ? (
-              <div className="mt-1 text-[11px]" style={{ color: "var(--win-dark)" }}>
-                {summarySubLabel}
-              </div>
+              <div className="text-caption text-matrix-muted mt-2">{summarySubLabel}</div>
             ) : null}
           </div>
 
           {!breakdownCollapsed && breakdownRows.length ? (
-            <div className="w-full">
-              <div className="grid grid-cols-2 gap-2">
+            <div className="w-full px-6">
+              <div className="grid grid-cols-2 gap-3 border-t border-b border-matrix-ghost py-4 relative">
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1px] h-full bg-matrix-ghost"></div>
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-[1px] bg-matrix-dim"></div>
+
                 {breakdownRows.map((row, idx) => (
                   <div
                     key={`${row.label}-${idx}`}
-                    className="flex flex-col items-center p-2"
-                    style={{
-                      background: "var(--win-sunken)",
-                      borderTop: "1px solid var(--win-btn-dark-shadow)",
-                      borderLeft: "1px solid var(--win-btn-dark-shadow)",
-                      borderBottom: "1px solid var(--win-btn-highlight)",
-                      borderRight: "1px solid var(--win-btn-highlight)",
-                    }}
+                    className="flex flex-col items-center p-3 bg-matrix-panel border border-matrix-ghost"
                   >
-                    <span
-                      className="mb-1"
-                      style={{ fontSize: 10, color: "var(--win-dark)" }}
-                    >
+                    <span className="text-caption text-matrix-muted uppercase mb-1">
                       {row.label}
                     </span>
-                    <span
-                      className="font-bold"
-                      style={{ fontSize: 13, color: "var(--win-navy)" }}
-                    >
+                    <span className="text-body font-bold text-matrix-primary tracking-tight">
                       {row.value}
                     </span>
                   </div>
@@ -262,38 +235,22 @@ export const UsagePanel = React.memo(function UsagePanel({
           ) : null}
         </div>
       ) : (
-        <div className="flex flex-col gap-2 py-1">
+        <div className="flex flex-col gap-4 px-4 py-2">
           {metrics.map((row, idx) => (
             <div
               key={`${row.label}-${idx}`}
-              className="flex flex-col items-center p-2 text-center"
-              style={{
-                background: "var(--win-sunken)",
-                borderTop: "1px solid var(--win-btn-dark-shadow)",
-                borderLeft: "1px solid var(--win-btn-dark-shadow)",
-                borderBottom: "1px solid var(--win-btn-highlight)",
-                borderRight: "1px solid var(--win-btn-highlight)",
-              }}
+              className="border border-matrix-ghost bg-matrix-panel p-4 text-center"
             >
+              <div className="text-caption uppercase text-matrix-muted mb-2">{row.label}</div>
               <div
-                className="mb-1"
-                style={{ fontSize: 10, color: "var(--win-dark)" }}
-              >
-                {row.label}
-              </div>
-              <div
-                className="font-bold"
-                style={{ fontSize: 15, color: "var(--win-navy)" }}
+                className={`text-body font-black text-matrix-bright glow-text ${
+                  row.valueClassName || ""
+                }`}
               >
                 {row.value}
               </div>
               {row.subValue ? (
-                <div
-                  className="mt-1"
-                  style={{ fontSize: 10, color: "var(--win-dark)" }}
-                >
-                  {row.subValue}
-                </div>
+                <div className="text-caption text-matrix-muted mt-2">{row.subValue}</div>
               ) : null}
             </div>
           ))}
@@ -301,14 +258,7 @@ export const UsagePanel = React.memo(function UsagePanel({
       )}
 
       {rangeLabel ? (
-        <div
-          className="mt-2 pt-1"
-          style={{
-            fontSize: 10,
-            color: "var(--win-dark)",
-            borderTop: "1px solid var(--win-btn-shadow)",
-          }}
-        >
+        <div className="mt-3 text-caption uppercase text-matrix-dim font-bold px-2">
           {copy("usage.range_label", { range: rangeLabel })}
           {rangeTimeZoneLabel ? ` ${rangeTimeZoneLabel}` : ""}
         </div>

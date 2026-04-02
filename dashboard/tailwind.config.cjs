@@ -7,86 +7,70 @@ module.exports = {
     extend: {
       fontFamily: {
         matrix: [
-          '"Tahoma"',
-          '"MS Sans Serif"',
-          '"Arial"',
-          "sans-serif",
+          '"Geist Mono"',
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "Monaco",
+          "Consolas",
+          '"Liberation Mono"',
+          '"Courier New"',
+          "monospace",
         ],
-        mono: ['"Courier New"', "Courier", "monospace"],
+        mono: ['"Geist Mono"', ...defaultTheme.fontFamily.mono],
       },
       fontSize: {
         display: [
-          "clamp(28px, 4vw, 42px)",
+          "clamp(48px, 6vw, 72px)",
           {
             lineHeight: "1",
-            letterSpacing: "-0.01em",
-            fontWeight: "700",
+            letterSpacing: "-0.02em",
+            fontWeight: "900",
           },
         ],
         heading: [
-          "11px",
+          "14px",
           {
-            lineHeight: "1.3",
-            letterSpacing: "0em",
+            lineHeight: "1.25",
+            letterSpacing: "0.08em",
             fontWeight: "700",
           },
         ],
         body: [
-          "11px",
+          "16px",
           {
-            lineHeight: "1.4",
-            fontWeight: "400",
+            lineHeight: "1.5",
+            fontWeight: "500",
           },
         ],
         caption: [
-          "10px",
+          "12px",
           {
             lineHeight: "1.3",
-            letterSpacing: "0em",
-            fontWeight: "400",
+            letterSpacing: "0.12em",
+            fontWeight: "500",
           },
         ],
       },
       colors: {
         matrix: {
-          // Win2K color remapping — keeps all existing class references working
-          primary: "#000000",       // text
-          bright: "#000000",        // bright text
-          muted: "#808080",         // disabled/muted text
-          dim: "#808080",           // dimmed
-          ghost: "#c0c0c0",         // subtle borders (use win-btn-face)
-          panel: "#c0c0c0",         // panel background
-          panelStrong: "#c0c0c0",   // stronger panel bg
-          dark: "#c0c0c0",          // body bg
+          primary: "#00FF41",
+          bright: "#E8FFE9",
+          muted: "rgba(0, 255, 65, 0.6)",
+          dim: "rgba(0, 255, 65, 0.35)",
+          ghost: "rgba(0, 255, 65, 0.18)",
+          panel: "rgba(0, 10, 0, 0.7)",
+          panelStrong: "rgba(0, 10, 0, 0.82)",
+          dark: "#050505",
         },
-        gold: "#000080",            // remap gold -> navy blue for Win2K accent
-        win: {
-          bg: "#c0c0c0",
-          dark: "#808080",
-          darker: "#404040",
-          titlebar: "#000080",
-          titlebarbg: "#1084d0",
-          text: "#000000",
-          sunken: "#ffffff",
-          highlight: "#000080",
-          "highlight-text": "#ffffff",
-          btn: "#c0c0c0",
-          "btn-light": "#dfdfdf",
-          "btn-highlight": "#ffffff",
-          "btn-shadow": "#808080",
-          "btn-dark-shadow": "#404040",
-          green: "#008000",
-          navy: "#000080",
-        },
+        gold: "#FFD700",
       },
       boxShadow: {
-        "matrix-glow": "none",
-        "matrix-gold": "none",
-        "win-raised": "inset -1px -1px 0 #808080, inset 1px 1px 0 #dfdfdf, 1px 1px 0 #404040, -1px -1px 0 #ffffff",
-        "win-inset": "inset 1px 1px 0 #808080, inset -1px -1px 0 #dfdfdf",
+        "matrix-glow": "0 0 24px rgba(0, 255, 65, 0.35)",
+        "matrix-gold": "0 0 18px rgba(255, 215, 0, 0.35)",
       },
       backdropBlur: {
-        panel: "0px",
+        panel: "10px",
       },
     },
   },

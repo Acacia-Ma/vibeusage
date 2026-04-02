@@ -1,48 +1,48 @@
 import React from "react";
 
-// Win2K GroupBox / Panel — replaces the Matrix ASCII border box
+export const ASCII_CHARS = {
+  TOP_LEFT: "┌",
+  TOP_RIGHT: "┐",
+  BOTTOM_LEFT: "└",
+  BOTTOM_RIGHT: "┘",
+  HORIZONTAL: "─",
+  VERTICAL: "│",
+};
+
 export function AsciiBox({ title, subtitle, children, className = "", bodyClassName = "" }) {
   return (
-    <div
-      className={`relative flex flex-col ${className}`}
-      style={{
-        background: "var(--win-btn-face)",
-        border: "1px solid var(--win-btn-shadow)",
-        boxShadow: "inset -1px -1px 0 var(--win-btn-highlight), inset 1px 1px 0 var(--win-btn-dark-shadow)",
-      }}
-    >
-      {/* Title bar strip — mimics Win2K GroupBox / dialog section header */}
-      <div
-        className="win-titlebar shrink-0 select-none"
-        style={{ fontSize: 11, minHeight: 20, padding: "2px 6px" }}
-      >
-        <span className="font-bold truncate" style={{ color: "var(--win-titlebar-text)" }}>
+    <div className={`relative flex flex-col matrix-panel ${className}`}>
+      <div className="flex items-center leading-none">
+        <span className="shrink-0 text-matrix-dim">{ASCII_CHARS.TOP_LEFT}</span>
+        <span className="mx-3 shrink-0 text-heading uppercase text-matrix-primary px-2 py-1 bg-matrix-panelStrong border border-matrix-ghost">
           {title}
         </span>
         {subtitle ? (
-          <span
-            className="ml-2 font-normal text-white/70 truncate"
-            style={{ fontSize: 10 }}
-          >
-            [{subtitle}]
-          </span>
+          <span className="text-caption text-matrix-muted mr-2 uppercase">[{subtitle}]</span>
         ) : null}
+        <span className="flex-1 overflow-hidden whitespace-nowrap text-matrix-ghost">
+          {ASCII_CHARS.HORIZONTAL.repeat(100)}
+        </span>
+        <span className="shrink-0 text-matrix-dim">{ASCII_CHARS.TOP_RIGHT}</span>
       </div>
 
-      {/* Body */}
-      <div className={`flex-1 p-3 ${bodyClassName}`} style={{ background: "var(--win-btn-face)" }}>
-        {children}
+      <div className="flex flex-1">
+        <div className="shrink-0 w-3 flex justify-center text-matrix-ghost">
+          {ASCII_CHARS.VERTICAL}
+        </div>
+        <div className={`flex-1 min-w-0 py-5 px-4 relative z-10 ${bodyClassName}`}>{children}</div>
+        <div className="shrink-0 w-3 flex justify-center text-matrix-ghost">
+          {ASCII_CHARS.VERTICAL}
+        </div>
+      </div>
+
+      <div className="flex items-center leading-none text-matrix-ghost">
+        <span className="shrink-0">{ASCII_CHARS.BOTTOM_LEFT}</span>
+        <span className="flex-1 overflow-hidden whitespace-nowrap">
+          {ASCII_CHARS.HORIZONTAL.repeat(100)}
+        </span>
+        <span className="shrink-0">{ASCII_CHARS.BOTTOM_RIGHT}</span>
       </div>
     </div>
   );
 }
-
-// Keep ASCII_CHARS export for any callers that import it (unused visually now)
-export const ASCII_CHARS = {
-  TOP_LEFT: "+",
-  TOP_RIGHT: "+",
-  BOTTOM_LEFT: "+",
-  BOTTOM_RIGHT: "+",
-  HORIZONTAL: "-",
-  VERTICAL: "|",
-};
