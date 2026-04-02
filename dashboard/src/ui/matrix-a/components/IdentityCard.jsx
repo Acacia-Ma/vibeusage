@@ -2,8 +2,6 @@ import { Button } from "@base-ui/react/button";
 import React, { useEffect, useState } from "react";
 import { copy } from "../../../lib/copy";
 import { AsciiBox } from "../../foundation/AsciiBox.jsx";
-import { MatrixAvatar } from "../../foundation/MatrixAvatar.jsx";
-import { ScrambleText } from "../../foundation/ScrambleText.jsx";
 
 function normalizeBadgePart(value) {
   if (typeof value !== "string") return "";
@@ -35,6 +33,39 @@ function buildSubscriptionItems(subscriptions) {
   return Array.from(deduped.values());
 }
 
+// Win2K avatar — pixel-art style square
+function Win2KAvatar({ name, size = 56 }) {
+  const initials = (name || "?")
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((word) => {
+      return word[0];
+    })
+    .join("")
+    .toUpperCase();
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        background: "var(--win-titlebar)",
+        border: "2px solid var(--win-btn-dark-shadow)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        fontFamily: '"Tahoma", sans-serif',
+        fontWeight: "bold",
+        fontSize: Math.round(size * 0.36),
+        color: "var(--win-titlebar-text)",
+        userSelect: "none",
+      }}
+    >
+      {initials}
+    </div>
+  );
+}
+
 export function IdentityCard({
   name = copy("identity_card.name_default"),
   avatarUrl,
@@ -54,12 +85,11 @@ export function IdentityCard({
   scrambleRespectReducedMotion = false,
   scanlines = true,
   className = "",
-  avatarSize = 80,
+  avatarSize = 56,
   animate = true,
 }) {
   const unknownLabel = copy("identity_card.unknown");
   const displayName = isPublic ? name : unknownLabel;
-  const avatarName = isPublic ? name : unknownLabel;
   const [avatarFailed, setAvatarFailed] = useState(false);
   const safeAvatarUrl = typeof avatarUrl === "string" ? avatarUrl.trim() : "";
   const showAvatar = isPublic && safeAvatarUrl && !avatarFailed;
@@ -74,113 +104,127 @@ export function IdentityCard({
     setAvatarFailed(false);
   }, [safeAvatarUrl]);
 
-  const titleNode =
-    typeof title === "string" && animateTitle ? (
-      <ScrambleText
-        text={title}
-        durationMs={scrambleDurationMs}
-        loop={scrambleLoop}
-        loopDelayMs={scrambleLoopDelayMs}
-        startScrambled={scrambleStartScrambled}
-        respectReducedMotion={scrambleRespectReducedMotion}
-      />
-    ) : (
-      title
-    );
-
   return (
-    <AsciiBox title={titleNode} subtitle={subtitle} className={className}>
-      <div className="relative overflow-hidden">
-        {scanlines ? (
-          <>
-            <div className="pointer-events-none absolute inset-0 matrix-scanlines opacity-30 mix-blend-screen"></div>
-            <div className="pointer-events-none absolute inset-0 matrix-scan-sweep opacity-20"></div>
-          </>
-        ) : null}
-
-        <div className="relative z-10 flex items-center space-x-6 px-2">
-          {showAvatar ? (
-            <div
-              style={{ width: avatarSize, height: avatarSize }}
-              className="relative p-1 bg-matrix-panelStrong border border-matrix-dim overflow-hidden"
-            >
-              <img
-                src={safeAvatarUrl}
-                alt={displayName}
-                className="w-full h-full object-cover"
-                onError={() => setAvatarFailed(true)}
-              />
-            </div>
-          ) : (
-            <MatrixAvatar name={avatarName} isAnon={!isPublic} size={avatarSize} />
-          )}
-
-          <div className="flex-1 space-y-2">
-            <div>
-              <div className="text-2xl md:text-3xl font-black text-matrix-bright tracking-tight leading-none">
-                {animate ? (
-                  <ScrambleText
-                    text={displayName}
-                    durationMs={scrambleDurationMs}
-                    loop={scrambleLoop}
-                    loopDelayMs={scrambleLoopDelayMs}
-                    startScrambled={scrambleStartScrambled}
-                    respectReducedMotion={scrambleRespectReducedMotion}
-                  />
-                ) : (
-                  displayName
-                )}
-              </div>
-            </div>
-
-            {!isPublic && onDecrypt ? (
-              <Button
-                type="button"
-                onClick={onDecrypt}
-                className="text-caption text-black bg-matrix-primary px-3 py-1 font-bold uppercase hover:bg-white transition-colors"
-              >
-                {copy("identity_card.decrypt")}
-              </Button>
-            ) : null}
-
-            {shouldShowStats ? (
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <div className="bg-matrix-panel p-2 border border-matrix-ghost text-center">
-                  <div className="text-caption text-matrix-muted uppercase font-bold">
-                    {copy("identity_card.rank_label")}
-                  </div>
-                  <div className="text-gold font-black text-body">{rankValue}</div>
-                </div>
-                <div className="bg-matrix-panel p-2 border border-matrix-ghost text-center">
-                  <div className="text-caption text-matrix-muted uppercase font-bold">
-                    {copy("identity_card.streak_label")}
-                  </div>
-                  <div className="text-gold font-black tracking-tight text-body">{streakValue}</div>
-                </div>
-              </div>
-            ) : null}
-
-            {subscriptionItems.length !== 0 ? (
-              <div className="pt-2">
-                <div className="mb-1 text-caption text-matrix-muted uppercase font-bold">
-                  {copy("identity_card.subscriptions_label")}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {subscriptionItems.map((entry, index) => (
-                    <span
-                      key={`${entry.tool}:${entry.plan}:${index}`}
-                      className="inline-flex items-center px-2 py-1 border border-matrix-ghost bg-matrix-panel text-[10px] uppercase tracking-[0.14em] text-matrix-bright"
-                    >
-                      {copy("identity_card.subscription_item", {
-                        tool: entry.tool,
-                        plan: entry.plan,
-                      })}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
+    <AsciiBox title={title} subtitle={subtitle} className={className}>
+      <div className="flex items-start gap-3">
+        {/* Avatar */}
+        {showAvatar ? (
+          <div
+            style={{
+              width: avatarSize,
+              height: avatarSize,
+              border: "2px solid var(--win-btn-dark-shadow)",
+              overflow: "hidden",
+              flexShrink: 0,
+            }}
+          >
+            <img
+              src={safeAvatarUrl}
+              alt={displayName}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              onError={() => setAvatarFailed(true)}
+            />
           </div>
+        ) : (
+          <Win2KAvatar name={displayName} size={avatarSize} />
+        )}
+
+        <div className="flex-1 min-w-0">
+          {/* Name */}
+          <div
+            className="font-bold truncate leading-tight mb-2"
+            style={{ fontSize: 14, color: "var(--win-text)" }}
+          >
+            {displayName}
+          </div>
+
+          {/* Decrypt button */}
+          {!isPublic && onDecrypt ? (
+            <Button
+              type="button"
+              onClick={onDecrypt}
+              className="win-btn win-btn--primary mb-2"
+              style={{ fontSize: 11, minWidth: 0 }}
+            >
+              {copy("identity_card.decrypt")}
+            </Button>
+          ) : null}
+
+          {/* Stats */}
+          {shouldShowStats ? (
+            <div className="grid grid-cols-2 gap-1 mt-1">
+              <div
+                className="p-1 text-center"
+                style={{
+                  background: "var(--win-sunken)",
+                  borderTop: "1px solid var(--win-btn-dark-shadow)",
+                  borderLeft: "1px solid var(--win-btn-dark-shadow)",
+                  borderBottom: "1px solid var(--win-btn-highlight)",
+                  borderRight: "1px solid var(--win-btn-highlight)",
+                }}
+              >
+                <div style={{ fontSize: 9, color: "var(--win-dark)" }}>
+                  {copy("identity_card.rank_label")}
+                </div>
+                <div
+                  className="font-bold"
+                  style={{ fontSize: 12, color: "var(--win-navy)" }}
+                >
+                  {rankValue}
+                </div>
+              </div>
+              <div
+                className="p-1 text-center"
+                style={{
+                  background: "var(--win-sunken)",
+                  borderTop: "1px solid var(--win-btn-dark-shadow)",
+                  borderLeft: "1px solid var(--win-btn-dark-shadow)",
+                  borderBottom: "1px solid var(--win-btn-highlight)",
+                  borderRight: "1px solid var(--win-btn-highlight)",
+                }}
+              >
+                <div style={{ fontSize: 9, color: "var(--win-dark)" }}>
+                  {copy("identity_card.streak_label")}
+                </div>
+                <div
+                  className="font-bold"
+                  style={{ fontSize: 12, color: "var(--win-navy)" }}
+                >
+                  {streakValue}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Subscriptions */}
+          {subscriptionItems.length !== 0 ? (
+            <div className="mt-2">
+              <div style={{ fontSize: 10, color: "var(--win-dark)", marginBottom: 3 }}>
+                {copy("identity_card.subscriptions_label")}
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {subscriptionItems.map((entry, index) => (
+                  <span
+                    key={`${entry.tool}:${entry.plan}:${index}`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      padding: "1px 5px",
+                      fontSize: 10,
+                      background: "var(--win-titlebar)",
+                      color: "var(--win-titlebar-text)",
+                      border: "1px solid var(--win-btn-dark-shadow)",
+                    }}
+                  >
+                    {copy("identity_card.subscription_item", {
+                      tool: entry.tool,
+                      plan: entry.plan,
+                    })}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </AsciiBox>

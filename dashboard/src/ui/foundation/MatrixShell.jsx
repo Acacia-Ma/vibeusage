@@ -1,6 +1,5 @@
 import React from "react";
 import { copy } from "../../lib/copy";
-import { MatrixRain } from "../matrix-a/components/MatrixRain.jsx";
 
 export function MatrixShell({
   headerRight,
@@ -13,78 +12,182 @@ export function MatrixShell({
   hideHeader = false,
 }) {
   const headerTitle = copy("shell.header.title");
-  const titleParts = String(headerTitle || "")
-    .trim()
-    .split(/\s+/);
-  const titlePrimary = titleParts[0] || headerTitle;
-  const titleSecondary = titleParts.slice(1).join(" ");
+  const fileLabel = copy("shell.menu.file");
+  const viewLabel = copy("shell.menu.view");
+  const toolsLabel = copy("shell.menu.tools");
+  const helpLabel = copy("shell.menu.help");
 
   return (
     <div
-      className={`min-h-screen bg-matrix-dark text-matrix-primary font-matrix p-4 md:p-8 flex flex-col leading-tight text-body selection:bg-matrix-primary selection:text-black overflow-hidden ${rootClassName}`}
+      className={`min-h-screen font-matrix text-body leading-tight ${rootClassName}`}
+      style={{ background: "var(--win-bg)", color: "var(--win-text)" }}
     >
-      <MatrixRain />
-      <div className="matrix-scanline-overlay pointer-events-none fixed inset-0 z-50 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%)] bg-[length:100%_4px]"></div>
-
+      {/* Main window chrome */}
       <div
-        className={`relative z-10 flex flex-col min-h-screen matrix-shell-content ${contentClassName}`}
+        className="flex flex-col min-h-screen"
+        style={{ marginTop: "var(--matrix-banner-offset, 0px)" }}
       >
+        {/* Window title bar */}
         {!hideHeader ? (
-          <header className="border-b border-matrix-primary/20 pb-3 mb-6 shrink-0">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="flex min-w-0 items-center gap-3 md:gap-6">
-                <img
-                  src="/icon.svg"
-                  alt=""
-                  aria-hidden="true"
-                  className="w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-sm bg-black border border-matrix-primary/30 shadow-[0_0_12px_rgba(0,255,65,0.35)] shrink-0"
-                />
-                <div className="flex min-w-0 items-baseline gap-2 md:gap-3 uppercase select-none">
-                  <span
-                    className="text-matrix-primary font-black text-xl sm:text-2xl md:text-3xl glow-text leading-none truncate"
-                    style={{ letterSpacing: "-1px" }}
-                  >
-                    {titlePrimary}
-                  </span>
-                  {titleSecondary ? (
-                    <span
-                      className="hidden sm:inline text-matrix-primary font-extralight text-xs md:text-base truncate"
-                      style={{ letterSpacing: "2px" }}
-                    >
-                      {titleSecondary}
-                    </span>
-                  ) : null}
-                </div>
-                <div className="hidden sm:flex items-center space-x-4 text-caption text-matrix-muted uppercase font-bold shrink-0">
+          <>
+            <div className="win-titlebar select-none shrink-0">
+              {/* App icon */}
+              <img
+                src="/icon.svg"
+                alt=""
+                aria-hidden="true"
+                className="shrink-0"
+                style={{ width: 14, height: 14, imageRendering: "pixelated" }}
+              />
+              <span className="flex-1 truncate text-xs font-bold text-white" style={{ fontSize: 11 }}>
+                {headerTitle} — Usage Monitor
+              </span>
+              {/* Win2K window control buttons */}
+              <div className="flex items-center gap-0.5 ml-2">
+                <button
+                  type="button"
+                  aria-label="Minimize"
+                  className="win-titlebar-btn"
+                  style={{ fontSize: 8 }}
+                >
+                  _
+                </button>
+                <button
+                  type="button"
+                  aria-label="Maximize"
+                  className="win-titlebar-btn"
+                  style={{ fontSize: 8 }}
+                >
+                  ▫
+                </button>
+                <button
+                  type="button"
+                  aria-label="Close"
+                  className="win-titlebar-btn"
+                  style={{ fontSize: 9, fontWeight: "bold" }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Menu bar */}
+            <div className="win-toolbar shrink-0 text-[11px]">
+              <span className="px-2 py-0.5 hover:bg-win-titlebar hover:text-white cursor-default">
+                {fileLabel}
+              </span>
+              <span className="px-2 py-0.5 hover:bg-win-titlebar hover:text-white cursor-default">
+                {viewLabel}
+              </span>
+              <span className="px-2 py-0.5 hover:bg-win-titlebar hover:text-white cursor-default">
+                {toolsLabel}
+              </span>
+              <span className="px-2 py-0.5 hover:bg-win-titlebar hover:text-white cursor-default">
+                {helpLabel}
+              </span>
+            </div>
+
+            {/* Toolbar with header right content */}
+            {headerRight ? (
+              <div
+                className="shrink-0 flex items-center gap-2 px-3 py-1 text-[11px] overflow-x-auto no-scrollbar"
+                style={{
+                  background: "var(--win-btn-face)",
+                  borderBottom: "1px solid var(--win-btn-shadow)",
+                }}
+              >
+                {/* Status indicator */}
+                <div
+                  className="flex items-center gap-1 shrink-0 text-[11px] mr-3"
+                  style={{ color: "var(--win-text)" }}
+                >
                   {headerStatus || (
-                    <span className="flex items-center">
-                      <span className="w-1.5 h-1.5 bg-matrix-primary rounded-full mr-2 animate-pulse"></span>
+                    <span className="flex items-center gap-1">
+                      <span
+                        style={{
+                          display: "inline-block",
+                          width: 8,
+                          height: 8,
+                          background: "var(--win-green)",
+                          border: "1px solid var(--win-btn-dark-shadow)",
+                        }}
+                      />
                       {copy("shell.header.link_active")}
                     </span>
                   )}
                 </div>
+                <div className="win-toolbar-sep" />
+                {headerRight}
               </div>
-
-              {headerRight ? (
-                <div className="w-full md:w-auto md:ml-4">
-                  <div className="w-full md:w-auto overflow-x-auto no-scrollbar">{headerRight}</div>
-                </div>
-              ) : null}
-            </div>
-          </header>
+            ) : (
+              <div
+                className="shrink-0 px-3 py-1 flex items-center gap-2"
+                style={{
+                  background: "var(--win-btn-face)",
+                  borderBottom: "1px solid var(--win-btn-shadow)",
+                }}
+              >
+                {headerStatus || (
+                  <span className="flex items-center gap-1 text-[11px]">
+                    <span
+                      style={{
+                        display: "inline-block",
+                        width: 8,
+                        height: 8,
+                        background: "var(--win-green)",
+                        border: "1px solid var(--win-btn-dark-shadow)",
+                      }}
+                    />
+                    {copy("shell.header.link_active")}
+                  </span>
+                )}
+              </div>
+            )}
+          </>
         ) : null}
 
-        <main className="flex-1">{children}</main>
+        {/* Content area */}
+        <main
+          className={`flex-1 p-3 overflow-auto ${contentClassName}`}
+          style={{ background: "var(--win-bg)" }}
+        >
+          {children}
+        </main>
 
-        <footer className="mt-6 pt-3 border-t border-matrix-ghost flex justify-between text-caption uppercase font-bold tracking-[0.3em] text-matrix-dim shrink-0">
-          <div className="flex space-x-10 items-center">
+        {/* Status bar */}
+        <footer className="win-statusbar shrink-0 text-[11px]">
+          <div className="win-statusbar-panel flex-1">
             {footerLeft || <span>{copy("shell.footer.help")}</span>}
           </div>
-          <div className="flex items-center space-x-3">
-            {footerRight || <span className="font-bold">{copy("shell.footer.neural_index")}</span>}
+          <div className="win-statusbar-panel" style={{ flex: "0 0 auto", minWidth: 160, textAlign: "right" }}>
+            {footerRight || <span>{copy("shell.footer.neural_index")}</span>}
+          </div>
+          {/* Clock panel */}
+          <div
+            className="win-statusbar-panel text-right shrink-0"
+            style={{ minWidth: 72, flex: "0 0 auto" }}
+          >
+            <WinClock />
           </div>
         </footer>
       </div>
     </div>
   );
+}
+
+function WinClock() {
+  const [time, setTime] = React.useState(() => formatTime(new Date()));
+  React.useEffect(() => {
+    const id = setInterval(() => setTime(formatTime(new Date())), 30000);
+    return () => clearInterval(id);
+  }, []);
+  return <span>{time}</span>;
+}
+
+function formatTime(d) {
+  const h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, "0");
+  const ampm = h >= 12 ? "PM" : "AM";
+  const hour = h % 12 || 12;
+  return `${hour}:${m} ${ampm}`;
 }

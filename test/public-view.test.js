@@ -110,12 +110,15 @@ test("backend status does not expose refresh click", () => {
   assert.doesNotMatch(src, /backend\.meta\.click_refresh/);
 });
 
-test("connection status renders bracket indicator only", () => {
+test("connection status renders Win2K dot indicator with copy labels", () => {
   const src = read("dashboard/src/ui/matrix-a/components/ConnectionStatus.jsx");
   assert.doesNotMatch(src, /onClick/);
   assert.doesNotMatch(src, /status\.link\./);
-  assert.doesNotMatch(src, /rounded-full/);
-  assert.match(src, /matrix-header-chip--bare/);
+  assert.match(src, /dashboard\.connection_status\.connected/);
+  assert.match(src, /dashboard\.connection_status\.unstable/);
+  assert.match(src, /dashboard\.connection_status\.disconnected/);
+  assert.match(src, /borderRadius: "50%"/);
+  assert.match(src, /background: current\.color/);
 });
 
 test("public view invalid check handles string errors", () => {

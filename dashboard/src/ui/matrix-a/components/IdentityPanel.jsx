@@ -15,35 +15,87 @@ export function IdentityPanel({ auth, streakDays = 0, rankLabel }) {
     : copy("identity_panel.rank_placeholder");
 
   return (
-    <div className="flex items-center space-x-6">
-      <div className="relative group">
-        <div className="w-20 h-20 border border-matrix-ghost flex items-center justify-center text-body font-black bg-matrix-panel shadow-[0_0_15px_rgba(0,255,65,0.1)]">
-          {copy("identity_panel.badge")}
-        </div>
-        <div className="absolute -bottom-1 -right-1 bg-white text-black text-caption px-1 font-black uppercase">
-          {copy("identity_panel.level")}
-        </div>
+    <div className="flex items-center gap-3">
+      {/* Win2K avatar badge */}
+      <div
+        style={{
+          width: 48,
+          height: 48,
+          background: "var(--win-titlebar)",
+          border: "2px solid var(--win-btn-dark-shadow)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          color: "var(--win-titlebar-text)",
+          fontWeight: "bold",
+          fontSize: 16,
+          fontFamily: '"Tahoma", sans-serif',
+          userSelect: "none",
+        }}
+      >
+        {copy("identity_panel.badge")}
       </div>
 
-      <div className="space-y-3 flex-1 min-w-0">
-        <div className="border-l-2 border-matrix-primary pl-3 py-2 bg-matrix-panel">
-          <div className="text-2xl md:text-3xl font-black text-matrix-bright tracking-tight leading-none uppercase truncate">
+      <div className="flex-1 min-w-0" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {/* Handle */}
+        <div
+          style={{
+            borderLeft: "3px solid var(--win-titlebar)",
+            paddingLeft: 6,
+            paddingTop: 2,
+            paddingBottom: 2,
+            background: "var(--win-sunken)",
+            borderTop: "1px solid var(--win-btn-dark-shadow)",
+            borderBottom: "1px solid var(--win-btn-highlight)",
+            borderRight: "1px solid var(--win-btn-highlight)",
+          }}
+        >
+          <div
+            className="font-bold truncate"
+            style={{ fontSize: 14, color: "var(--win-text)", textTransform: "uppercase" }}
+          >
             {handle}
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <div className="bg-matrix-panel p-2 border border-matrix-ghost text-center">
-            <div className="text-caption text-matrix-muted uppercase font-bold">
+        {/* Stats grid */}
+        <div className="grid grid-cols-2" style={{ gap: 2 }}>
+          <div
+            className="text-center"
+            style={{
+              padding: "2px 4px",
+              background: "var(--win-sunken)",
+              borderTop: "1px solid var(--win-btn-dark-shadow)",
+              borderLeft: "1px solid var(--win-btn-dark-shadow)",
+              borderBottom: "1px solid var(--win-btn-highlight)",
+              borderRight: "1px solid var(--win-btn-highlight)",
+            }}
+          >
+            <div style={{ fontSize: 9, color: "var(--win-dark)" }}>
               {copy("identity_panel.rank_label")}
             </div>
-            <div className="text-matrix-primary font-black text-body">{rankValue}</div>
+            <div style={{ fontSize: 12, fontWeight: "bold", color: "var(--win-navy)" }}>
+              {rankValue}
+            </div>
           </div>
-          <div className="bg-matrix-panel p-2 border border-matrix-ghost text-center">
-            <div className="text-caption text-matrix-muted uppercase font-bold">
+          <div
+            className="text-center"
+            style={{
+              padding: "2px 4px",
+              background: "var(--win-sunken)",
+              borderTop: "1px solid var(--win-btn-dark-shadow)",
+              borderLeft: "1px solid var(--win-btn-dark-shadow)",
+              borderBottom: "1px solid var(--win-btn-highlight)",
+              borderRight: "1px solid var(--win-btn-highlight)",
+            }}
+          >
+            <div style={{ fontSize: 9, color: "var(--win-dark)" }}>
               {copy("identity_panel.streak_label")}
             </div>
-            <div className="text-gold font-black tracking-tight text-body">{streakValue}</div>
+            <div style={{ fontSize: 12, fontWeight: "bold", color: "var(--win-navy)" }}>
+              {streakValue}
+            </div>
           </div>
         </div>
       </div>

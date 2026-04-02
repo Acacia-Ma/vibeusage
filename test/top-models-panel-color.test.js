@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { test } = require("node:test");
 
-test("TopModelsPanel renders percent in primary matrix color", () => {
+test("TopModelsPanel renders share column with Win2K accent token", () => {
   const src = fs.readFileSync(
     path.join(__dirname, "../dashboard/src/ui/matrix-a/components/TopModelsPanel.jsx"),
     "utf8",
@@ -11,12 +11,7 @@ test("TopModelsPanel renders percent in primary matrix color", () => {
 
   assert.match(
     src,
-    /<span\s+className="[^"]*text-matrix-primary[^"]*"\s*>\s*\{percent\}/,
-    "expected percent to use primary matrix color",
-  );
-  assert.match(
-    src,
-    /<span\s+className="[^"]*text-matrix-primary[^"]*"\s*>\s*\{percentSymbol\}/,
-    "expected percent symbol to use primary matrix color",
+    /color: "var\(--win-text-accent\)"/,
+    "expected share column to use the Win2K accent token",
   );
 });
