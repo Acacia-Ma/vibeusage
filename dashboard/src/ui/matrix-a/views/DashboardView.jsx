@@ -124,28 +124,30 @@ export function DashboardView(props) {
         rootClassName={screenshotMode ? "screenshot-mode" : ""}
       >
         {publicViewInvalid ? (
-          <div className="mb-3">
-            <AsciiBox title={publicViewInvalidTitle}>
-              <p style={{ fontSize: 11, color: "var(--win-dark)", margin: 0 }}>{publicViewInvalidBody}</p>
+          <div className="mb-6">
+            <AsciiBox title={publicViewInvalidTitle} className="border-[#00FF41]/40">
+              <p className="text-[10px] opacity-50 mt-0">{publicViewInvalidBody}</p>
             </AsciiBox>
           </div>
         ) : null}
         {showExpiredGate ? (
-          <div className="mb-3">
+          <div className="mb-6">
             <AsciiBox
               title={copy("dashboard.session_expired.title")}
               subtitle={copy("dashboard.session_expired.subtitle")}
+              className="border-[#00FF41]/40"
             >
-              <p className="flex flex-wrap items-center gap-2" style={{ fontSize: 11, margin: 0 }}>
-                <span style={{ color: "var(--win-dark)" }}>{copy("dashboard.session_expired.body")}</span>
+              <p className="text-[10px] mt-0 flex flex-wrap items-center gap-2">
+                <span className="opacity-50">{copy("dashboard.session_expired.body")}</span>
                 <MatrixButton
+                  className="px-2 py-1 text-[9px] normal-case"
                   onClick={handleCopySessionExpired}
                 >
                   {sessionExpiredCopied ? sessionExpiredCopiedLabel : sessionExpiredCopyLabel}
                 </MatrixButton>
-                <span style={{ color: "var(--win-dark)" }}>{copy("dashboard.session_expired.body_tail")}</span>
+                <span className="opacity-50">{copy("dashboard.session_expired.body_tail")}</span>
               </p>
-              <div className="flex flex-wrap gap-2 mt-3">
+              <div className="flex flex-wrap gap-3 mt-4">
                 <MatrixButton as="a" primary href={signInUrl}>
                   {copy("shared.button.sign_in")}
                 </MatrixButton>
@@ -162,8 +164,9 @@ export function DashboardView(props) {
               subtitle={copy("dashboard.auth_required.subtitle")}
               className="w-full max-w-2xl"
             >
-              <p style={{ fontSize: 11, color: "var(--win-dark)", margin: 0 }}>{copy("dashboard.auth_required.body")}</p>
-              <div className="flex flex-wrap gap-2 mt-3">
+              <p className="text-[10px] opacity-50 mt-0">{copy("dashboard.auth_required.body")}</p>
+
+              <div className="flex flex-wrap gap-3 mt-4">
                 <MatrixButton as="a" primary href={signInUrl}>
                   {copy("shared.button.sign_in")}
                 </MatrixButton>
@@ -178,18 +181,12 @@ export function DashboardView(props) {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               <div className="lg:col-span-4 flex flex-col gap-6 min-w-0">
                 {screenshotMode ? (
-                  <div className="flex items-start justify-between gap-4 mb-2">
+                  <div className="flex items-start justify-between gap-4">
                     <div className="flex flex-col gap-1">
-                      <span
-                        className="font-bold leading-none"
-                        style={{ fontSize: "clamp(24px, 4vw, 36px)", color: "var(--win-navy)" }}
-                      >
+                      <span className="text-3xl md:text-4xl font-black text-white tracking-[-0.03em] leading-none glow-text">
                         {screenshotTitleLine1}
                       </span>
-                      <span
-                        className="font-bold leading-none"
-                        style={{ fontSize: "clamp(18px, 3vw, 28px)", color: "var(--win-navy)" }}
-                      >
+                      <span className="text-2xl md:text-3xl font-black text-white tracking-[-0.03em] leading-none glow-text">
                         {screenshotTitleLine2}
                       </span>
                     </div>
@@ -217,10 +214,10 @@ export function DashboardView(props) {
                     title={copy("dashboard.auth_optional.title")}
                     subtitle={copy("dashboard.auth_optional.subtitle")}
                   >
-                    <p style={{ fontSize: 11, color: "var(--win-dark)", margin: 0 }}>
+                    <p className="text-[10px] opacity-50 mt-0">
                       {copy("dashboard.auth_optional.body")}
                     </p>
-                    <div className="flex flex-wrap gap-2 mt-3">
+                    <div className="flex flex-wrap gap-3 mt-4">
                       <MatrixButton as="a" primary href={signInUrl}>
                         {copy("shared.button.sign_in")}
                       </MatrixButton>
@@ -237,30 +234,48 @@ export function DashboardView(props) {
                     subtitle={copy("dashboard.install.subtitle")}
                     className="relative"
                   >
-                    <div className="mb-2" style={{ fontSize: 11, color: "var(--win-text)", fontWeight: "bold" }}>
+                    <div className="text-[12px] tracking-[0.16em] font-semibold text-[#00FF41]/90">
                       {installPrompt}
                     </div>
-                    <div className="flex flex-col gap-2">
+                    <div className="mt-3 flex flex-col gap-2">
                       <MatrixButton
                         onClick={handleCopyInstall}
                         aria-label={installCopied ? installCopiedLabel : installCopyLabel}
                         title={installCopied ? installCopiedLabel : installCopyLabel}
-                        className="w-full justify-between gap-2"
-                        style={{ minWidth: 0, fontSize: 11, fontFamily: '"Courier New", monospace', textAlign: "left" }}
+                        className="w-full justify-between gap-3 normal-case px-3"
                       >
-                        <span style={{ fontFamily: '"Courier New", monospace', fontSize: 11 }}>
+                        <span className="font-mono text-[11px] md:text-[12px] tracking-[0.02em] normal-case text-left">
                           {installInitCmdDisplay}
                         </span>
-                        <span style={{ fontSize: 10 }}>
-                          {installCopied ? "Copied!" : "Copy"}
+                        <span className="inline-flex items-center justify-center w-7 h-7 border border-[#00FF41]/30 bg-black/30">
+                          {installCopied ? (
+                            <svg
+                              viewBox="0 0 16 16"
+                              className="w-4 h-4 text-[#00FF41]"
+                              fill="currentColor"
+                              aria-hidden="true"
+                            >
+                              <path d="M6.4 11.2 3.2 8l1.1-1.1 2.1 2.1 5-5L12.5 5z" />
+                            </svg>
+                          ) : (
+                            <svg
+                              viewBox="0 0 16 16"
+                              className="w-4 h-4 text-[#00FF41]"
+                              fill="currentColor"
+                              aria-hidden="true"
+                            >
+                              <path d="M11 1H4a1 1 0 0 0-1 1v9h1V2h7V1z" />
+                              <path d="M5 4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4zm1 0v9h6V4H6z" />
+                            </svg>
+                          )}
                         </span>
                       </MatrixButton>
                       {linkCodeLoading ? (
-                        <span style={{ fontSize: 11, color: "var(--win-dark)" }}>
+                        <span className="text-[12px] opacity-40">
                           {copy("dashboard.install.link_code.loading")}
                         </span>
                       ) : linkCodeError ? (
-                        <span style={{ fontSize: 11, color: "var(--win-danger)" }}>
+                        <span className="text-[12px] opacity-40">
                           {copy("dashboard.install.link_code.failed")}
                         </span>
                       ) : null}
@@ -271,37 +286,40 @@ export function DashboardView(props) {
                 {!screenshotMode && signedIn && !publicMode ? (
                   <AsciiBox title={publicViewTitle} className="relative">
                     <div className="flex flex-col gap-3">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <Button
-                              type="button"
-                              onClick={handleTogglePublicView}
-                              disabled={publicViewBusy}
-                              aria-pressed={publicViewEnabled}
-                              aria-label={publicViewToggleLabel}
-                              title={publicViewToggleLabel}
-                              className="win-btn"
-                              style={{
-                                minWidth: 0,
-                                padding: "2px 8px",
-                                fontSize: 11,
-                                background: publicViewEnabled ? "var(--win-highlight)" : "var(--win-btn-face)",
-                                color: publicViewEnabled ? "var(--win-highlight-text)" : "var(--win-text)",
-                              }}
-                            >
-                              {publicViewEnabled ? "ON" : "OFF"}
-                            </Button>
-                            <span style={{ fontSize: 11, color: "var(--win-text)" }}>
-                              {publicViewStatusLabel}
-                            </span>
-                          </div>
-                          <MatrixButton
-                            onClick={handleCopyPublicView}
-                            disabled={!publicViewEnabled || publicViewBusy}
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <Button
+                            type="button"
+                            onClick={handleTogglePublicView}
+                            disabled={publicViewBusy}
+                            aria-pressed={publicViewEnabled}
+                            aria-label={publicViewToggleLabel}
+                            title={publicViewToggleLabel}
+                            className={`relative inline-flex h-6 w-11 items-center border px-[3px] transition-colors ${
+                              publicViewEnabled
+                                ? "border-[#00FF41] bg-[#00FF41]/10"
+                                : "border-[#00FF41]/40 bg-black/40"
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
                           >
-                            {publicViewCopyButtonLabel}
-                          </MatrixButton>
+                            <span
+                              aria-hidden="true"
+                              className={`inline-block h-3.5 w-3.5 bg-[#00FF41] transition-transform ${
+                                publicViewEnabled ? "translate-x-[18px]" : "translate-x-0"
+                              }`}
+                            />
+                          </Button>
+                          <span className="text-[10px] uppercase tracking-[0.2em] text-[#00FF41]/80">
+                            {publicViewStatusLabel}
+                          </span>
                         </div>
+                        <MatrixButton
+                          onClick={handleCopyPublicView}
+                          disabled={!publicViewEnabled || publicViewBusy}
+                          className="px-3 py-2 text-[9px] normal-case"
+                        >
+                          {publicViewCopyButtonLabel}
+                        </MatrixButton>
+                      </div>
                     </div>
                   </AsciiBox>
                 ) : null}
@@ -385,65 +403,39 @@ export function DashboardView(props) {
                     subtitle={copy("dashboard.daily.subtitle")}
                   >
                     {!hasDetailsActual ? (
-                      <div className="mb-2" style={{ fontSize: 11, color: "var(--win-dark)" }}>
+                      <div className="text-[10px] opacity-40 mb-2">
                         {dailyEmptyPrefix}
-                        <code
-                          style={{
-                            fontFamily: '"Courier New", monospace',
-                            background: "var(--win-sunken)",
-                            border: "1px solid var(--win-btn-dark-shadow)",
-                            padding: "0 4px",
-                          }}
-                        >
+                        <code className="px-1 py-0.5 bg-black/40 border border-[#00FF41]/20">
                           {installSyncCmd}
                         </code>
                         {dailyEmptySuffix}
                       </div>
                     ) : null}
                     <div
-                      className="overflow-auto max-h-[520px] win-scrollbar"
+                      className="overflow-auto max-h-[520px] border border-[#00FF41]/10"
                       role="region"
                       aria-label={copy("daily.table.aria_label")}
                       tabIndex={0}
-                      style={{
-                        background: "var(--win-sunken)",
-                        borderTop: "1px solid var(--win-btn-dark-shadow)",
-                        borderLeft: "1px solid var(--win-btn-dark-shadow)",
-                        borderBottom: "1px solid var(--win-btn-highlight)",
-                        borderRight: "1px solid var(--win-btn-highlight)",
-                      }}
                     >
-                      <table className="w-full" style={{ borderCollapse: "collapse", fontSize: 11, fontFamily: '"Tahoma", "MS Sans Serif", sans-serif' }}>
-                        <thead style={{ position: "sticky", top: 0, zIndex: 1, background: "var(--win-btn-face)" }}>
-                          <tr>
+                      <table className="w-full border-collapse">
+                        <thead className="sticky top-0 bg-black/90">
+                          <tr className="border-b border-[#00FF41]/10">
                             {detailsColumns.map((c) => (
                               <th
                                 key={c.key}
                                 aria-sort={ariaSortFor(c.key)}
-                                className="win-listview-header"
-                                style={{ textAlign: "left" }}
+                                className="text-left p-0"
                               >
                                 <Button
                                   type="button"
                                   onClick={() => toggleSort(c.key)}
                                   title={c.title}
-                                  className="w-full text-left focus:outline-none"
-                                  style={{
-                                    padding: "2px 6px",
-                                    fontSize: 11,
-                                    fontFamily: '"Tahoma", sans-serif',
-                                    fontWeight: "bold",
-                                    cursor: "default",
-                                    background: "transparent",
-                                    border: "none",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 4,
-                                    color: "var(--win-text)",
-                                  }}
+                                  className="w-full px-3 py-2 text-left text-[9px] uppercase tracking-widest font-black opacity-70 hover:opacity-100 hover:bg-[#00FF41]/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00FF41]/30 flex items-center justify-start"
                                 >
-                                  <span>{c.label}</span>
-                                  <span style={{ color: "var(--win-dark)", fontSize: 9 }}>{sortIconFor(c.key)}</span>
+                                  <span className="inline-flex items-center gap-2">
+                                    <span>{c.label}</span>
+                                    <span className="opacity-40">{sortIconFor(c.key)}</span>
+                                  </span>
                                 </Button>
                               </th>
                             ))}
@@ -455,31 +447,30 @@ export function DashboardView(props) {
                               key={String(
                                 r?.[detailsDateKey] || r?.day || r?.hour || r?.month || "",
                               )}
-                              className="win-listview-row"
-                              style={
+                              className={`border-b border-[#00FF41]/5 hover:bg-[#00FF41]/5 ${
                                 r.missing
-                                  ? { color: "var(--win-dark)" }
+                                  ? "text-[#00FF41]/50"
                                   : r.future
-                                  ? { color: "var(--win-dark)", opacity: 0.5 }
-                                  : {}
-                              }
+                                    ? "text-[#00FF41]/30"
+                                    : ""
+                              }`}
                             >
-                              <td className="px-4" style={{ padding: "2px 6px", fontFamily: '"Courier New", monospace', fontSize: 11, borderRight: "1px solid var(--win-btn-shadow)" }}>
+                              <td className="px-3 py-2 text-[12px] opacity-80 font-mono">
                                 {renderDetailDate(r)}
                               </td>
-                              <td style={{ padding: "2px 6px", fontFamily: '"Courier New", monospace', fontSize: 11, textAlign: "right" }}>
+                              <td className="px-3 py-2 text-[12px] font-mono">
                                 {renderDetailCell(r, "total_tokens")}
                               </td>
-                              <td style={{ padding: "2px 6px", fontFamily: '"Courier New", monospace', fontSize: 11, textAlign: "right" }}>
+                              <td className="px-3 py-2 text-[12px] font-mono">
                                 {renderDetailCell(r, "input_tokens")}
                               </td>
-                              <td style={{ padding: "2px 6px", fontFamily: '"Courier New", monospace', fontSize: 11, textAlign: "right" }}>
+                              <td className="px-3 py-2 text-[12px] font-mono">
                                 {renderDetailCell(r, "output_tokens")}
                               </td>
-                              <td style={{ padding: "2px 6px", fontFamily: '"Courier New", monospace', fontSize: 11, textAlign: "right" }}>
+                              <td className="px-3 py-2 text-[12px] font-mono">
                                 {renderDetailCell(r, "cached_input_tokens")}
                               </td>
-                              <td style={{ padding: "2px 6px", fontFamily: '"Courier New", monospace', fontSize: 11, textAlign: "right" }}>
+                              <td className="px-3 py-2 text-[12px] font-mono">
                                 {renderDetailCell(r, "reasoning_output_tokens")}
                               </td>
                             </tr>
@@ -488,7 +479,7 @@ export function DashboardView(props) {
                       </table>
                     </div>
                     {DETAILS_PAGED_PERIODS.has(period) && detailsPageCount > 1 ? (
-                      <div className="flex items-center justify-between mt-2" style={{ fontSize: 11 }}>
+                      <div className="flex items-center justify-between mt-3 text-[9px] uppercase tracking-widest font-black">
                         <MatrixButton
                           type="button"
                           onClick={() => setDetailsPage((prev) => Math.max(0, prev - 1))}
@@ -496,7 +487,7 @@ export function DashboardView(props) {
                         >
                           {copy("details.pagination.prev")}
                         </MatrixButton>
-                        <span style={{ color: "var(--win-dark)" }}>
+                        <span className="opacity-50">
                           {copy("details.pagination.page", {
                             page: detailsPage + 1,
                             total: detailsPageCount,

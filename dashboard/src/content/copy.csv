@@ -1,7 +1,6 @@
 key,module,page,component,slot,text,notes,status
 shared.placeholder.short,shared,*,*,placeholder_short,"--",,active
 shared.placeholder.anon_mark,shared,*,*,placeholder_anon_mark,"?",,active
-shared.brand.name,shared,*,*,brand_name,"VibeUsage",,active
 shared.unit.percent,shared,*,*,unit_percent,"%",,active
 shared.unit.thousand_abbrev,shared,*,*,unit_thousand_abbrev,"K",,active
 shared.unit.million_abbrev,shared,*,*,unit_million_abbrev,"M",,active
@@ -82,10 +81,6 @@ landing.footer.system_ready,landing,LandingPage,LandingPage,footer_system_ready,
 
 shell.header.title,ui,MatrixShell,MatrixShell,header_title,"VIBE USAGE",,active
 shell.header.link_active,ui,MatrixShell,MatrixShell,header_link_active,"LINK_ACTIVE",,active
-shell.menu.file,ui,MatrixShell,MatrixShell,menu_file,"File",,active
-shell.menu.view,ui,MatrixShell,MatrixShell,menu_view,"View",,active
-shell.menu.tools,ui,MatrixShell,MatrixShell,menu_tools,"Tools",,active
-shell.menu.help,ui,MatrixShell,MatrixShell,menu_help,"Help",,active
 shell.footer.help,ui,MatrixShell,MatrixShell,footer_help,"[F1] Help",,active
 shell.footer.neural_index,ui,MatrixShell,MatrixShell,footer_neural_index,"CORE_INDEX: 0.942.A1",,active
 
@@ -161,12 +156,6 @@ dashboard.model_breakdown.footer,ui,NeuralDivergenceMap,NeuralDivergenceMap,foot
 dashboard.model_breakdown.usage_label,ui,NeuralAdaptiveFleet,NeuralAdaptiveFleet,usage_label,"USAGE: {{value}}",,active
 dashboard.top_models.title,ui,TopModelsPanel,TopModelsPanel,title,"Top Models",,active
 dashboard.top_models.subtitle,ui,TopModelsPanel,TopModelsPanel,subtitle,"All_Scores",,active
-dashboard.top_models.column_rank,ui,TopModelsPanel,TopModelsPanel,column_rank,"#",,active
-dashboard.top_models.column_model,ui,TopModelsPanel,TopModelsPanel,column_model,"Model",,active
-dashboard.top_models.column_share,ui,TopModelsPanel,TopModelsPanel,column_share,"Share",,active
-dashboard.connection_status.connected,ui,ConnectionStatus,ConnectionStatus,connected,"Connected",,active
-dashboard.connection_status.unstable,ui,ConnectionStatus,ConnectionStatus,unstable,"Unstable",,active
-dashboard.connection_status.disconnected,ui,ConnectionStatus,ConnectionStatus,disconnected,"Disconnected",,active
 dashboard.projects.title,ui,ProjectUsagePanel,ProjectUsagePanel,title,"Project Usage",,active
 dashboard.projects.subtitle,ui,ProjectUsagePanel,ProjectUsagePanel,subtitle,"Repositories",,active
 dashboard.projects.tokens_label,ui,ProjectUsagePanel,ProjectUsagePanel,tokens_label,"TOKENS",,active

@@ -25,7 +25,6 @@ const projectUsagePath = path.join(
   "components",
   "ProjectUsagePanel.jsx",
 );
-const stylesPath = path.join(__dirname, "..", "dashboard", "src", "styles.css");
 const installStatusPath = path.join(
   __dirname,
   "..",
@@ -124,15 +123,6 @@ test("ProjectUsagePanel constrains identity text width", () => {
   assert.ok(src.includes('data-card-field="repo"'), "expected repo field marker for truncation");
   assert.ok(src.includes("truncate"), "expected truncated identity text");
   assert.ok(src.includes("max-w-"), "expected max width constraint for identity text");
-});
-
-test("styles define win-sunken alias for panel backgrounds", () => {
-  const src = readFile(stylesPath);
-  assert.ok(src.includes("--win-sunken:"), "expected --win-sunken token definition");
-  assert.ok(
-    src.includes("var(--win-sunken-bg)"),
-    "expected --win-sunken to alias the sunken background token",
-  );
 });
 
 test("DashboardPage wires install panel gating through helper", () => {

@@ -95,12 +95,6 @@ function buildFullYearMonthMarkers({ weeksCount, to, weekStartsOn }) {
   return markers;
 }
 
-function getHeatmapCellColor(level) {
-  if (level === 0) return "rgb(var(--win-bg-rgb) / 0.5)";
-  const opacity = OPACITY_BY_LEVEL[level] ?? 0.3;
-  return `rgb(var(--win-accent-rgb) / ${opacity})`;
-}
-
 export function ActivityHeatmap({
   heatmap,
   timeZoneLabel,
@@ -365,7 +359,7 @@ export function ActivityHeatmap({
   }, []);
 
   if (!weeks.length) {
-    return <div style={{ fontSize: 11, color: "var(--win-dark)" }}>{copy("heatmap.empty")}</div>;
+    return <div className="text-caption text-matrix-muted">{copy("heatmap.empty")}</div>;
   }
 
   const gridColumns = {
@@ -420,7 +414,7 @@ export function ActivityHeatmap({
             onPointerDown={onContentPointerDown}
             // Move and Up are handled by window listeners now
           >
-            <div style={{ ...gridColumns, marginBottom: 4, fontSize: 9, color: "var(--win-dark)", fontFamily: '"Tahoma", sans-serif' }}>
+            <div style={gridColumns} className="text-caption uppercase text-matrix-muted mb-2">
               <span></span>
               {monthMarkers.map((label) => (
                 <span
@@ -435,7 +429,8 @@ export function ActivityHeatmap({
 
             <div style={gridColumns}>
               <div
-                style={{ ...labelRows, background: "var(--win-btn-face)", paddingRight: 4, fontSize: 9, color: "var(--win-dark)", fontFamily: '"Tahoma", sans-serif', position: "sticky", left: 0, zIndex: 10 }}
+                style={labelRows}
+                className="text-caption uppercase text-matrix-muted sticky left-0 z-10 bg-matrix-panel pr-2"
               >
                 {dayLabels.map((label) => (
                   <span key={label} className="leading-none">
@@ -459,7 +454,8 @@ export function ActivityHeatmap({
                     }
 
                     const level = Number(cell.level) || 0;
-                    const color = getHeatmapCellColor(level);
+                    const opacity = OPACITY_BY_LEVEL[level] ?? 0.3;
+                    const color = level === 0 ? "rgba(0,255,65,0.08)" : `rgba(0,255,65,${opacity})`;
 
                     const tzDetail =
                       timeZoneLabel || timeZoneShortLabel || copy("heatmap.legend.utc");
@@ -474,12 +470,11 @@ export function ActivityHeatmap({
                           unit: copy("heatmap.unit.tokens"),
                           tz: tzDetail,
                         })}
+                        className="rounded-[2px] border border-matrix-ghost"
                         style={{
                           width: CELL_SIZE,
                           height: CELL_SIZE,
                           background: color,
-                          border: "1px solid var(--win-btn-shadow)",
-                          display: "inline-block",
                         }}
                       ></span>
                     );
@@ -494,55 +489,47 @@ export function ActivityHeatmap({
       {/* Custom Scrollbar Track */}
       <div
         ref={trackRef}
-        className="relative overflow-visible mt-1 transition-opacity duration-150"
+        className="heatmap-scrollbar-track relative h-[6px] rounded-full bg-matrix-panelStrong border border-matrix-ghost overflow-visible mt-1 transition-opacity duration-150"
         style={{
-          height: 10,
-          background: "var(--win-scroll-track)",
-          border: "1px solid var(--win-btn-shadow)",
           opacity: showScrollbar ? 1 : 0,
           pointerEvents: showScrollbar ? "auto" : "none",
         }}
       >
+        {/* Scrollbar Thumb */}
         <div
           ref={thumbRef}
-          className={isDraggingScrollbar ? "cursor-grabbing" : "cursor-grab"}
+          className={`absolute top-0 bottom-0 rounded-full bg-[#00FF41]/50 hover:bg-[#00FF41]/70 shadow-[0_0_10px_rgba(0,255,65,0.4)] ${
+            isDraggingScrollbar ? "cursor-grabbing" : "cursor-grab"
+          }`}
           style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
             left: `${scrollState.left * 100 * (1 - scrollState.width)}%`,
             width: `${scrollState.width * 100}%`,
-            background: "var(--win-btn-face)",
-            borderTop: "1px solid var(--win-btn-highlight)",
-            borderLeft: "1px solid var(--win-btn-highlight)",
-            borderBottom: "1px solid var(--win-btn-dark-shadow)",
-            borderRight: "1px solid var(--win-btn-dark-shadow)",
             transition: isDraggingScrollbar ? "none" : "left 100ms linear",
             touchAction: "none",
           }}
           onPointerDown={onThumbPointerDown}
+          // specific move/up listeners not needed on element due to global win listeners
         />
       </div>
 
       {!hideLegend ? (
-        <div
-          className="flex justify-between items-center pt-1"
-          style={{ fontSize: 9, color: "var(--win-dark)", borderTop: "1px solid var(--win-btn-shadow)", fontFamily: '"Tahoma", sans-serif' }}
-        >
-          <div className="flex items-center gap-1">
+        <div className="flex justify-between items-center text-caption border-t border-matrix-ghost pt-2 text-matrix-muted font-bold uppercase">
+          <div className="flex items-center gap-2">
             <span>{copy("heatmap.legend.less")}</span>
             <div className="flex gap-1">
               {[0, 1, 2, 3, 4].map((level) => (
                 <span
                   key={level}
+                  className="rounded-[2px] border border-matrix-ghost"
                   style={{
-                    width: 8,
-                    height: 8,
-                    display: "inline-block",
-                    background: getHeatmapCellColor(level),
-                    border: "1px solid var(--win-btn-shadow)",
+                    width: 10,
+                    height: 10,
+                    background:
+                      level === 0
+                        ? "rgba(0,255,65,0.08)"
+                        : `rgba(0,255,65,${OPACITY_BY_LEVEL[level]})`,
                   }}
-                />
+                ></span>
               ))}
             </div>
             <span>{copy("heatmap.legend.more")}</span>

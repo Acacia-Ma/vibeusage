@@ -134,8 +134,8 @@ export function ProjectUsagePanel({
       className={className}
       bodyClassName="py-4"
     >
-      <div className="flex items-center justify-between gap-2 mb-3">
-        <span style={{ fontSize: 11, color: "var(--win-text)" }}>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <span className="text-caption text-matrix-muted uppercase tracking-[0.2em]">
           {limitLabel}
         </span>
         <div className="relative">
@@ -153,37 +153,26 @@ export function ProjectUsagePanel({
           >
             <Select.Trigger
               aria-label={limitAria}
-              className="win-btn"
-              style={{ fontSize: 11, minWidth: 0, padding: "2px 8px", gap: 4 }}
+              className="matrix-header-chip matrix-header-action text-caption uppercase font-bold tracking-[0.2em] gap-2"
             >
               <Select.Value />
-              <span>▾</span>
+              <span className="text-matrix-bright">▾</span>
             </Select.Trigger>
             <Select.Portal>
-              <Select.Positioner align="end" side="bottom" sideOffset={2} className="z-50">
-                <Select.Popup
-                  style={{
-                    background: "var(--win-btn-face)",
-                    border: "2px solid var(--win-btn-dark-shadow)",
-                    borderTop: "2px solid var(--win-btn-highlight)",
-                    borderLeft: "2px solid var(--win-btn-highlight)",
-                    minWidth: 120,
-                    boxShadow: "2px 2px 4px var(--win-overlay-shadow)",
-                  }}
-                >
+              <Select.Positioner align="end" side="bottom" sideOffset={8} className="z-50">
+                <Select.Popup className="w-40 border border-matrix-ghost bg-matrix-panelStrong backdrop-blur-md pointer-events-auto">
                   <Select.List aria-label={limitAria} role="listbox">
                     {LIMIT_OPTIONS.map((value) => (
                       <Select.Item
                         key={value}
                         value={value}
                         className={({ selected }) =>
-                          `w-full text-left px-2 py-1 ${
+                          `w-full text-left px-3 py-2 text-caption uppercase tracking-[0.2em] transition-colors ${
                             selected
-                              ? "bg-win-highlight text-white"
-                              : "hover:bg-win-highlight hover:text-white"
+                              ? "bg-matrix-panel border-l-2 border-matrix-primary"
+                              : "hover:bg-matrix-panel data-[highlighted]:bg-matrix-panel"
                           }`
                         }
-                        style={{ fontSize: 11, fontFamily: '"Tahoma", sans-serif', cursor: "default" }}
                       >
                         <Select.ItemText>{optionLabels[value]}</Select.ItemText>
                       </Select.Item>
@@ -197,7 +186,7 @@ export function ProjectUsagePanel({
       </div>
 
       {displayEntries.length === 0 ? (
-        <div style={{ fontSize: 11, color: "var(--win-dark)" }}>
+        <div className="text-caption text-matrix-muted uppercase tracking-[0.2em]">
           {emptyStateContent}
         </div>
       ) : (
@@ -254,89 +243,80 @@ function ProjectUsageCard({
       href={projectRef || (repoId ? `https://github.com/${repoId}` : "#")}
       target="_blank"
       rel="noopener noreferrer"
-      className="group relative flex flex-col gap-2 min-h-[120px]"
+      className="group relative flex h-full min-h-[152px] flex-col gap-3 border border-matrix-ghost bg-matrix-panel px-4 py-5 transition-all duration-200 hover:border-matrix-primary hover:shadow-matrix-glow"
       data-project-card="true"
-      style={{
-        background: "var(--win-sunken)",
-        borderTop: "1px solid var(--win-btn-dark-shadow)",
-        borderLeft: "1px solid var(--win-btn-dark-shadow)",
-        borderBottom: "1px solid var(--win-btn-highlight)",
-        borderRight: "1px solid var(--win-btn-highlight)",
-        padding: "8px 10px",
-        textDecoration: "none",
-        color: "var(--win-text)",
-      }}
     >
-      {/* Stars badge */}
       <div
-        className="absolute right-2 top-2 flex items-center gap-1"
+        className="absolute right-4 top-4 flex items-center gap-1 text-caption uppercase tracking-[0.2em] text-matrix-muted"
         data-card-line="stars"
         data-star-slot="corner"
         data-star-position="top-right"
-        style={{ fontSize: 10, color: "var(--win-dark)" }}
       >
         <span className="sr-only">{starsLabel}</span>
-        <svg
-          viewBox="0 0 16 16"
-          className="h-[1.3em] w-[1.3em]"
-          data-star-icon="true"
-          style={{ fill: "var(--win-warning)" }}
-          aria-hidden="true"
+        <span className="inline-flex items-center justify-center h-[1.3em] w-[1.3em]">
+          <svg
+            viewBox="0 0 16 16"
+            className="h-full w-full fill-matrix-primary"
+            data-star-icon="true"
+            aria-hidden="true"
+          >
+            <path d="M8 1.1 10.1 5.4l4.8.7-3.5 3.4.8 4.8L8 11.9l-4.2 2.4.8-4.8L1.1 6.1l4.8-.7L8 1.1z" />
+          </svg>
+        </span>
+        <span
+          className="inline-flex items-center h-[1.3em] tabular-nums text-matrix-bright"
+          title={starsFull}
         >
-          <path d="M8 1.1 10.1 5.4l4.8.7-3.5 3.4.8 4.8L8 11.9l-4.2 2.4.8-4.8L1.1 6.1l4.8-.7L8 1.1z" />
-        </svg>
-        <span title={starsFull}>{starsCompact}</span>
+          {starsCompact}
+        </span>
       </div>
 
-      {/* Identity row */}
       <div
-        className="flex items-center gap-2 pr-12"
+        className="flex items-center gap-3 min-w-0 pr-12"
         data-card-line="identity"
-        data-owner-row="true"
       >
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            border: "1px solid var(--win-btn-dark-shadow)",
-            overflow: "hidden",
-            flexShrink: 0,
-          }}
-        >
+        <div className="relative h-12 w-12 rounded-full border border-matrix-ghost overflow-hidden">
           {avatarUrl ? (
-            <img src={avatarUrl} alt={owner || repoKey} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <img
+              src={avatarUrl}
+              alt={owner || repoKey}
+              className="h-full w-full object-cover"
+            />
           ) : (
-            <div style={{ width: "100%", height: "100%", background: "var(--win-btn-face)" }} />
+            <div className="h-full w-full bg-matrix-panel" />
           )}
         </div>
-        <div
-          className="max-w-[8rem] truncate"
-          style={{ fontSize: 10, color: "var(--win-dark)" }}
-          data-card-field="owner"
-        >
-          {owner || placeholder}
+        <div className="min-w-0 flex-1">
+          <div
+            className="flex items-center gap-3"
+            data-owner-row="true"
+          >
+            <div
+              className="text-caption text-matrix-muted uppercase tracking-[0.2em] leading-none h-[1.3em] flex items-center truncate max-w-[10rem] sm:max-w-[12rem]"
+              data-card-field="owner"
+            >
+              {owner || placeholder}
+            </div>
+          </div>
         </div>
       </div>
-
-      {/* Repo name */}
       <div
-        className="max-w-full truncate"
-        style={{ fontSize: 13, fontWeight: "bold", color: "var(--win-text-accent)" }}
+        className="text-body font-black text-matrix-bright truncate max-w-[14rem] sm:max-w-[16rem] pr-12"
         title={repo || repoKey}
         data-card-line="repo"
         data-card-field="repo"
       >
         {repo || repoKey || placeholder}
       </div>
-
-      {/* Tokens row */}
       <div
-        className="flex items-center justify-between gap-2 mt-auto"
+        className="flex items-center justify-between gap-3 text-caption uppercase tracking-[0.2em] text-matrix-muted"
         data-card-line="tokens"
-        style={{ fontSize: 10, paddingTop: 4, borderTop: "1px solid var(--win-btn-shadow)" }}
       >
-        <span style={{ color: "var(--win-dark)" }}>{tokensLabel}</span>
-        <span style={{ fontWeight: "bold", color: "var(--win-text-accent)", fontSize: 12 }} title={tokensFull}>
+        <span>{tokensLabel}</span>
+        <span
+          className="text-body font-black text-matrix-primary tabular-nums"
+          title={tokensFull}
+        >
           {tokensCompact}
         </span>
       </div>
@@ -347,35 +327,19 @@ function ProjectUsageCard({
 function ProjectUsagePlaceholderCard({ placeholder }) {
   return (
     <div
-      className="relative flex flex-col gap-2 min-h-[120px] opacity-50"
+      className="relative flex h-full min-h-[152px] flex-col gap-3 border border-matrix-ghost bg-matrix-panel px-4 py-5 opacity-60"
       data-project-card-placeholder="true"
-      style={{
-        background: "var(--win-sunken)",
-        borderTop: "1px solid var(--win-btn-dark-shadow)",
-        borderLeft: "1px solid var(--win-btn-dark-shadow)",
-        borderBottom: "1px solid var(--win-btn-highlight)",
-        borderRight: "1px solid var(--win-btn-highlight)",
-        padding: "8px 10px",
-      }}
     >
-      <div className="flex items-start gap-2">
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            background: "var(--win-btn-face)",
-            border: "1px solid var(--win-btn-shadow)",
-            flexShrink: 0,
-          }}
-        />
-        <div className="flex flex-col gap-1 flex-1 min-w-0">
-          <div style={{ height: 12, width: 80, background: "var(--win-btn-face)", border: "1px solid var(--win-btn-shadow)" }} />
-          <div style={{ height: 10, width: 60, background: "var(--win-btn-face)", border: "1px solid var(--win-btn-shadow)" }} />
+      <div className="flex items-start gap-3">
+        <div className="h-10 w-10 rounded-full border border-matrix-ghost bg-matrix-panelStrong" />
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <div className="h-4 w-24 border border-matrix-ghost bg-matrix-panelStrong" />
+          <div className="h-3 w-32 border border-matrix-ghost bg-matrix-panelStrong" />
         </div>
       </div>
-      <div className="mt-auto flex items-center justify-between gap-3">
-        <span style={{ fontSize: 10, color: "var(--win-dark)" }}>{placeholder}</span>
-        <span style={{ fontSize: 10, color: "var(--win-dark)" }}>{placeholder}</span>
+      <div className="mt-auto flex items-center justify-between gap-4 text-caption uppercase tracking-[0.2em] text-matrix-muted">
+        <span>{placeholder}</span>
+        <span>{placeholder}</span>
       </div>
     </div>
   );
