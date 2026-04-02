@@ -32,6 +32,9 @@ vibeusage init
 3. 创建本地数据目录 ~/.vibeusage/
 4. 生成设备 token 用于身份识别
 
+> 说明
+> 从 `vibeusage@0.3.0` 开始，只有 `init` 会修改本地客户端配置。`status`、`diagnostics`、`doctor`、`sync` 都是只读命令；如果是旧安装，请重新执行一次 `vibeusage init`。
+
 ### 步骤 4: 验证安装
 ```bash
 # 检查状态
@@ -54,7 +57,7 @@ VibeUsage 会自动检测并配置以下客户端：
 | Every Code | ~/.code/config.toml |
 | Gemini CLI | ~/.gemini/settings.json |
 | OpenCode | 全局插件 |
-| Claude Code | ~/.claude/hooks/ |
+| Claude Code | ~/.claude/settings.json |
 | OpenClaw | Session plugin |
 
 ## 常用命令
@@ -88,7 +91,7 @@ vibeusage uninstall --purge
 解决: 检查网络连接，或运行 `vibeusage sync --debug` 查看详细日志
 
 ### 问题: 某些客户端未配置
-解决: 手动运行 `vibeusage init` 会重新检测并配置所有支持的客户端
+解决: 手动运行 `vibeusage init` 会重新检测并配置所有支持的客户端；只读命令不会自动修复旧 hook 布局
 
 ## 隐私说明
 - 仅追踪 Token 用量数字，不上传代码或对话内容

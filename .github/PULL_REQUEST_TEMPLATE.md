@@ -4,6 +4,12 @@
 
 -
 
+## Affected Modules / Dependency Notes
+
+- **Modules touched:**
+- **Dependencies / contracts touched:**
+- **Repo sitemap evidence:** `updated` / `not required` / affected section(s)
+
 ## Codex Context (required when requesting @codex review)
 
 - **Delta since last Codex review:** (commits or summary)

@@ -3,26 +3,23 @@ const path = require("node:path");
 const fs = require("node:fs/promises");
 
 const { readJson } = require("./fs");
-const { readCodexNotify, readEveryCodeNotify } = require("./codex-config");
-const { isClaudeHookConfigured, buildClaudeHookCommand } = require("./claude-config");
-const {
-  resolveGeminiConfigDir,
-  resolveGeminiSettingsPath,
-  buildGeminiHookCommand,
-  isGeminiHookConfigured,
-} = require("./gemini-config");
-const { resolveOpencodeConfigDir, isOpencodePluginInstalled } = require("./opencode-config");
 const { normalizeState: normalizeUploadState } = require("./upload-throttle");
-const { probeOpenclawHookState } = require("./openclaw-hook");
-const { probeOpenclawSessionPluginState } = require("./openclaw-session-plugin");
-const { resolveTrackerPaths } = require("./tracker-paths");
+const { createIntegrationContext, probeIntegrations } = require("./integrations");
 
 async function collectTrackerDiagnostics({
   home = os.homedir(),
   codexHome = process.env.CODEX_HOME || path.join(home, ".codex"),
   codeHome = process.env.CODE_HOME || path.join(home, ".code"),
 } = {}) {
-  const { trackerDir, binDir } = await resolveTrackerPaths({ home });
+  const integrationContext = await createIntegrationContext({
+    home,
+    env: {
+      ...process.env,
+      CODEX_HOME: codexHome,
+      CODE_HOME: codeHome,
+    },
+  });
+  const trackerDir = integrationContext.trackerPaths.trackerDir;
   const configPath = path.join(trackerDir, "config.json");
   const queuePath = path.join(trackerDir, "queue.jsonl");
   const queueStatePath = path.join(trackerDir, "queue.state.json");
@@ -34,16 +31,14 @@ async function collectTrackerDiagnostics({
   const autoRetryPath = path.join(trackerDir, "auto.retry.json");
   const codexConfigPath = path.join(codexHome, "config.toml");
   const codeConfigPath = path.join(codeHome, "config.toml");
-  const claudeConfigPath = path.join(home, ".claude", "settings.json");
-  const geminiConfigDir = resolveGeminiConfigDir({ home, env: process.env });
-  const geminiSettingsPath = resolveGeminiSettingsPath({ configDir: geminiConfigDir });
-  const opencodeConfigDir = resolveOpencodeConfigDir({ home, env: process.env });
 
   const config = await readJson(configPath);
   const cursors = await readJson(cursorsPath);
   const queueState = (await readJson(queueStatePath)) || { offset: 0 };
   const uploadThrottle = normalizeUploadState(await readJson(uploadThrottlePath));
   const autoRetry = await readJson(autoRetryPath);
+  const probes = await probeIntegrations(integrationContext);
+  const probeByName = new Map(probes.map((probe) => [probe.name, probe]));
 
   const queueSize = await safeStatSize(queuePath);
   const offsetBytes = Number(queueState.offset || 0);
@@ -53,33 +48,20 @@ async function collectTrackerDiagnostics({
   const lastOpenclawSync = (await safeReadText(openclawSignalPath))?.trim() || null;
   const lastNotifySpawn = parseEpochMsToIso((await safeReadText(throttlePath))?.trim() || null);
 
-  const codexNotifyRaw = await readCodexNotify(codexConfigPath);
-  const notifyConfigured = Array.isArray(codexNotifyRaw) && codexNotifyRaw.length > 0;
-  const codexNotify = notifyConfigured ? codexNotifyRaw.map((v) => redactValue(v, home)) : null;
-  const everyCodeNotifyRaw = await readEveryCodeNotify(codeConfigPath);
-  const everyCodeConfigured = Array.isArray(everyCodeNotifyRaw) && everyCodeNotifyRaw.length > 0;
-  const everyCodeNotify = everyCodeConfigured
-    ? everyCodeNotifyRaw.map((v) => redactValue(v, home))
+  const codexProbe = probeByName.get("codex");
+  const everyCodeProbe = probeByName.get("every-code");
+  const claudeProbe = probeByName.get("claude");
+  const geminiProbe = probeByName.get("gemini");
+  const opencodeProbe = probeByName.get("opencode");
+  const openclawSessionProbe = probeByName.get("openclaw-session");
+  const openclawLegacyProbe = probeByName.get("openclaw-legacy");
+
+  const codexNotify = Array.isArray(codexProbe?.currentNotify)
+    ? codexProbe.currentNotify.map((value) => redactValue(value, home))
     : null;
-  const claudeHookCommand = buildClaudeHookCommand(path.join(binDir, "notify.cjs"));
-  const claudeHookConfigured = await isClaudeHookConfigured({
-    settingsPath: claudeConfigPath,
-    hookCommand: claudeHookCommand,
-  });
-  const geminiHookCommand = buildGeminiHookCommand(path.join(binDir, "notify.cjs"));
-  const geminiHookConfigured = await isGeminiHookConfigured({
-    settingsPath: geminiSettingsPath,
-    hookCommand: geminiHookCommand,
-  });
-  const opencodePluginConfigured = await isOpencodePluginInstalled({
-    configDir: opencodeConfigDir,
-  });
-  const openclawSessionPluginState = await probeOpenclawSessionPluginState({
-    home,
-    trackerDir,
-    env: process.env,
-  });
-  const openclawHookState = await probeOpenclawHookState({ home, trackerDir, env: process.env });
+  const everyCodeNotify = Array.isArray(everyCodeProbe?.currentNotify)
+    ? everyCodeProbe.currentNotify.map((value) => redactValue(value, home))
+    : null;
 
   const lastSuccessAt = uploadThrottle.lastSuccessMs
     ? new Date(uploadThrottle.lastSuccessMs).toISOString()
@@ -101,9 +83,9 @@ async function collectTrackerDiagnostics({
       codex_config: redactValue(codexConfigPath, home),
       code_home: redactValue(codeHome, home),
       code_config: redactValue(codeConfigPath, home),
-      claude_config: redactValue(claudeConfigPath, home),
-      gemini_config: redactValue(geminiSettingsPath, home),
-      opencode_config: redactValue(opencodeConfigDir, home),
+      claude_config: redactValue(integrationContext.claude.settingsPath, home),
+      gemini_config: redactValue(integrationContext.gemini.settingsPath, home),
+      opencode_config: redactValue(integrationContext.opencode.configDir, home),
     },
     config: {
       base_url: typeof config?.baseUrl === "string" ? config.baseUrl : null,
@@ -128,19 +110,34 @@ async function collectTrackerDiagnostics({
       last_notify: lastNotify,
       last_openclaw_triggered_sync: lastOpenclawSync,
       last_notify_triggered_sync: lastNotifySpawn,
-      codex_notify_configured: notifyConfigured,
+      codex_notify_status: codexProbe?.status || "unknown",
+      codex_notify_configured: Boolean(codexProbe?.configured),
       codex_notify: codexNotify,
-      every_code_notify_configured: everyCodeConfigured,
+      every_code_notify_status: everyCodeProbe?.status || "unknown",
+      every_code_notify_configured: Boolean(everyCodeProbe?.configured),
       every_code_notify: everyCodeNotify,
-      claude_hook_configured: claudeHookConfigured,
-      gemini_hook_configured: geminiHookConfigured,
-      opencode_plugin_configured: opencodePluginConfigured,
-      openclaw_session_plugin_configured: Boolean(openclawSessionPluginState?.configured),
-      openclaw_session_plugin_linked: Boolean(openclawSessionPluginState?.linked),
-      openclaw_session_plugin_enabled: Boolean(openclawSessionPluginState?.enabled),
-      openclaw_hook_configured: Boolean(openclawHookState?.configured),
-      openclaw_hook_linked: Boolean(openclawHookState?.linked),
-      openclaw_hook_enabled: Boolean(openclawHookState?.enabled),
+      claude_hook_status: claudeProbe?.status || "unknown",
+      claude_hook_configured: Boolean(claudeProbe?.configured),
+      gemini_hook_status: geminiProbe?.status || "unknown",
+      gemini_hook_configured: Boolean(geminiProbe?.configured),
+      opencode_plugin_status: opencodeProbe?.status || "unknown",
+      opencode_plugin_configured: Boolean(opencodeProbe?.configured),
+      openclaw_session_plugin_status: openclawSessionProbe?.status || "unknown",
+      openclaw_session_plugin_configured: Boolean(openclawSessionProbe?.configured),
+      openclaw_session_plugin_linked: Boolean(openclawSessionProbe?.linked),
+      openclaw_session_plugin_enabled: Boolean(openclawSessionProbe?.enabled),
+      openclaw_session_plugin_detail:
+        typeof openclawSessionProbe?.detail === "string"
+          ? redactError(openclawSessionProbe.detail, home)
+          : null,
+      openclaw_hook_status: openclawLegacyProbe?.status || "unknown",
+      openclaw_hook_configured: Boolean(openclawLegacyProbe?.configured),
+      openclaw_hook_linked: Boolean(openclawLegacyProbe?.linked),
+      openclaw_hook_enabled: Boolean(openclawLegacyProbe?.enabled),
+      openclaw_hook_detail:
+        typeof openclawLegacyProbe?.detail === "string"
+          ? redactError(openclawLegacyProbe.detail, home)
+          : null,
     },
     upload: {
       last_success_at: lastSuccessAt,

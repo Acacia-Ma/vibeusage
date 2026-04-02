@@ -44,10 +44,21 @@ This document is the single source of truth for repository navigation. Use it to
   - `bin/tracker.js`
   - `src/commands/`
   - `src/lib/`
+- Integration lifecycle source of truth:
+  - `src/lib/integrations/`
+  - `src/commands/init.js`
+  - `src/commands/status.js`
+  - `src/lib/diagnostics.js`
+  - `src/commands/uninstall.js`
 - Common hotspots:
-  - init/install flow: `src/commands/init.js`
+  - init/install flow: `src/commands/init.js`, `src/lib/integrations/`
+  - integration status/diagnostics: `src/commands/status.js`, `src/lib/diagnostics.js`
   - sync pipeline: `src/commands/sync.js`, `src/lib/rollout.js`, `src/lib/upload.js`
-  - local state/config: `src/lib/config.js`, `src/lib/state.js`
+  - local state/config: `src/lib/runtime-config.js`, `src/lib/tracker-paths.js`, `src/lib/fs.js`
+- Hard-cut CLI integration contract:
+  - `init` is the only supported command that mutates local AI CLI integration config.
+  - `status`, `diagnostics`, `doctor`, and `sync` are read-only with respect to integration setup.
+  - Legacy activation/auto-heal files were removed; do not reintroduce alternate integration entrypoints outside `src/lib/integrations/`.
 
 ### Dashboard
 
@@ -109,6 +120,7 @@ This document is the single source of truth for repository navigation. Use it to
   - `scripts/acceptance/`
   - `scripts/smoke/`
 - Policy and validation:
+  - `scripts/ops/pr-risk-layer-gate.cjs`
   - `scripts/validate-architecture-guardrails.cjs`
   - `scripts/validate-copy-registry.cjs`
   - `scripts/validate-retros.cjs`
@@ -126,6 +138,7 @@ This document is the single source of truth for repository navigation. Use it to
   - `BACKEND_API.md`
 - Workflow and runbooks:
   - `docs/ops/`
+  - `docs/ops/pr-review-preflight.md`
   - `docs/tdd/README.md`
 - Coordination:
   - `docs/coordination/index.yaml`
