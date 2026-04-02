@@ -111,6 +111,9 @@ Initialize your environment once - VibeUsage handles all synchronization automat
 npx vibeusage init
 ```
 
+> [!IMPORTANT]
+> Starting with `vibeusage@0.3.0`, `init` is the only supported command that writes local integration config. If you upgrade from an older install layout, re-run `npx vibeusage init`; `status`, `diagnostics`, `doctor`, and `sync` will not auto-repair legacy hooks.
+
 ### Authentication Methods
 
 1. **Browser Auth** (default) - Opens browser for secure authentication
@@ -140,11 +143,13 @@ Once `init` completes, all supported CLI tools are automatically configured for 
 | **Codex CLI** | `~/.codex/config.toml` | `notify` hook |
 | **Every Code** | `~/.code/config.toml` (or `CODE_HOME`) | `notify` hook |
 | **Gemini CLI** | `~/.gemini/settings.json` (or `GEMINI_HOME`) | `SessionEnd` hook |
-| **Opencode** | Global plugins | Message parser plugin |
-| **Claude Code** | `~/.claude/hooks/` | Hook configuration |
+| **Opencode** | OpenCode config/plugins | Message parser plugin |
+| **Claude Code** | `~/.claude/settings.json` | `Stop` + `SessionEnd` hooks |
 | **OpenClaw** | Auto-links when installed | Session plugin (requires restart) |
 
 No further intervention required! 🎉
+
+If any integration drifts later, re-run `npx vibeusage init`. The read-only commands intentionally do not rewrite local hook/plugin state.
 
 ## 💡 Usage
 

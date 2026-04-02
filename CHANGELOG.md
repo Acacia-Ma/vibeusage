@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-02
+
+### Changed
+
+- Hard-cut the CLI integration lifecycle around `src/lib/integrations/`; `init` is now the only supported command that mutates local AI CLI integration config.
+- `status`, `diagnostics`, `doctor`, and `sync` are now read-only with respect to local integration setup.
+- Legacy Claude Code installs that only configured `SessionEnd` are now reported as `unsupported_legacy` and require `vibeusage init`.
+
+### Removed
+
+- Runtime auto-heal for older installs.
+- Legacy activation flow built around `activation-check` and `activate-if-needed`.
+
+### Fixed
+
+- Normalize equivalent Claude hook command strings during probe/remove/install checks so quoted and unquoted notify paths resolve to the same hook identity.
+
 ## [0.2.24] - 2026-04-02
 
 ### Fixed

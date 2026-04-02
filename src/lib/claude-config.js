@@ -70,12 +70,30 @@ async function removeClaudeHook({ settingsPath, hookCommand, events = DEFAULT_EV
 }
 
 async function isClaudeHookConfigured({ settingsPath, hookCommand, events = DEFAULT_EVENTS }) {
+  const probe = await probeClaudeHook({ settingsPath, hookCommand, events });
+  return probe.configured;
+}
+
+async function probeClaudeHook({ settingsPath, hookCommand, events = DEFAULT_EVENTS }) {
   const settings = await readJson(settingsPath);
-  if (!settings || typeof settings !== "object") return false;
+  if (!settings || typeof settings !== "object") {
+    return { configured: false, anyPresent: false, eventStates: {} };
+  }
   const hooks = settings.hooks;
-  if (!hooks || typeof hooks !== "object") return false;
+  if (!hooks || typeof hooks !== "object") {
+    return { configured: false, anyPresent: false, eventStates: {} };
+  }
   const targetEvents = normalizeEvents(events);
-  return targetEvents.every((event) => hasHook(normalizeEntries(hooks[event]), hookCommand));
+  const eventStates = {};
+  for (const event of targetEvents) {
+    eventStates[event] = hasHook(normalizeEntries(hooks[event]), hookCommand);
+  }
+  const anyPresent = Object.values(eventStates).some(Boolean);
+  return {
+    configured: targetEvents.every((event) => eventStates[event] === true),
+    anyPresent,
+    eventStates,
+  };
 }
 
 function buildClaudeHookCommand(notifyPath) {
@@ -109,7 +127,13 @@ function normalizeEvents(raw) {
 
 function normalizeCommand(cmd) {
   if (Array.isArray(cmd)) return cmd.map((v) => String(v)).join("\u0000");
-  if (typeof cmd === "string") return cmd.trim();
+  if (typeof cmd === "string") {
+    const raw = cmd.trim();
+    if (!raw) return null;
+    const parsed = splitShellCommand(raw);
+    if (parsed) return parsed.join("\u0000");
+    return raw;
+  }
   return null;
 }
 
@@ -185,6 +209,56 @@ function quoteArg(value) {
   return `"${v.replace(/"/g, '\\"')}"`;
 }
 
+function splitShellCommand(raw) {
+  const parts = [];
+  let current = "";
+  let quote = null;
+  let escaping = false;
+
+  for (let i = 0; i < raw.length; i += 1) {
+    const ch = raw[i];
+
+    if (escaping) {
+      current += ch;
+      escaping = false;
+      continue;
+    }
+
+    if (ch === "\\") {
+      escaping = true;
+      continue;
+    }
+
+    if (quote) {
+      if (ch === quote) {
+        quote = null;
+      } else {
+        current += ch;
+      }
+      continue;
+    }
+
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      continue;
+    }
+
+    if (/\s/.test(ch)) {
+      if (current) {
+        parts.push(current);
+        current = "";
+      }
+      continue;
+    }
+
+    current += ch;
+  }
+
+  if (escaping || quote) return null;
+  if (current) parts.push(current);
+  return parts.length > 0 ? parts : null;
+}
+
 async function writeClaudeSettings({ settingsPath, settings }) {
   await ensureDir(path.dirname(settingsPath));
   let backupPath = null;
@@ -206,5 +280,6 @@ module.exports = {
   upsertClaudeHook,
   removeClaudeHook,
   isClaudeHookConfigured,
+  probeClaudeHook,
   buildClaudeHookCommand,
 };

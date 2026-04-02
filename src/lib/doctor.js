@@ -313,6 +313,7 @@ function buildDiagnosticsChecks(diagnostics) {
     notify.claude_hook_configured ||
     notify.gemini_hook_configured ||
     notify.opencode_plugin_configured ||
+    notify.openclaw_session_plugin_configured ||
     notify.openclaw_hook_configured,
   );
 

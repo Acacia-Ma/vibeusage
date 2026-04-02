@@ -11,7 +11,7 @@ function stripAnsi(text) {
   return String(text || "").replace(/\x1b\[[0-9;]*m/g, "");
 }
 
-test("dry-run preview reports opencode install when config is missing", async () => {
+test("dry-run preview skips opencode when config is missing", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-init-dry-"));
   const prevHome = process.env.HOME;
   const prevOpencodeConfigDir = process.env.OPENCODE_CONFIG_DIR;
@@ -41,7 +41,7 @@ test("dry-run preview reports opencode install when config is missing", async ()
 
     const clean = stripAnsi(output);
     assert.match(clean, /Opencode Plugin/);
-    assert.match(clean, /Will create config and install plugin/);
+    assert.match(clean, /Skipped - Config not found/);
 
     const pluginPath = path.join(
       resolveOpencodePluginDir({ configDir: process.env.OPENCODE_CONFIG_DIR }),

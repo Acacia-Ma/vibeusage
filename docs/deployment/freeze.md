@@ -15,6 +15,21 @@
 - Cold regression step:
 - Synthetic acceptance:
 
+## 2026-04-02-release-0.3.0
+
+- Date: 2026-04-02
+- Scope: CLI hard-cut integration lifecycle refactor (`vibeusage@0.3.0`) with registry-backed integration SSOT and no runtime auto-heal
+- Change ID: N/A (direct foreman execution)
+- CI workflow run: N/A (local-only verification in this turn)
+- Release workflow run: N/A
+- Preflight: `node --test test/init-dry-run.test.js test/cli-hard-cut.test.js test/status.test.js test/init-uninstall.test.js test/diagnostics.test.js test/doctor.test.js` (pass); `node --test test/diagnostics.test.js test/openclaw-session-plugin.test.js test/openclaw-hook.test.js` (pass); `npm run ci:local` (pass); `node scripts/acceptance/npm-install-smoke.cjs` (pass)
+- npm publish: skipped (not attempted in this turn)
+- Vercel check: skipped (no dashboard changes)
+- MCP deploy: skipped (no functions changes)
+- Freeze artifact: local CLI package version `vibeusage@0.3.0` after hard-cut integration lifecycle refactor
+- Cold regression step: `npm run ci:local`
+- Synthetic acceptance: `node --test test/init-dry-run.test.js test/cli-hard-cut.test.js test/status.test.js test/init-uninstall.test.js test/diagnostics.test.js test/doctor.test.js`; `node scripts/acceptance/npm-install-smoke.cjs`
+
 ## 2026-04-02-release-0.2.24
 
 - Date: 2026-04-02

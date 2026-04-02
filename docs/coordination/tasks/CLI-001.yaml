@@ -1,0 +1,54 @@
+id: CLI-001
+title: Hard-cut CLI integration lifecycle refactor
+status: done
+owner: codex-main
+touches:
+  - src/cli.js
+  - src/commands/init.js
+  - src/commands/status.js
+  - src/commands/diagnostics.js
+  - src/commands/doctor.js
+  - src/commands/uninstall.js
+  - src/lib/diagnostics.js
+  - src/lib/doctor.js
+  - src/lib/integrations/
+  - src/lib/claude-config.js
+  - src/lib/codex-config.js
+  - src/lib/gemini-config.js
+  - src/lib/opencode-config.js
+  - src/lib/openclaw-hook.js
+  - src/lib/openclaw-session-plugin.js
+  - src/lib/runtime-auto-heal.js
+  - src/lib/activation-check.js
+  - src/commands/activate-if-needed.js
+  - test/status.test.js
+  - test/init-uninstall.test.js
+  - test/init-dry-run.test.js
+  - test/diagnostics.test.js
+  - test/openclaw-hook.test.js
+  - test/openclaw-session-plugin.test.js
+  - test/cli-auto-heal.test.js
+  - test/cli-hard-cut.test.js
+  - docs/coordination/index.yaml
+  - docs/coordination/tasks/CLI-001.yaml
+  - CHANGELOG.md
+  - README.md
+  - README.zh-CN.md
+  - docs/AI_AGENT_INSTALL.md
+  - docs/deployment/freeze.md
+  - docs/pr/2026-04-02-release-0.3.0.md
+  - docs/repo-sitemap.md
+  - package.json
+  - package-lock.json
+notes:
+  - "DECISION: Hard cut the CLI integration lifecycle so only init mutates integration config."
+  - "DECISION: Remove runtime auto-heal and legacy activation paths instead of migrating old installs."
+  - "DONE: Introduced src/lib/integrations/ as the CLI integration lifecycle SSOT."
+  - "DONE: Switched init/status/diagnostics/uninstall/doctor to registry-backed probing or install/uninstall orchestration."
+  - "DONE: Removed runtime auto-heal, activation-check, activate-if-needed, and their regression coverage."
+  - "VERIFIED: node --test test/init-dry-run.test.js test/cli-hard-cut.test.js test/status.test.js test/init-uninstall.test.js test/diagnostics.test.js test/doctor.test.js"
+  - "VERIFIED: node --test test/diagnostics.test.js test/openclaw-session-plugin.test.js test/openclaw-hook.test.js"
+  - "VERIFIED: npm run ci:local"
+  - "VERIFIED: node scripts/acceptance/npm-install-smoke.cjs"
+  - "REVIEW: Init/uninstall reviewer reported no blocking code-quality or doc/process issues."
+  - "REVIEW: Status/diagnostics reviewer found missing OpenClaw linked/enabled propagation in diagnostics; fixed by propagating descriptor fields and adding regression coverage."
