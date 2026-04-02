@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.24] - 2026-04-02
+
+### Fixed
+
+- Install Claude Code sync hooks on both `Stop` and `SessionEnd` instead of waiting for session end only.
+- Auto-heal older Claude Code installs on the next CLI run when the local notify shim is already present.
+
 ## [0.2.21] - 2026-02-18
 
 ### Changed
