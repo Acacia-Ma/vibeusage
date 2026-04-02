@@ -1,5 +1,10 @@
 {
-  "placeholderValues": ["-"],
+  "placeholderValues": [
+    "-",
+    "**Modules touched:**",
+    "**Dependencies / contracts touched:**",
+    "**Repo sitemap evidence:** `updated` / `not required` / affected section(s)"
+  ],
   "requiredSections": [
     {
       "heading": "Affected Modules / Dependency Notes",

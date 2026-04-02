@@ -98,6 +98,27 @@ test("evaluatePrBody fails when required affected-modules section is missing", (
   );
 });
 
+test("evaluatePrBody rejects untouched affected-modules template stub lines", () => {
+  const body = createCompleteBody().replace(
+    /## Affected Modules \/ Dependency Notes[\s\S]*?## Codex Context/,
+    `## Affected Modules / Dependency Notes
+
+- **Modules touched:**
+- **Dependencies / contracts touched:**
+- **Repo sitemap evidence:** \`updated\` / \`not required\` / affected section(s)
+
+## Codex Context`,
+  );
+
+  const result = evaluatePrBody(body, DEFAULT_CONFIG);
+
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((error) => error.includes("Affected Modules / Dependency Notes")),
+    `expected untouched template stubs to fail affected-modules validation, got ${result.errors.join("\n")}`,
+  );
+});
+
 test("evaluatePrBody fails when risk layer is checked without complete addendum", () => {
   const body = createCompleteBody().replace(
     /### Boundary Matrix \(must list at least 3\)[\s\S]*?### Evidence \(tests or repro\)/,
