@@ -53,20 +53,33 @@ This document is the single source of truth for repository navigation. Use it to
 - Common hotspots:
   - init/install flow: `src/commands/init.js`, `src/lib/integrations/`
   - integration status/diagnostics: `src/commands/status.js`, `src/lib/diagnostics.js`
-  - sync pipeline: `src/commands/sync.js`, `src/lib/rollout.js`, `src/lib/upload.js`
+  - sync pipeline: `src/commands/sync.js`, `src/lib/rollout.js`, `src/lib/opencode-sqlite.js`, `src/lib/upload.js`
   - local state/config: `src/lib/runtime-config.js`, `src/lib/tracker-paths.js`, `src/lib/fs.js`
+  - InsForge CLI wrappers and device-token flows: `src/lib/insforge-client.js`, `src/lib/vibeusage-api.js`
 - Hard-cut CLI integration contract:
   - `init` is the only supported command that mutates local AI CLI integration config.
   - `status`, `diagnostics`, `doctor`, and `sync` are read-only with respect to integration setup.
   - Legacy activation/auto-heal files were removed; do not reintroduce alternate integration entrypoints outside `src/lib/integrations/`.
+- Root InsForge SDK loading contract:
+  - Start at `src/lib/insforge-client.js` before touching CLI/device-token InsForge behavior.
+  - Root CommonJS entrypoints load the official SDK via async `import("@insforge/sdk")`; direct `require("@insforge/sdk")` is not the repository-supported path.
 
 ### Dashboard
 
 - Start here for web UI work:
   - `dashboard/src/App.jsx`
+  - `dashboard/src/main.jsx`
   - `dashboard/src/pages/`
   - `dashboard/src/hooks/`
   - `dashboard/src/ui/matrix-a/components/`
+- Auth/session integration first-read path:
+  - `dashboard/src/lib/insforge-client.ts`
+  - `dashboard/src/lib/insforge-auth-client.ts`
+  - `dashboard/src/lib/vibeusage-api.ts`
+  - `dashboard/src/App.jsx`
+- Dashboard InsForge session contract:
+  - SDK session persistence is repository-owned and wraps the SDK token manager.
+  - Official refresh/state primitives currently used by local code are `auth.refreshSession()` and `auth.getCurrentUser()`.
 - Copy and content source of truth:
   - `dashboard/src/content/copy.csv`
 - Public web assets:

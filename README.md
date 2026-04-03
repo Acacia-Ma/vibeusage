@@ -56,7 +56,7 @@ That's it! Your AI token usage will now automatically sync to the [Dashboard](ht
 | **Every Code** | ✅ | Full Support |
 | **Gemini CLI** | ✅ | Full Support |
 | **Claude Code** | ✅ | Full Support |
-| **Opencode** | ✅ | Full Support |
+| **Opencode** | ✅ | SQLite-First Support |
 | **OpenClaw** | ✅ | Full Support |
 
 Whether you're using GPT-4, Claude 3.5 Sonnet, o1, or Gemini - all token consumption is unified and tracked.
@@ -143,7 +143,7 @@ Once `init` completes, all supported CLI tools are automatically configured for 
 | **Codex CLI** | `~/.codex/config.toml` | `notify` hook |
 | **Every Code** | `~/.code/config.toml` (or `CODE_HOME`) | `notify` hook |
 | **Gemini CLI** | `~/.gemini/settings.json` (or `GEMINI_HOME`) | `SessionEnd` hook |
-| **Opencode** | OpenCode config/plugins | Message parser plugin |
+| **Opencode** | OpenCode config/plugins | SQLite-first parser plugin |
 | **Claude Code** | `~/.claude/settings.json` | `Stop` + `SessionEnd` hooks |
 | **OpenClaw** | Auto-links when installed | Session plugin (requires restart) |
 
@@ -207,7 +207,7 @@ graph LR
     A[Codex CLI] -->|Rollout Logs| G(Tracker CLI)
     B[Every Code] -->|Rollout Logs| G
     C[Gemini CLI] -->|Session Logs| G
-    D[Opencode] -->|Message Logs| G
+    D[Opencode] -->|SQLite DB| G
     E[Claude Code] -->|Hook Output| G
     F[OpenClaw] -->|Session Plugin| G
     G -->|AI Tokens| H{Core Relay}
@@ -236,7 +236,7 @@ graph LR
 
 1. AI CLI tools generate logs during usage
 2. Local `notify-handler` detects changes and triggers sync
-3. CLI incrementally parses logs, extracts token counts (whitelist fields only)
+3. CLI incrementally parses logs and SQLite state, extracting whitelist token counts only
 4. Data aggregated into 30-minute UTC buckets locally
 5. Batch upload to InsForge with idempotent deduplication
 6. Dashboard queries aggregated results for visualization
@@ -248,7 +248,7 @@ graph LR
 | **Codex CLI** | `~/.codex/sessions/**/rollout-*.jsonl` | `CODEX_HOME` |
 | **Every Code** | `~/.code/sessions/**/rollout-*.jsonl` | `CODE_HOME` |
 | **Gemini CLI** | `~/.gemini/tmp/**/chats/session-*.json` | `GEMINI_HOME` |
-| **Opencode** | `~/.opencode/messages/*.json` | - |
+| **Opencode** | `~/.local/share/opencode/opencode.db` (legacy `storage/message/**/*.json` fallback) | `OPENCODE_HOME` |
 | **Claude Code** | Parsed from hook output | - |
 | **OpenClaw** | Session plugin integration | - |
 
@@ -275,6 +275,7 @@ graph LR
 | `CODEX_HOME` | Codex CLI directory override | `~/.codex` |
 | `CODE_HOME` | Every Code directory override | `~/.code` |
 | `GEMINI_HOME` | Gemini CLI directory override | `~/.gemini` |
+| `OPENCODE_HOME` | OpenCode data directory override | `~/.local/share/opencode` |
 
 </details>
 
@@ -285,8 +286,13 @@ graph LR
 
 1. Check status: `npx vibeusage status`
 2. Force manual sync: `npx vibeusage sync`
-3. Verify CLI tool hooks are configured (re-run `init` if needed)
-4. Check debug output: `VIBEUSAGE_DEBUG=1 npx vibeusage sync`
+3. Check OpenCode SQLite reader health: `npx vibeusage status --diagnostics`
+4. Run `npx vibeusage doctor` if OpenCode usage looks incomplete
+5. Verify CLI tool hooks are configured (re-run `init` if needed)
+6. Check debug output: `VIBEUSAGE_DEBUG=1 npx vibeusage sync`
+
+> [!NOTE]
+> Current OpenCode releases store usage in `~/.local/share/opencode/opencode.db`. Legacy message JSON files are treated as fallback only. Complete OpenCode support requires the `sqlite3` CLI to be available on `PATH`.
 
 </details>
 
