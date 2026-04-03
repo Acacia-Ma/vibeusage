@@ -67,7 +67,9 @@ test("App uses repo-owned hosted auth state for signed-in gating", () => {
   const src = read("dashboard/src/App.jsx");
   assert.doesNotMatch(src, /@insforge\/react-router/);
   assert.doesNotMatch(src, /useInsforgeAuth/);
-  assert.match(src, /const \[insforgeLoaded, setInsforgeLoaded\] = useState\(false\)/);
+  assert.match(src, /useSyncExternalStore/);
+  assert.match(src, /subscribeInsforgeSession/);
+  assert.match(src, /getInsforgeSessionSnapshot/);
   assert.match(src, /insforgeAuthClient\.auth\.signOut\(\)/);
 });
 

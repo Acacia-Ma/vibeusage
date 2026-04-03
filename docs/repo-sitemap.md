@@ -80,7 +80,7 @@ This document is the single source of truth for repository navigation. Use it to
   - `dashboard/src/lib/vibeusage-api.ts`
 - Dashboard InsForge session contract:
   - Hosted-auth restore is repository-owned and runs directly on `@insforge/sdk`; the dashboard does not use `@insforge/react` / `@insforge/react-router` as a runtime restore layer.
-  - SDK session persistence is repository-owned and wraps the SDK token manager.
+  - SDK session persistence and runtime session store are repository-owned and wrap the SDK token manager; `App.jsx` subscribes to that store instead of caching its own session truth.
   - Official refresh/state primitives currently used by local code are `auth.refreshSession()`, `auth.getCurrentUser()`, and `auth.signOut()`.
   - OAuth redirect entrypoints stay repository-owned, while PKCE callback exchange continues to run inside the SDK client.
 - Copy and content source of truth:

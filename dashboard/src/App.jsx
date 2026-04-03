@@ -1,4 +1,12 @@
-import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
 import { getAppVersion } from "./lib/app-version";
@@ -24,7 +32,12 @@ import {
 import { getAccessTokenUserId, isLikelyExpiredAccessToken } from "./lib/auth-token";
 import { getInsforgeBaseUrl } from "./lib/config";
 import { resolveCurrentIdentity } from "./lib/current-identity";
-import { getCurrentInsforgeSession, insforgeAuthClient } from "./lib/insforge-auth-client";
+import {
+  getCurrentInsforgeSession,
+  getInsforgeSessionSnapshot,
+  insforgeAuthClient,
+  subscribeInsforgeSession,
+} from "./lib/insforge-auth-client";
 import { clearInsforgePersistentStorage } from "./lib/insforge-client";
 import { isMockEnabled } from "./lib/mock-data";
 import { fetchLatestTrackerVersion } from "./lib/npm-version";
@@ -73,7 +86,11 @@ export default function App() {
   const appVersion = useMemo(() => getAppVersion(import.meta.env), []);
   const [latestVersion, setLatestVersion] = useState(null);
   const [insforgeLoaded, setInsforgeLoaded] = useState(false);
-  const [insforgeSession, setInsforgeSession] = useState();
+  const insforgeSession = useSyncExternalStore(
+    subscribeInsforgeSession,
+    getInsforgeSessionSnapshot,
+    getInsforgeSessionSnapshot,
+  );
   const [currentIdentity, setCurrentIdentity] = useState(undefined);
   const [sessionExpired, setSessionExpired] = useState(() => loadSessionExpired());
   const [sessionSoftExpired, setSessionSoftExpired] = useState(() => loadSessionSoftExpired());
@@ -104,7 +121,6 @@ export default function App() {
     getCurrentInsforgeSession()
       .then((session) => {
         if (!active) return;
-        setInsforgeSession(session);
         setInsforgeLoaded(true);
 
         // Debug logging for mobile troubleshooting
@@ -122,7 +138,6 @@ export default function App() {
       })
       .catch((err) => {
         if (!active) return;
-        setInsforgeSession(null);
         setInsforgeLoaded(true);
         if (
           process.env.NODE_ENV === "development" ||
@@ -327,7 +342,6 @@ export default function App() {
         clearAuthStorage();
         clearSessionExpired();
         clearSessionSoftExpired();
-        setInsforgeSession(null);
       }
     };
   }, []);
