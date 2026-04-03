@@ -53,7 +53,9 @@ module.exports = {
       return action(this, "restored", true, ctx.codex.configPath);
     }
     if (result.skippedReason === "no-backup-not-installed") {
-      return action(this, "skipped", false, "no backup; not installed");
+      return action(this, "skipped", false, "no backup; not installed", {
+        skippedReason: result.skippedReason,
+      });
     }
     return action(this, "unchanged", false, "no change");
   },
@@ -74,12 +76,13 @@ function baseProbe(descriptor, values) {
   };
 }
 
-function action(descriptor, status, changed, detail) {
+function action(descriptor, status, changed, detail, extras = {}) {
   return {
     name: descriptor.name,
     label: descriptor.summaryLabel,
     status,
     changed,
     detail,
+    ...extras,
   };
 }

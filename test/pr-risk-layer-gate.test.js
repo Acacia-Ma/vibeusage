@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const cp = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -97,6 +98,27 @@ test("evaluatePrBody fails when required affected-modules section is missing", (
   );
 });
 
+test("evaluatePrBody rejects untouched affected-modules template stub lines", () => {
+  const body = createCompleteBody().replace(
+    /## Affected Modules \/ Dependency Notes[\s\S]*?## Codex Context/,
+    `## Affected Modules / Dependency Notes
+
+- **Modules touched:**
+- **Dependencies / contracts touched:**
+- **Repo sitemap evidence:** \`updated\` / \`not required\` / affected section(s)
+
+## Codex Context`,
+  );
+
+  const result = evaluatePrBody(body, DEFAULT_CONFIG);
+
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((error) => error.includes("Affected Modules / Dependency Notes")),
+    `expected untouched template stubs to fail affected-modules validation, got ${result.errors.join("\n")}`,
+  );
+});
+
 test("evaluatePrBody fails when risk layer is checked without complete addendum", () => {
   const body = createCompleteBody().replace(
     /### Boundary Matrix \(must list at least 3\)[\s\S]*?### Evidence \(tests or repro\)/,
@@ -178,6 +200,48 @@ test("loadBodyFromEvent reads pull request body from GitHub event payload", () =
 
   const body = loadBodyFromEvent(eventPath);
   assert.equal(body, "## Summary\n\nReusable gate body\n");
+});
+
+test("loadBodyFromEvent returns null when event has no PR or issue body source", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pr-risk-layer-missing-"));
+  const eventPath = writeTempFile(
+    root,
+    "event.json",
+    JSON.stringify({
+      repository: {
+        full_name: "victorGPT/vibeusage",
+      },
+    }),
+  );
+
+  const body = loadBodyFromEvent(eventPath);
+  assert.equal(body, null);
+});
+
+test("CLI gate treats empty PR body as invalid instead of skipping", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pr-risk-layer-empty-"));
+  const eventPath = writeTempFile(
+    root,
+    "event.json",
+    JSON.stringify({
+      pull_request: {
+        body: "",
+      },
+    }),
+  );
+
+  const result = cp.spawnSync(
+    process.execPath,
+    [path.join(repoRoot, "scripts", "ops", "pr-risk-layer-gate.cjs"), "--event-file", eventPath],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+    },
+  );
+
+  assert.equal(result.status, 1, `expected exit 1, got ${result.status}.\n${result.stdout}\n${result.stderr}`);
+  assert.match(result.stderr, /PR risk layer gate failed:/);
+  assert.match(result.stderr, /Missing required section:/);
 });
 
 test("default config headings stay aligned with PR template", () => {

@@ -58,6 +58,30 @@ test("doctor reports runtime config status", async () => {
   assert.equal(tokenCheck.status, "ok");
 });
 
+test("doctor surfaces unreadable OpenClaw diagnostics as warnings", async () => {
+  const report = await buildDoctorReport({
+    runtime: { baseUrl: "https://example" },
+    fetch: async () => ({ status: 200 }),
+    diagnostics: {
+      notify: {
+        openclaw_session_plugin_status: "unreadable",
+        openclaw_session_plugin_detail: "OpenClaw config unreadable: invalid json",
+        openclaw_session_plugin_configured: false,
+        openclaw_hook_status: "unreadable",
+        openclaw_hook_detail: "OpenClaw config unreadable: invalid json",
+        openclaw_hook_configured: false,
+      },
+    },
+  });
+  const sessionCheck = report.checks.find((c) => c.id === "notify.openclaw_session_plugin");
+  const hookCheck = report.checks.find((c) => c.id === "notify.openclaw_hook");
+
+  assert.equal(sessionCheck.status, "warn");
+  assert.equal(sessionCheck.meta.status, "unreadable");
+  assert.equal(hookCheck.status, "warn");
+  assert.equal(hookCheck.meta.status, "unreadable");
+});
+
 test("doctor marks invalid config.json as critical", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-doctor-"));
   const trackerDir = path.join(tmp, ".vibeusage", "tracker");
@@ -225,6 +249,49 @@ test("doctor tolerates null config.json payload", async () => {
   }
 });
 
+test("doctor does not migrate legacy tracker directory", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-doctor-legacy-"));
+  const prevHome = process.env.HOME;
+  const prevFetch = globalThis.fetch;
+  const prevWrite = process.stdout.write;
+  const prevErr = process.stderr.write;
+  const prevExit = process.exitCode;
+
+  try {
+    process.env.HOME = tmp;
+    const legacyTrackerDir = path.join(tmp, ".vibescore", "tracker");
+    await fs.mkdir(legacyTrackerDir, { recursive: true });
+    await fs.writeFile(
+      path.join(legacyTrackerDir, "config.json"),
+      JSON.stringify({ baseUrl: "https://legacy.example", deviceToken: "legacy-token" }) + "\n",
+      "utf8",
+    );
+    globalThis.fetch = async () => ({ status: 200 });
+    const outCapture = createWriteCapture();
+    const errCapture = createWriteCapture();
+    process.stdout.write = outCapture.write;
+    process.stderr.write = errCapture.write;
+    process.exitCode = 0;
+
+    await cmdDoctor(["--json"]);
+
+    const payload = JSON.parse(outCapture.read());
+    const configCheck = payload.checks.find((c) => c.id === "fs.config_json");
+    assert.equal(configCheck.status, "warn");
+    assert.match(configCheck.meta.path, /\.vibeusage\/tracker\/config\.json$/);
+    const newTrackerDir = path.join(tmp, ".vibeusage", "tracker");
+    await assert.rejects(fs.stat(newTrackerDir));
+    await fs.stat(legacyTrackerDir);
+  } finally {
+    process.stdout.write = prevWrite;
+    process.stderr.write = prevErr;
+    if (prevHome === undefined) delete process.env.HOME;
+    else process.env.HOME = prevHome;
+    globalThis.fetch = prevFetch;
+    process.exitCode = prevExit;
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
 test("doctor includes opencode sqlite support check", async () => {
   const report = await buildDoctorReport({
     runtime: { baseUrl: "https://example", deviceToken: "token" },

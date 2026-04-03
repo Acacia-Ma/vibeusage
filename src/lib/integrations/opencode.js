@@ -8,7 +8,12 @@ module.exports = {
   async probe(ctx) {
     const hasConfigDir = await isDir(ctx.opencode.configDir);
     if (!hasConfigDir) {
-      return baseProbe(this, { status: "not_installed", detail: "Config not found" });
+      return baseProbe(this, {
+        status: "not_installed",
+        detail: "Config not found",
+        initPreviewStatus: "updated",
+        initPreviewDetail: "Will install plugin",
+      });
     }
     const configured = await isOpencodePluginInstalled({ configDir: ctx.opencode.configDir });
     return baseProbe(this, {
@@ -41,10 +46,14 @@ module.exports = {
       return action(this, "removed", true, ctx.opencode.configDir);
     }
     if (result.skippedReason === "plugin-missing") {
-      return action(this, "unchanged", false, "no change");
+      return action(this, "unchanged", false, "no change", {
+        skippedReason: result.skippedReason,
+      });
     }
     if (result.skippedReason === "unexpected-content") {
-      return action(this, "skipped", false, "unexpected content");
+      return action(this, "skipped", false, "unexpected content", {
+        skippedReason: result.skippedReason,
+      });
     }
     return action(this, "skipped", false, "config dir not found");
   },
@@ -65,12 +74,13 @@ function baseProbe(descriptor, values) {
   };
 }
 
-function action(descriptor, status, changed, detail) {
+function action(descriptor, status, changed, detail, extras = {}) {
   return {
     name: descriptor.name,
     label: descriptor.summaryLabel,
     status,
     changed,
     detail,
+    ...extras,
   };
 }

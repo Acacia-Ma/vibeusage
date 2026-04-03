@@ -196,6 +196,22 @@ test("diagnostics preserves OpenClaw linked and enabled flags from integration p
   await fs.rm(tmp, { recursive: true, force: true });
 });
 
+test("diagnostics reports unreadable OpenClaw config explicitly", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-diagnostics-openclaw-bad-"));
+  const home = path.join(tmp, "home");
+  const openclawDir = path.join(home, ".openclaw");
+  const openclawConfigPath = path.join(openclawDir, "openclaw.json");
+  await fs.mkdir(openclawDir, { recursive: true });
+  await fs.writeFile(openclawConfigPath, "{ bad json\n", "utf8");
+
+  const diagnostics = await collectTrackerDiagnostics({ home });
+  assert.equal(diagnostics.notify.openclaw_session_plugin_status, "unreadable");
+  assert.match(diagnostics.notify.openclaw_session_plugin_detail, /OpenClaw config unreadable:/);
+  assert.equal(diagnostics.notify.openclaw_hook_status, "unreadable");
+  assert.match(diagnostics.notify.openclaw_hook_detail, /OpenClaw config unreadable:/);
+
+  await fs.rm(tmp, { recursive: true, force: true });
+});
 test("diagnostics exposes redacted opencode sqlite health", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-diagnostics-opencode-"));
   const prevHome = process.env.HOME;

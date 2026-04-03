@@ -71,7 +71,9 @@ module.exports = {
       return action(this, "removed", true, ctx.claude.settingsPath);
     }
     if (result.skippedReason === "hook-missing") {
-      return action(this, "unchanged", false, "no change");
+      return action(this, "unchanged", false, "no change", {
+        skippedReason: result.skippedReason,
+      });
     }
     return action(this, "skipped", false, "settings.json not found");
   },
@@ -92,12 +94,13 @@ function baseProbe(descriptor, values) {
   };
 }
 
-function action(descriptor, status, changed, detail) {
+function action(descriptor, status, changed, detail, extras = {}) {
   return {
     name: descriptor.name,
     label: descriptor.summaryLabel,
     status,
     changed,
     detail,
+    ...extras,
   };
 }

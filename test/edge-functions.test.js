@@ -9136,6 +9136,155 @@ test("vibeusage-user-status returns tracked subscriptions for identity card", as
   assert.equal(body.install.latest_device_seen_at, "2026-02-11T09:00:00.000Z");
 });
 
+
+
+test("vibeusage-user-status install signal stays independent from link code rows", async () => {
+  const fn = await loadEdgeFunction("vibeusage-user-status");
+
+  const userId = "11111111-1111-1111-1111-11111111111b";
+  const userJwt = createUserJwt(userId);
+  let linkCodesTouched = false;
+
+  globalThis.createClient = (args) => {
+    if (args && args.edgeFunctionToken === userJwt) {
+      return {
+        auth: {
+          getCurrentUser: async () => ({ data: { user: { id: userId } }, error: null }),
+        },
+        database: {
+          from: (table) => {
+            if (table === "vibeusage_link_codes") {
+              linkCodesTouched = true;
+              throw new Error("user-status must not depend on vibeusage_link_codes");
+            }
+            if (table === "vibeusage_user_entitlements") {
+              return {
+                select: () => ({
+                  eq: () => ({
+                    order: async () => ({ data: [], error: null }),
+                  }),
+                }),
+              };
+            }
+            if (table === "vibeusage_tracker_subscriptions") {
+              return {
+                select: () => ({
+                  eq: () => ({
+                    order: async () => ({ data: [], error: null }),
+                  }),
+                }),
+              };
+            }
+            if (table === "vibeusage_tracker_device_tokens") {
+              return {
+                select: (columns, options) => {
+                  if (columns === "id" && options?.count === "exact") {
+                    return {
+                      eq: () => ({
+                        is: () => ({
+                          limit: async () => ({ data: [{ id: "tok_1" }], count: 1, error: null }),
+                        }),
+                      }),
+                    };
+                  }
+
+                  if (columns === "last_used_at") {
+                    return {
+                      eq: () => ({
+                        is: () => ({
+                          order: () => ({
+                            limit: async () => ({
+                              data: [{ last_used_at: "2026-02-12T05:00:00.000Z" }],
+                              error: null,
+                            }),
+                          }),
+                        }),
+                      }),
+                    };
+                  }
+
+                  throw new Error(`Unexpected token select: ${String(columns)}`);
+                },
+              };
+            }
+            if (table === "vibeusage_tracker_devices") {
+              return {
+                select: (columns, options) => {
+                  if (columns === "id" && options?.count === "exact") {
+                    return {
+                      eq: () => ({
+                        is: () => ({
+                          limit: async () => ({ data: [{ id: "dev_1" }], count: 1, error: null }),
+                        }),
+                      }),
+                    };
+                  }
+
+                  if (columns === "last_seen_at") {
+                    return {
+                      eq: () => ({
+                        is: () => ({
+                          order: () => ({
+                            limit: async () => ({
+                              data: [{ last_seen_at: "2026-02-12T05:30:00.000Z" }],
+                              error: null,
+                            }),
+                          }),
+                        }),
+                      }),
+                    };
+                  }
+
+                  throw new Error(`Unexpected device select: ${String(columns)}`);
+                },
+              };
+            }
+            throw new Error(`Unexpected user table: ${String(table)}`);
+          },
+        },
+      };
+    }
+
+    if (args && args.edgeFunctionToken === SERVICE_ROLE_KEY) {
+      return {
+        database: {
+          from: (table) => {
+            assert.equal(table, "users");
+            return {
+              select: () => ({
+                eq: () => ({
+                  maybeSingle: async () => ({
+                    data: { created_at: "2025-01-01T00:00:00Z" },
+                    error: null,
+                  }),
+                }),
+              }),
+            };
+          },
+        },
+      };
+    }
+
+    throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
+  };
+
+  const req = new Request("http://localhost/functions/vibeusage-user-status", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${userJwt}` },
+  });
+
+  const res = await fn(req);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(linkCodesTouched, false);
+  assert.equal(body.install.partial, false);
+  assert.equal(body.install.has_active_device_token, true);
+  assert.equal(body.install.has_active_device, true);
+  assert.equal(body.install.active_device_tokens, 1);
+  assert.equal(body.install.active_devices, 1);
+  assert.equal(body.install.latest_token_activity_at, "2026-02-12T05:00:00.000Z");
+  assert.equal(body.install.latest_device_seen_at, "2026-02-12T05:30:00.000Z");
+});
 test("vibeusage-user-status marks install partial when device tables are missing", async () => {
   const fn = await loadEdgeFunction("vibeusage-user-status");
 
