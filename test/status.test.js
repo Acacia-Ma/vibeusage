@@ -258,7 +258,6 @@ test("status reports OpenClaw integrations as unreadable when config cannot be p
     await fs.rm(tmp, { recursive: true, force: true });
   }
 });
-
 test("status prints healthy opencode sqlite lines", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-status-opencode-ok-"));
   const prevHome = process.env.HOME;

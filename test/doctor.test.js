@@ -292,7 +292,6 @@ test("doctor does not migrate legacy tracker directory", async () => {
     await fs.rm(tmp, { recursive: true, force: true });
   }
 });
-
 test("doctor includes opencode sqlite support check", async () => {
   const report = await buildDoctorReport({
     runtime: { baseUrl: "https://example", deviceToken: "token" },

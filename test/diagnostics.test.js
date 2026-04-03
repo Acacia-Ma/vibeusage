@@ -212,7 +212,6 @@ test("diagnostics reports unreadable OpenClaw config explicitly", async () => {
 
   await fs.rm(tmp, { recursive: true, force: true });
 });
-
 test("diagnostics exposes redacted opencode sqlite health", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-diagnostics-opencode-"));
   const prevHome = process.env.HOME;
