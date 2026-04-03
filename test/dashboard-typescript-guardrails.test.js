@@ -9,6 +9,8 @@ const { promisify } = require("node:util");
 const execFileAsync = promisify(execFile);
 
 const repoRoot = path.join(__dirname, "..");
+const rootPkgPath = path.join(repoRoot, "package.json");
+const rootLockPath = path.join(repoRoot, "package-lock.json");
 const tsconfigPath = path.join(repoRoot, "dashboard/tsconfig.json");
 const pkgPath = path.join(repoRoot, "dashboard/package.json");
 const lockPath = path.join(repoRoot, "dashboard/package-lock.json");
@@ -74,6 +76,23 @@ test("vite env types are declared", async () => {
 test("dashboard package defines typecheck", async () => {
   const pkg = JSON.parse(await read(pkgPath));
   assert.ok(pkg.scripts?.typecheck, "expected typecheck script");
+});
+
+test("insforge sdk baseline is pinned consistently across root and dashboard", async () => {
+  const rootPkg = JSON.parse(await read(rootPkgPath));
+  const dashboardPkg = JSON.parse(await read(pkgPath));
+  const rootLock = JSON.parse(await read(rootLockPath));
+  const dashboardLock = JSON.parse(await read(lockPath));
+
+  assert.equal(rootPkg.dependencies?.["@insforge/sdk"], "1.2.2");
+  assert.equal(dashboardPkg.dependencies?.["@insforge/sdk"], "1.2.2");
+  assert.equal(dashboardPkg.dependencies?.["@insforge/react"], "1.1.8");
+  assert.equal(dashboardPkg.dependencies?.["@insforge/react-router"], "1.1.7");
+
+  assert.equal(rootLock.packages?.["node_modules/@insforge/sdk"]?.version, "1.2.2");
+  assert.equal(dashboardLock.packages?.["node_modules/@insforge/sdk"]?.version, "1.2.2");
+  assert.equal(dashboardLock.packages?.["node_modules/@insforge/react"]?.version, "1.1.8");
+  assert.equal(dashboardLock.packages?.["node_modules/@insforge/react-router"]?.version, "1.1.7");
 });
 
 test("eslint uses typescript parser", async () => {

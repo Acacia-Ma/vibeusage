@@ -1,13 +1,17 @@
 "use strict";
 
-function loadInsforgeSdk() {
-  try {
-    return require("@insforge/sdk");
-  } catch (err) {
-    const wrapped = new Error("Missing dependency @insforge/sdk. Please reinstall vibeusage.");
-    wrapped.cause = err;
-    throw wrapped;
+let sdkModulePromise = null;
+
+async function loadInsforgeSdk() {
+  if (!sdkModulePromise) {
+    sdkModulePromise = import("@insforge/sdk").catch((err) => {
+      sdkModulePromise = null;
+      const wrapped = new Error("Missing dependency @insforge/sdk. Please reinstall vibeusage.");
+      wrapped.cause = err;
+      throw wrapped;
+    });
   }
+  return sdkModulePromise;
 }
 
 function getAnonKey({ env = process.env } = {}) {
@@ -45,9 +49,9 @@ function createTimeoutFetch(baseFetch) {
   };
 }
 
-function createInsforgeClient({ baseUrl, accessToken } = {}) {
+async function createInsforgeClient({ baseUrl, accessToken } = {}) {
   if (!baseUrl) throw new Error("Missing baseUrl");
-  const { createClient } = loadInsforgeSdk();
+  const { createClient } = await loadInsforgeSdk();
   const anonKey = getAnonKey();
   return createClient({
     baseUrl,

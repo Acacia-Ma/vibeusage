@@ -1152,6 +1152,228 @@ test("parseOpencodeIncremental preserves legacy file totals when opencode index 
   }
 });
 
+test("parseOpencodeIncremental ingests sqlite rows when message files are absent", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibescore-opencode-sqlite-"));
+  try {
+    const queuePath = path.join(tmp, "queue.jsonl");
+    const cursors = { version: 1, files: {}, updatedAt: null };
+
+    const res = await parseOpencodeIncremental({
+      messageFiles: [],
+      opencodeDbPath: path.join(tmp, "opencode.db"),
+      cursors,
+      queuePath,
+      readSqliteRows: async () => ({
+        status: "ok",
+        checkedAt: "2026-04-03T00:00:00.000Z",
+        inode: 42,
+        rows: [
+          {
+            id: "msg_sqlite",
+            session_id: "ses_sqlite",
+            role: "assistant",
+            time_created: Date.parse("2025-12-29T10:15:00.000Z"),
+            data: JSON.stringify(
+              buildOpencodeMessage({
+                modelID: "gpt-5",
+                created: "2025-12-29T10:14:00.000Z",
+                completed: "2025-12-29T10:15:00.000Z",
+                tokens: { input: 10, output: 2, reasoning: 1, cached: 3, cacheWrite: 5 },
+              }),
+            ),
+          },
+        ],
+      }),
+    });
+
+    assert.equal(res.filesProcessed, 0);
+    assert.equal(res.eventsAggregated, 1);
+    assert.equal(res.bucketsQueued, 1);
+    assert.equal(res.sqliteStatus, "ok");
+    assert.equal(res.sqliteCheckedAt, "2026-04-03T00:00:00.000Z");
+    assert.equal(res.sqliteErrorCode, null);
+    assert.equal(cursors.opencodeSqlite.inode, 42);
+    assert.equal(cursors.opencodeSqlite.lastProcessedIds[0], "msg_sqlite");
+    assert.equal(cursors.opencodeSqlite.lastStatus, "ok");
+    assert.equal(cursors.opencodeSqlite.lastCheckedAt, "2026-04-03T00:00:00.000Z");
+    assert.equal(cursors.opencodeSqlite.lastErrorCode, null);
+
+    const queued = await readJsonLines(queuePath);
+    assert.equal(queued.length, 1);
+    assert.equal(queued[0].source, "opencode");
+    assert.equal(queued[0].model, "gpt-5");
+    assert.equal(queued[0].total_tokens, 18);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("parseOpencodeIncremental persists missing sqlite db health without buckets", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibescore-opencode-sqlite-missing-db-"));
+  try {
+    const queuePath = path.join(tmp, "queue.jsonl");
+    const cursors = { version: 1, files: {}, updatedAt: null };
+
+    const res = await parseOpencodeIncremental({
+      messageFiles: [],
+      opencodeDbPath: path.join(tmp, "opencode.db"),
+      cursors,
+      queuePath,
+      readSqliteRows: async () => ({
+        status: "missing-db",
+        checkedAt: "2026-04-03T00:10:00.000Z",
+        inode: 0,
+        rows: [],
+        errorCode: null,
+      }),
+    });
+
+    assert.equal(res.eventsAggregated, 0);
+    assert.equal(res.bucketsQueued, 0);
+    assert.equal(res.sqliteStatus, "missing-db");
+    assert.equal(res.sqliteCheckedAt, "2026-04-03T00:10:00.000Z");
+    assert.equal(res.sqliteErrorCode, null);
+    assert.equal(cursors.opencodeSqlite.lastStatus, "missing-db");
+    assert.equal(cursors.opencodeSqlite.lastCheckedAt, "2026-04-03T00:10:00.000Z");
+    assert.equal(cursors.opencodeSqlite.lastErrorCode, null);
+
+    const queued = await readJsonLines(queuePath);
+    assert.equal(queued.length, 0);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("parseOpencodeIncremental persists missing sqlite3 health without buckets", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibescore-opencode-sqlite-missing-cli-"));
+  try {
+    const queuePath = path.join(tmp, "queue.jsonl");
+    const cursors = { version: 1, files: {}, updatedAt: null };
+
+    const res = await parseOpencodeIncremental({
+      messageFiles: [],
+      opencodeDbPath: path.join(tmp, "opencode.db"),
+      cursors,
+      queuePath,
+      readSqliteRows: async () => ({
+        status: "missing-sqlite3",
+        checkedAt: "2026-04-03T00:20:00.000Z",
+        inode: 7,
+        rows: [],
+        errorCode: "ENOENT",
+      }),
+    });
+
+    assert.equal(res.eventsAggregated, 0);
+    assert.equal(res.bucketsQueued, 0);
+    assert.equal(res.sqliteStatus, "missing-sqlite3");
+    assert.equal(res.sqliteCheckedAt, "2026-04-03T00:20:00.000Z");
+    assert.equal(res.sqliteErrorCode, "ENOENT");
+    assert.equal(cursors.opencodeSqlite.lastStatus, "missing-sqlite3");
+    assert.equal(cursors.opencodeSqlite.lastCheckedAt, "2026-04-03T00:20:00.000Z");
+    assert.equal(cursors.opencodeSqlite.lastErrorCode, "ENOENT");
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("parseOpencodeIncremental persists sqlite query failures without buckets", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibescore-opencode-sqlite-query-fail-"));
+  try {
+    const queuePath = path.join(tmp, "queue.jsonl");
+    const cursors = { version: 1, files: {}, updatedAt: null };
+
+    const res = await parseOpencodeIncremental({
+      messageFiles: [],
+      opencodeDbPath: path.join(tmp, "opencode.db"),
+      cursors,
+      queuePath,
+      readSqliteRows: async () => ({
+        status: "query-failed",
+        checkedAt: "2026-04-03T00:30:00.000Z",
+        inode: 9,
+        rows: [],
+        errorCode: "SQLITE_CORRUPT",
+      }),
+    });
+
+    assert.equal(res.eventsAggregated, 0);
+    assert.equal(res.bucketsQueued, 0);
+    assert.equal(res.sqliteStatus, "query-failed");
+    assert.equal(res.sqliteCheckedAt, "2026-04-03T00:30:00.000Z");
+    assert.equal(res.sqliteErrorCode, "SQLITE_CORRUPT");
+    assert.equal(cursors.opencodeSqlite.lastStatus, "query-failed");
+    assert.equal(cursors.opencodeSqlite.lastCheckedAt, "2026-04-03T00:30:00.000Z");
+    assert.equal(cursors.opencodeSqlite.lastErrorCode, "SQLITE_CORRUPT");
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("parseOpencodeIncremental resolves sqlite project usage from project worktree", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibescore-opencode-sqlite-project-"));
+  try {
+    const repoRoot = path.join(tmp, "repo");
+    await fs.mkdir(path.join(repoRoot, ".git"), { recursive: true });
+    await fs.writeFile(
+      path.join(repoRoot, ".git", "config"),
+      `[remote "origin"]\n\turl = https://github.com/acme/alpha.git\n`,
+      "utf8",
+    );
+
+    const queuePath = path.join(tmp, "queue.jsonl");
+    const projectQueuePath = path.join(tmp, "project.queue.jsonl");
+    const cursors = { version: 1, files: {}, updatedAt: null };
+
+    const res = await parseOpencodeIncremental({
+      messageFiles: [],
+      opencodeDbPath: path.join(tmp, "opencode.db"),
+      cursors,
+      queuePath,
+      projectQueuePath,
+      publicRepoResolver: async ({ projectRef }) => ({
+        status: "public_verified",
+        projectKey: "acme/alpha",
+        projectRef,
+      }),
+      readSqliteRows: async () => ({
+        status: "ok",
+        checkedAt: "2026-04-03T00:40:00.000Z",
+        inode: 7,
+        rows: [
+          {
+            id: "msg_sqlite_project",
+            session_id: "ses_sqlite_project",
+            role: "assistant",
+            time_created: Date.parse("2025-12-29T10:15:00.000Z"),
+            project_worktree: repoRoot,
+            data: JSON.stringify(
+              buildOpencodeMessage({
+                modelID: "gpt-5",
+                created: "2025-12-29T10:14:00.000Z",
+                completed: "2025-12-29T10:15:00.000Z",
+                tokens: { input: 4, output: 1, reasoning: 0, cached: 0 },
+              }),
+            ),
+          },
+        ],
+      }),
+    });
+
+    assert.equal(res.eventsAggregated, 1);
+    assert.equal(res.projectBucketsQueued, 1);
+
+    const projectQueued = await readJsonLines(projectQueuePath);
+    assert.equal(projectQueued.length, 1);
+    assert.equal(projectQueued[0].project_key, "acme/alpha");
+    assert.equal(projectQueued[0].project_ref, "https://github.com/acme/alpha");
+    assert.equal(projectQueued[0].source, "opencode");
+    assert.equal(projectQueued[0].total_tokens, 5);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("parseRolloutIncremental handles Every Code token_count envelope", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibescore-rollout-"));
   try {

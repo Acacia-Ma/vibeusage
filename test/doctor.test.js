@@ -293,6 +293,67 @@ test("doctor does not migrate legacy tracker directory", async () => {
   }
 });
 
+test("doctor includes opencode sqlite support check", async () => {
+  const report = await buildDoctorReport({
+    runtime: { baseUrl: "https://example", deviceToken: "token" },
+    fetch: async () => ({ status: 200 }),
+    diagnostics: {
+      notify: {},
+      upload: { last_error: null },
+      opencode: {
+        sqlite_status: "ok",
+        sqlite_db_present: true,
+      },
+    },
+  });
+
+  const check = report.checks.find((entry) => entry.id === "opencode.sqlite_support");
+  assert.ok(check);
+  assert.equal(check.status, "ok");
+});
+
+test("doctor warns when opencode sqlite has never been checked or db is missing", async () => {
+  for (const sqliteStatus of ["never_checked", "missing-db"]) {
+    const report = await buildDoctorReport({
+      runtime: { baseUrl: "https://example", deviceToken: "token" },
+      fetch: async () => ({ status: 200 }),
+      diagnostics: {
+        notify: {},
+        upload: { last_error: null },
+        opencode: {
+          sqlite_status: sqliteStatus,
+          sqlite_db_present: sqliteStatus !== "missing-db",
+        },
+      },
+    });
+
+    const check = report.checks.find((entry) => entry.id === "opencode.sqlite_support");
+    assert.equal(check.status, "warn");
+  }
+});
+
+test("doctor fails opencode sqlite support without marking it critical", async () => {
+  for (const sqliteStatus of ["missing-sqlite3", "query-failed"]) {
+    const report = await buildDoctorReport({
+      runtime: { baseUrl: "https://example", deviceToken: "token" },
+      fetch: async () => ({ status: 200 }),
+      diagnostics: {
+        notify: {},
+        upload: { last_error: null },
+        opencode: {
+          sqlite_status: sqliteStatus,
+          sqlite_db_present: true,
+        },
+      },
+    });
+
+    const check = report.checks.find((entry) => entry.id === "opencode.sqlite_support");
+    assert.equal(check.status, "fail");
+    assert.equal(check.critical, false);
+    assert.equal(report.summary.critical, 0);
+  }
+});
+
 function createWriteCapture() {
   let out = "";
   return {

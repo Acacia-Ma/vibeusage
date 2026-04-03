@@ -15,6 +15,21 @@
 - Cold regression step:
 - Synthetic acceptance:
 
+## 2026-04-03-release-0.3.1
+
+- Date: 2026-04-03
+- Scope: CLI patch release prep for current `main` (`vibeusage@0.3.1`), carrying OpenCode SQLite support finalization plus the InsForge SDK baseline bump to `1.2.2`
+- Change ID: N/A (release)
+- CI workflow run: N/A (not pushed in this turn)
+- Release workflow run: N/A (not pushed in this turn)
+- Preflight: `npm run ci:local` (pass); `node --test test/sync-opencode-sqlite.test.js test/rollout-parser.test.js test/diagnostics.test.js test/status.test.js test/doctor.test.js test/opencode-usage-audit.test.js` (pass); `node scripts/acceptance/npm-install-smoke.cjs` (pass)
+- npm publish: pending via GitHub Actions `release.yml` after pushing `main` (local `npm whoami` blocked with `401 Unauthorized`)
+- Vercel check: skipped (no dashboard changes in this release prep)
+- MCP deploy: skipped (no function changes in this release prep)
+- Freeze artifact: local CLI package version `vibeusage@0.3.1` from current `main`
+- Cold regression step: `npm run ci:local`
+- Synthetic acceptance: `node scripts/acceptance/npm-install-smoke.cjs`; after publish `VIBEUSAGE_RUN_NPX=1 node scripts/acceptance/npm-install-smoke.cjs`
+
 ## 2026-04-02-release-0.3.0
 
 - Date: 2026-04-02

@@ -1,6 +1,6 @@
 {
   "name": "vibeusage",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Codex CLI token usage tracker (macOS-first, notify-driven).",
   "license": "MIT",
   "bin": {
@@ -41,7 +41,7 @@
     "validate:ui-hardcode": "node scripts/ops/validate-ui-hardcode.cjs"
   },
   "dependencies": {
-    "@insforge/sdk": "^1.0.4"
+    "@insforge/sdk": "1.2.2"
   },
   "devDependencies": {
     "@sourcegraph/scip-typescript": "^0.3.6",

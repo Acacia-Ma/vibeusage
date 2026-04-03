@@ -6,6 +6,7 @@ import {
 } from "../insforge-client";
 
 const TOKEN_STORAGE_KEY = "vibeusage.insforge.session.v1.insforge-auth-token";
+const USER_STORAGE_KEY = "vibeusage.insforge.session.v1.insforge-auth-user";
 
 function createMemoryStorage(): Storage {
   const store = new Map<string, string>();
@@ -94,44 +95,73 @@ describe("createPersistentStorage", () => {
 });
 
 describe("installSessionPersistenceBridge", () => {
-  it("forces storage mode and saves returned session", async () => {
-    const session = { accessToken: "token-123", user: { id: "u1" } };
-    const tokenManager = {
-      setStorageMode: vi.fn(),
-      saveSession: vi.fn(),
-    };
-    const auth = {
-      getCurrentSession: vi.fn(async () => ({ data: { session }, error: null })),
-    };
-    const client = { auth, tokenManager };
-
-    installSessionPersistenceBridge(client);
-    await client.auth.getCurrentSession();
-
-    expect(tokenManager.setStorageMode).toHaveBeenCalledTimes(1);
-    expect(tokenManager.saveSession).toHaveBeenCalledWith(session);
+  beforeEach(() => {
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: createMemoryStorage(),
+    });
+    Object.defineProperty(window, "sessionStorage", {
+      configurable: true,
+      value: createMemoryStorage(),
+    });
   });
 
-  it("installs only once", async () => {
+  it("persists token-manager sessions into storage", () => {
     const session = { accessToken: "token-123", user: { id: "u1" } };
+    const originalSaveSession = vi.fn();
     const tokenManager = {
-      setStorageMode: vi.fn(),
-      saveSession: vi.fn(),
+      saveSession: originalSaveSession,
+      getSession: vi.fn(() => null),
+      clearSession: vi.fn(),
     };
-    const originalGetCurrentSession = vi.fn(async () => ({
-      data: { session },
-      error: null,
-    }));
-    const auth = { getCurrentSession: originalGetCurrentSession };
-    const client = { auth, tokenManager };
+    const client = { tokenManager };
+
+    installSessionPersistenceBridge(client);
+    client.tokenManager.saveSession(session);
+
+    expect(originalSaveSession).toHaveBeenCalledWith(session);
+    expect(createPersistentStorage().getItem("insforge-auth-token")).toBe("token-123");
+    expect(window.localStorage.getItem(USER_STORAGE_KEY)).toBe(JSON.stringify({ id: "u1" }));
+  });
+
+  it("hydrates token manager from persisted storage when memory is empty", () => {
+    const session = { accessToken: "token-123", user: { id: "u1" } };
+    const storage = createPersistentStorage();
+    storage.setItem("insforge-auth-token", session.accessToken);
+    storage.setItem("insforge-auth-user", JSON.stringify(session.user));
+
+    const originalSaveSession = vi.fn();
+    const tokenManager = {
+      saveSession: originalSaveSession,
+      getSession: vi.fn(() => null),
+      clearSession: vi.fn(),
+    };
+    const client = { tokenManager };
+
+    installSessionPersistenceBridge(client);
+    originalSaveSession.mockClear();
+    const restored = client.tokenManager.getSession();
+
+    expect(originalSaveSession).toHaveBeenCalledTimes(1);
+    expect(originalSaveSession).toHaveBeenCalledWith(session);
+    expect(restored).toEqual(session);
+  });
+
+  it("installs only once", () => {
+    const session = { accessToken: "token-123", user: { id: "u1" } };
+    const originalSaveSession = vi.fn();
+    const tokenManager = {
+      saveSession: originalSaveSession,
+      getSession: vi.fn(() => null),
+      clearSession: vi.fn(),
+    };
+    const client = { tokenManager };
 
     installSessionPersistenceBridge(client);
     installSessionPersistenceBridge(client);
+    client.tokenManager.saveSession(session);
 
-    await client.auth.getCurrentSession();
-
-    expect(originalGetCurrentSession).toHaveBeenCalledTimes(1);
-    expect(tokenManager.saveSession).toHaveBeenCalledTimes(1);
+    expect(originalSaveSession).toHaveBeenCalledTimes(1);
   });
 });
 

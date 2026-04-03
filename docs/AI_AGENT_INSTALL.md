@@ -3,12 +3,18 @@
 ## 概述
 VibeUsage 是一个 AI Token 用量追踪工具，支持 Codex CLI、Claude Code、Gemini CLI、OpenCode 和 OpenClaw 等多种 AI 客户端。
 
+> 说明
+> 当前 OpenCode 版本的本地用量真源是 `~/.local/share/opencode/opencode.db`（可由 `OPENCODE_HOME` 覆盖），不是旧版 `storage/message/**/*.json`。要获得完整 OpenCode 支持，系统里需要可执行的 `sqlite3`。
+
 ## 安装步骤（请按顺序执行）
 
 ### 步骤 1: 检查环境
 ```bash
 # 检查 Node.js 版本（需要 18+）
 node --version
+
+# OpenCode 用户额外检查 sqlite3（完整支持需要）
+sqlite3 --version
 
 # 如果 Node.js 版本低于 18，请先升级
 # macOS/Linux: nvm install 18 && nvm use 18
@@ -56,7 +62,7 @@ VibeUsage 会自动检测并配置以下客户端：
 | Codex CLI | ~/.codex/config.toml |
 | Every Code | ~/.code/config.toml |
 | Gemini CLI | ~/.gemini/settings.json |
-| OpenCode | 全局插件 |
+| OpenCode | 全局插件 + 本地 SQLite |
 | Claude Code | ~/.claude/settings.json |
 | OpenClaw | Session plugin |
 
@@ -89,6 +95,9 @@ vibeusage uninstall --purge
 
 ### 问题: 同步失败
 解决: 检查网络连接，或运行 `vibeusage sync --debug` 查看详细日志
+
+### 问题: OpenCode 用量不完整
+解决: 先运行 `vibeusage status --diagnostics` 或 `vibeusage doctor`，确认 `opencode.sqlite_status` / `OpenCode SQLite reader`。如果状态是 `missing-sqlite3`，请先安装 `sqlite3`；如果状态是 `query-failed`，请保留 `vibeusage sync --debug` 输出继续排查。
 
 ### 问题: 某些客户端未配置
 解决: 手动运行 `vibeusage init` 会重新检测并配置所有支持的客户端；只读命令不会自动修复旧 hook 布局
