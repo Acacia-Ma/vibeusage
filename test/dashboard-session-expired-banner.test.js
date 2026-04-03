@@ -26,12 +26,13 @@ test("App does not use legacy auth hook", () => {
   assert.doesNotMatch(src, /useLegacyAuth/);
 });
 
-test("main wires InsForge hosted auth routes", () => {
+test("main avoids InsForge react-router provider restore", () => {
   const src = read("dashboard/src/main.jsx");
-  assert.match(src, /@insforge\/react-router/);
-  assert.match(src, /getInsforgeRoutes/);
-  assert.match(src, /getInsforgeBaseUrl/);
-  assert.match(src, /afterSignInUrl/);
+  assert.doesNotMatch(src, /@insforge\/react-router/);
+  assert.doesNotMatch(src, /InsforgeProvider/);
+  assert.doesNotMatch(src, /getInsforgeRoutes/);
+  assert.match(src, /createBrowserRouter/);
+  assert.match(src, /RouterProvider/);
 });
 
 test("insforge auth client wrapper uses base url and anon key", () => {
@@ -62,15 +63,17 @@ test("App routes LandingPage when signed out", () => {
   assert.match(src, /gate\s*===\s*["']landing["']/);
 });
 
-test("App uses InsForge auth hook for signed-in gating", () => {
+test("App uses repo-owned hosted auth state for signed-in gating", () => {
   const src = read("dashboard/src/App.jsx");
-  assert.match(src, /@insforge\/react-router/);
-  assert.match(src, /useInsforgeAuth/);
+  assert.doesNotMatch(src, /@insforge\/react-router/);
+  assert.doesNotMatch(src, /useInsforgeAuth/);
+  assert.match(src, /const \[insforgeLoaded, setInsforgeLoaded\] = useState\(false\)/);
+  assert.match(src, /insforgeAuthClient\.auth\.signOut\(\)/);
 });
 
 test("App derives signedIn from InsForge session state", () => {
   const src = read("dashboard/src/App.jsx");
-  assert.match(src, /const signedIn\s*=\s*useInsforge\s*&&\s*hasInsforgeSession/);
+  assert.match(src, /const signedIn\s*=\s*hasInsforgeSession/);
   assert.doesNotMatch(src, /hasInsforgeIdentity/);
 });
 
@@ -149,13 +152,13 @@ test("vibeusage-api resolves access token providers", () => {
 
 test("App avoids legacy auth fallback before InsForge is ready", () => {
   const src = read("dashboard/src/App.jsx");
-  assert.match(src, /insforgeLoaded\s*&&\s*insforgeSignedIn/);
+  assert.match(src, /const authPending[\s\S]*!insforgeLoaded \|\| insforgeSession === undefined/);
 });
 
 test("App clears stale InsForge storage after hosted auth resolves signed out", () => {
   const src = read("dashboard/src/App.jsx");
   assert.match(src, /if \(!insforgeLoaded\) return;/);
-  assert.match(src, /if \(insforgeSignedIn \|\| hasInsforgeSession\) return;/);
+  assert.match(src, /if \(hasInsforgeSession\) return;/);
   assert.match(src, /clearInsforgePersistentStorage\(\)/);
   assert.match(src, /clearAuthStorage\(\)/);
   assert.match(src, /clearSessionExpired\(\)/);
