@@ -218,3 +218,123 @@ test("status reports Claude hooks unsupported_legacy when only SessionEnd is con
     await fs.rm(tmp, { recursive: true, force: true });
   }
 });
+
+test("status prints healthy opencode sqlite lines", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-status-opencode-ok-"));
+  const prevHome = process.env.HOME;
+  const prevCodexHome = process.env.CODEX_HOME;
+  const prevOpencodeHome = process.env.OPENCODE_HOME;
+  const prevWrite = process.stdout.write;
+
+  try {
+    process.env.HOME = tmp;
+    process.env.CODEX_HOME = path.join(tmp, ".codex");
+    process.env.OPENCODE_HOME = path.join(tmp, ".opencode");
+
+    const trackerDir = path.join(tmp, ".vibeusage", "tracker");
+    await fs.mkdir(trackerDir, { recursive: true });
+    await fs.mkdir(process.env.CODEX_HOME, { recursive: true });
+    await fs.mkdir(process.env.OPENCODE_HOME, { recursive: true });
+    await fs.writeFile(path.join(process.env.OPENCODE_HOME, "opencode.db"), "", "utf8");
+
+    await fs.writeFile(
+      path.join(process.env.CODEX_HOME, "config.toml"),
+      'notify = ["/usr/bin/env", "node", "~/.vibeusage/bin/notify.cjs"]\n',
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(trackerDir, "cursors.json"),
+      JSON.stringify({
+        updatedAt: "2026-04-03T00:00:00.000Z",
+        opencodeSqlite: {
+          updatedAt: "2026-04-03T00:02:00.000Z",
+          lastStatus: "ok",
+          lastCheckedAt: "2026-04-03T00:03:00.000Z",
+          lastErrorCode: null,
+        },
+      }) + "\n",
+      "utf8",
+    );
+
+    let out = "";
+    process.stdout.write = (chunk, enc, cb) => {
+      out += typeof chunk === "string" ? chunk : chunk.toString(enc || "utf8");
+      if (typeof cb === "function") cb();
+      return true;
+    };
+
+    await cmdStatus();
+
+    assert.match(out, /- OpenCode SQLite DB: present/);
+    assert.match(out, /- OpenCode SQLite reader: ok/);
+  } finally {
+    process.stdout.write = prevWrite;
+    if (prevHome === undefined) delete process.env.HOME;
+    else process.env.HOME = prevHome;
+    if (prevCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = prevCodexHome;
+    if (prevOpencodeHome === undefined) delete process.env.OPENCODE_HOME;
+    else process.env.OPENCODE_HOME = prevOpencodeHome;
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("status prints degraded opencode sqlite lines", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-status-opencode-degraded-"));
+  const prevHome = process.env.HOME;
+  const prevCodexHome = process.env.CODEX_HOME;
+  const prevOpencodeHome = process.env.OPENCODE_HOME;
+  const prevWrite = process.stdout.write;
+
+  try {
+    process.env.HOME = tmp;
+    process.env.CODEX_HOME = path.join(tmp, ".codex");
+    process.env.OPENCODE_HOME = path.join(tmp, ".opencode");
+
+    const trackerDir = path.join(tmp, ".vibeusage", "tracker");
+    await fs.mkdir(trackerDir, { recursive: true });
+    await fs.mkdir(process.env.CODEX_HOME, { recursive: true });
+    await fs.mkdir(process.env.OPENCODE_HOME, { recursive: true });
+    await fs.writeFile(path.join(process.env.OPENCODE_HOME, "opencode.db"), "", "utf8");
+
+    await fs.writeFile(
+      path.join(process.env.CODEX_HOME, "config.toml"),
+      'notify = ["/usr/bin/env", "node", "~/.vibeusage/bin/notify.cjs"]\n',
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(trackerDir, "cursors.json"),
+      JSON.stringify({
+        updatedAt: "2026-04-03T00:00:00.000Z",
+        opencodeSqlite: {
+          updatedAt: "2026-04-03T00:02:00.000Z",
+          lastStatus: "missing-sqlite3",
+          lastCheckedAt: "2026-04-03T00:03:00.000Z",
+          lastErrorCode: "ENOENT",
+        },
+      }) + "\n",
+      "utf8",
+    );
+
+    let out = "";
+    process.stdout.write = (chunk, enc, cb) => {
+      out += typeof chunk === "string" ? chunk : chunk.toString(enc || "utf8");
+      if (typeof cb === "function") cb();
+      return true;
+    };
+
+    await cmdStatus();
+
+    assert.match(out, /- OpenCode SQLite DB: present/);
+    assert.match(out, /- OpenCode SQLite reader: missing-sqlite3/);
+  } finally {
+    process.stdout.write = prevWrite;
+    if (prevHome === undefined) delete process.env.HOME;
+    else process.env.HOME = prevHome;
+    if (prevCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = prevCodexHome;
+    if (prevOpencodeHome === undefined) delete process.env.OPENCODE_HOME;
+    else process.env.OPENCODE_HOME = prevOpencodeHome;
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});

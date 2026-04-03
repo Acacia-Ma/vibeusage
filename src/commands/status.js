@@ -28,6 +28,9 @@ async function cmdStatus(argv = []) {
   const throttlePath = path.join(trackerDir, "sync.throttle");
   const uploadThrottlePath = path.join(trackerDir, "upload.throttle.json");
   const autoRetryPath = path.join(trackerDir, "auto.retry.json");
+  const xdgDataHome = process.env.XDG_DATA_HOME || path.join(home, ".local", "share");
+  const opencodeHome = process.env.OPENCODE_HOME || path.join(xdgDataHome, "opencode");
+  const opencodeDbPath = path.join(opencodeHome, "opencode.db");
 
   const config = await readJson(configPath);
   const cursors = await readJson(cursorsPath);
@@ -79,6 +82,15 @@ async function cmdStatus(argv = []) {
   const opencodeProbe = probeByName.get("opencode");
   const openclawSessionProbe = probeByName.get("openclaw-session");
   const openclawLegacyProbe = probeByName.get("openclaw-legacy");
+  const opencodeDbPresent = Boolean((await safeStat(opencodeDbPath))?.isFile?.());
+  const opencodeSqliteState =
+    cursors?.opencodeSqlite && typeof cursors.opencodeSqlite === "object"
+      ? cursors.opencodeSqlite
+      : {};
+  const opencodeSqliteReader =
+    typeof opencodeSqliteState.lastStatus === "string" && opencodeSqliteState.lastStatus.trim()
+      ? opencodeSqliteState.lastStatus.trim()
+      : "never_checked";
 
   process.stdout.write(
     [
@@ -100,6 +112,8 @@ async function cmdStatus(argv = []) {
       `- Claude hooks: ${renderIntegrationStatus(descriptors.get("claude"), claudeProbe)}`,
       `- Gemini hooks: ${renderIntegrationStatus(descriptors.get("gemini"), geminiProbe)}`,
       `- Opencode plugin: ${renderIntegrationStatus(descriptors.get("opencode"), opencodeProbe)}`,
+      `- OpenCode SQLite DB: ${opencodeDbPresent ? "present" : "missing"}`,
+      `- OpenCode SQLite reader: ${opencodeSqliteReader}`,
       `- OpenClaw session plugin: ${renderIntegrationStatus(
         descriptors.get("openclaw-session"),
         openclawSessionProbe,
@@ -178,6 +192,14 @@ async function safeStatSize(p) {
     return st.size || 0;
   } catch (_e) {
     return 0;
+  }
+}
+
+async function safeStat(p) {
+  try {
+    return await fs.stat(p);
+  } catch (_e) {
+    return null;
   }
 }
 

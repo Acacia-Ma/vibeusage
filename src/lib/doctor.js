@@ -334,6 +334,29 @@ function buildDiagnosticsChecks(diagnostics) {
     meta: { last_error: uploadError ? uploadError.message || null : null },
   });
 
+  const opencode = diagnostics?.opencode || {};
+  const sqliteStatus =
+    typeof opencode.sqlite_status === "string" && opencode.sqlite_status.trim()
+      ? opencode.sqlite_status.trim()
+      : "never_checked";
+  let opencodeStatus = "warn";
+  if (sqliteStatus === "ok") opencodeStatus = "ok";
+  else if (sqliteStatus === "missing-sqlite3" || sqliteStatus === "query-failed") {
+    opencodeStatus = "fail";
+  }
+  checks.push({
+    id: "opencode.sqlite_support",
+    status: opencodeStatus,
+    detail: `OpenCode SQLite reader ${sqliteStatus}`,
+    critical: false,
+    meta: {
+      sqlite_status: sqliteStatus,
+      sqlite_db_present: Boolean(opencode.sqlite_db_present),
+      sqlite_last_checked_at: opencode.sqlite_last_checked_at || null,
+      sqlite_error_code: opencode.sqlite_error_code || null,
+    },
+  });
+
   return checks;
 }
 

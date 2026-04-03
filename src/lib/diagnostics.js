@@ -11,6 +11,10 @@ async function collectTrackerDiagnostics({
   codexHome = process.env.CODEX_HOME || path.join(home, ".codex"),
   codeHome = process.env.CODE_HOME || path.join(home, ".code"),
 } = {}) {
+  const xdgDataHome = process.env.XDG_DATA_HOME || path.join(home, ".local", "share");
+  const opencodeHome = process.env.OPENCODE_HOME || path.join(xdgDataHome, "opencode");
+  const opencodeStorageDir = path.join(opencodeHome, "storage");
+  const opencodeDbPath = path.join(opencodeHome, "opencode.db");
   const integrationContext = await createIntegrationContext({
     home,
     env: {
@@ -39,6 +43,9 @@ async function collectTrackerDiagnostics({
   const autoRetry = await readJson(autoRetryPath);
   const probes = await probeIntegrations(integrationContext);
   const probeByName = new Map(probes.map((probe) => [probe.name, probe]));
+  const opencodeSqliteCursor =
+    cursors?.opencodeSqlite && typeof cursors.opencodeSqlite === "object" ? cursors.opencodeSqlite : {};
+  const opencodeDbStat = await safeStat(opencodeDbPath);
 
   const queueSize = await safeStatSize(queuePath);
   const offsetBytes = Number(queueState.offset || 0);
@@ -105,6 +112,25 @@ async function collectTrackerDiagnostics({
       offset_bytes: offsetBytes,
       pending_bytes: pendingBytes,
       updated_at: typeof queueState.updatedAt === "string" ? queueState.updatedAt : null,
+    },
+    opencode: {
+      storage_dir: redactValue(opencodeStorageDir, home),
+      db_path: redactValue(opencodeDbPath, home),
+      sqlite_db_present: Boolean(opencodeDbStat?.isFile?.()),
+      sqlite_status:
+        typeof opencodeSqliteCursor.lastStatus === "string" && opencodeSqliteCursor.lastStatus.trim()
+          ? opencodeSqliteCursor.lastStatus.trim()
+          : "never_checked",
+      sqlite_last_checked_at:
+        typeof opencodeSqliteCursor.lastCheckedAt === "string"
+          ? opencodeSqliteCursor.lastCheckedAt
+          : null,
+      sqlite_cursor_updated_at:
+        typeof opencodeSqliteCursor.updatedAt === "string" ? opencodeSqliteCursor.updatedAt : null,
+      sqlite_error_code:
+        typeof opencodeSqliteCursor.lastErrorCode === "string"
+          ? opencodeSqliteCursor.lastErrorCode
+          : null,
     },
     notify: {
       last_notify: lastNotify,
@@ -183,6 +209,14 @@ async function safeStatSize(p) {
     return st && st.isFile() ? st.size : 0;
   } catch (_e) {
     return 0;
+  }
+}
+
+async function safeStat(p) {
+  try {
+    return await fs.stat(p);
+  } catch (_e) {
+    return null;
   }
 }
 

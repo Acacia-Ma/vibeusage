@@ -195,3 +195,112 @@ test("diagnostics preserves OpenClaw linked and enabled flags from integration p
 
   await fs.rm(tmp, { recursive: true, force: true });
 });
+
+test("diagnostics exposes redacted opencode sqlite health", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-diagnostics-opencode-"));
+  const prevHome = process.env.HOME;
+  const prevCodexHome = process.env.CODEX_HOME;
+  const prevOpencodeHome = process.env.OPENCODE_HOME;
+
+  try {
+    process.env.HOME = tmp;
+    process.env.CODEX_HOME = path.join(tmp, ".codex");
+    process.env.OPENCODE_HOME = path.join(tmp, ".opencode");
+
+    const trackerDir = path.join(tmp, ".vibeusage", "tracker");
+    await fs.mkdir(trackerDir, { recursive: true });
+    await fs.mkdir(process.env.CODEX_HOME, { recursive: true });
+    await fs.mkdir(process.env.OPENCODE_HOME, { recursive: true });
+    await fs.writeFile(path.join(process.env.OPENCODE_HOME, "opencode.db"), "", "utf8");
+    await fs.writeFile(
+      path.join(trackerDir, "cursors.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          files: {},
+          updatedAt: "2026-04-03T00:00:00.000Z",
+          opencodeSqlite: {
+            inode: 7,
+            updatedAt: "2026-04-03T00:00:00.000Z",
+            lastStatus: "missing-sqlite3",
+            lastCheckedAt: "2026-04-03T00:01:00.000Z",
+            lastErrorCode: "ENOENT",
+          },
+        },
+        null,
+        2,
+      ) + "\n",
+      "utf8",
+    );
+
+    const diagnostics = await collectTrackerDiagnostics({ home: tmp });
+    assert.equal(diagnostics.opencode.sqlite_db_present, true);
+    assert.equal(diagnostics.opencode.sqlite_status, "missing-sqlite3");
+    assert.equal(diagnostics.opencode.sqlite_last_checked_at, "2026-04-03T00:01:00.000Z");
+    assert.equal(diagnostics.opencode.sqlite_cursor_updated_at, "2026-04-03T00:00:00.000Z");
+    assert.equal(diagnostics.opencode.sqlite_error_code, "ENOENT");
+    assert.ok(String(diagnostics.opencode.storage_dir).startsWith("~"));
+    assert.ok(String(diagnostics.opencode.db_path).startsWith("~"));
+    assert.ok(!JSON.stringify(diagnostics).includes(tmp));
+  } finally {
+    if (prevHome === undefined) delete process.env.HOME;
+    else process.env.HOME = prevHome;
+    if (prevCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = prevCodexHome;
+    if (prevOpencodeHome === undefined) delete process.env.OPENCODE_HOME;
+    else process.env.OPENCODE_HOME = prevOpencodeHome;
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("diagnostics reports healthy opencode sqlite state", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-diagnostics-opencode-ok-"));
+  const prevHome = process.env.HOME;
+  const prevCodexHome = process.env.CODEX_HOME;
+  const prevOpencodeHome = process.env.OPENCODE_HOME;
+
+  try {
+    process.env.HOME = tmp;
+    process.env.CODEX_HOME = path.join(tmp, ".codex");
+    process.env.OPENCODE_HOME = path.join(tmp, ".opencode");
+
+    const trackerDir = path.join(tmp, ".vibeusage", "tracker");
+    await fs.mkdir(trackerDir, { recursive: true });
+    await fs.mkdir(process.env.CODEX_HOME, { recursive: true });
+    await fs.mkdir(process.env.OPENCODE_HOME, { recursive: true });
+    await fs.writeFile(path.join(process.env.OPENCODE_HOME, "opencode.db"), "", "utf8");
+    await fs.writeFile(
+      path.join(trackerDir, "cursors.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          files: {},
+          updatedAt: "2026-04-03T00:00:00.000Z",
+          opencodeSqlite: {
+            inode: 7,
+            updatedAt: "2026-04-03T00:00:00.000Z",
+            lastStatus: "ok",
+            lastCheckedAt: "2026-04-03T00:01:00.000Z",
+            lastErrorCode: null,
+          },
+        },
+        null,
+        2,
+      ) + "\n",
+      "utf8",
+    );
+
+    const diagnostics = await collectTrackerDiagnostics({ home: tmp });
+    assert.equal(diagnostics.opencode.sqlite_db_present, true);
+    assert.equal(diagnostics.opencode.sqlite_status, "ok");
+    assert.equal(diagnostics.opencode.sqlite_error_code, null);
+  } finally {
+    if (prevHome === undefined) delete process.env.HOME;
+    else process.env.HOME = prevHome;
+    if (prevCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = prevCodexHome;
+    if (prevOpencodeHome === undefined) delete process.env.OPENCODE_HOME;
+    else process.env.OPENCODE_HOME = prevOpencodeHome;
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
