@@ -67,19 +67,22 @@ This document is the single source of truth for repository navigation. Use it to
 ### Dashboard
 
 - Start here for web UI work:
-  - `dashboard/src/App.jsx`
   - `dashboard/src/main.jsx`
+  - `dashboard/src/App.jsx`
   - `dashboard/src/pages/`
   - `dashboard/src/hooks/`
   - `dashboard/src/ui/matrix-a/components/`
 - Auth/session integration first-read path:
-  - `dashboard/src/lib/insforge-client.ts`
-  - `dashboard/src/lib/insforge-auth-client.ts`
-  - `dashboard/src/lib/vibeusage-api.ts`
+  - `dashboard/src/main.jsx`
   - `dashboard/src/App.jsx`
+  - `dashboard/src/lib/insforge-auth-client.ts`
+  - `dashboard/src/lib/insforge-client.ts`
+  - `dashboard/src/lib/vibeusage-api.ts`
 - Dashboard InsForge session contract:
-  - SDK session persistence is repository-owned and wraps the SDK token manager.
-  - Official refresh/state primitives currently used by local code are `auth.refreshSession()` and `auth.getCurrentUser()`.
+  - Hosted-auth restore is repository-owned and runs directly on `@insforge/sdk`; the dashboard does not use `@insforge/react` / `@insforge/react-router` as a runtime restore layer.
+  - SDK session persistence and runtime session store are repository-owned and wrap the SDK token manager; `App.jsx` subscribes to that store instead of caching its own session truth.
+  - Official refresh/state primitives currently used by local code are `auth.refreshSession()`, `auth.getCurrentUser()`, and `auth.signOut()`.
+  - OAuth redirect entrypoints stay repository-owned, while PKCE callback exchange continues to run inside the SDK client.
 - Copy and content source of truth:
   - `dashboard/src/content/copy.csv`
 - Public web assets:

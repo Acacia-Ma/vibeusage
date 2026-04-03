@@ -10,31 +10,27 @@ const authStorage = vi.hoisted(() => ({
   markSessionSoftExpired: vi.fn(),
 }));
 
-const authClient = vi.hoisted(() => ({
-  auth: {
-    getCurrentSession: vi.fn(async () => ({ data: { session: null } })),
-  },
+const authState = vi.hoisted(() => ({
+  session: null as any,
 }));
+
+const getCurrentInsforgeSession = vi.hoisted(() => vi.fn(async () => authState.session));
+const refreshInsforgeSession = vi.hoisted(() => vi.fn(async () => authState.session));
 
 vi.mock("../insforge-client", () => ({
   createInsforgeClient: vi.fn(() => ({
     getHttpClient: () => http,
   })),
-  createInsforgeAuthClient: vi.fn(() => ({ auth: {} })),
 }));
 
 vi.mock("../auth-storage", () => authStorage);
 
 vi.mock("../insforge-auth-client", () => ({
-  insforgeAuthClient: authClient,
-  getCurrentInsforgeSession: vi.fn(async () => {
-    const { data } = await authClient.auth.getCurrentSession();
-    return data?.session ?? null;
-  }),
-  refreshInsforgeSession: vi.fn(async () => {
-    const { data } = await authClient.auth.getCurrentSession();
-    return data?.session ?? null;
-  }),
+  insforgeAuthClient: {
+    auth: {},
+  },
+  getCurrentInsforgeSession,
+  refreshInsforgeSession,
 }));
 
 vi.mock("../auth-token", () => ({
@@ -62,8 +58,11 @@ beforeEach(() => {
   http.get.mockResolvedValue({ data: {} });
   authStorage.clearSessionSoftExpired.mockReset();
   authStorage.markSessionSoftExpired.mockReset();
-  authClient.auth.getCurrentSession.mockReset();
-  authClient.auth.getCurrentSession.mockResolvedValue({ data: { session: null } });
+  authState.session = null;
+  getCurrentInsforgeSession.mockReset();
+  refreshInsforgeSession.mockReset();
+  getCurrentInsforgeSession.mockImplementation(async () => authState.session);
+  refreshInsforgeSession.mockImplementation(async () => authState.session);
 });
 
 describe("getUsageSummary", () => {
@@ -242,14 +241,10 @@ describe("error normalization", () => {
       .mockResolvedValueOnce({
         entries: [{ project_key: "octo/hello" }],
       });
-    authClient.auth.getCurrentSession.mockResolvedValueOnce({
-      data: {
-        session: {
-          accessToken: refreshedJwtToken,
-          user: { id: "user-1" },
-        },
-      },
-    });
+    authState.session = {
+      accessToken: refreshedJwtToken,
+      user: { id: "user-1" },
+    };
 
     await expect(
       api.getProjectUsageSummary({
@@ -263,7 +258,7 @@ describe("error normalization", () => {
       entries: [{ project_key: "octo/hello" }],
     });
 
-    expect(authClient.auth.getCurrentSession).toHaveBeenCalledTimes(1);
+    expect(refreshInsforgeSession).toHaveBeenCalledTimes(1);
     expect(http.get).toHaveBeenCalledTimes(2);
     expect(authStorage.clearSessionSoftExpired).toHaveBeenCalledTimes(1);
     expect(authStorage.markSessionSoftExpired).not.toHaveBeenCalled();
@@ -291,7 +286,7 @@ describe("error normalization", () => {
       statusCode: 500,
     });
 
-    expect(authClient.auth.getCurrentSession).toHaveBeenCalledTimes(1);
+    expect(refreshInsforgeSession).toHaveBeenCalledTimes(1);
     expect(authStorage.markSessionSoftExpired).toHaveBeenCalledWith(jwtToken);
   });
 

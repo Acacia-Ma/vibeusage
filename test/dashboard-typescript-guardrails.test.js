@@ -86,13 +86,13 @@ test("insforge sdk baseline is pinned consistently across root and dashboard", a
 
   assert.equal(rootPkg.dependencies?.["@insforge/sdk"], "1.2.2");
   assert.equal(dashboardPkg.dependencies?.["@insforge/sdk"], "1.2.2");
-  assert.equal(dashboardPkg.dependencies?.["@insforge/react"], "1.1.8");
-  assert.equal(dashboardPkg.dependencies?.["@insforge/react-router"], "1.1.7");
+  assert.equal(dashboardPkg.dependencies?.["@insforge/react"], undefined);
+  assert.equal(dashboardPkg.dependencies?.["@insforge/react-router"], undefined);
 
   assert.equal(rootLock.packages?.["node_modules/@insforge/sdk"]?.version, "1.2.2");
   assert.equal(dashboardLock.packages?.["node_modules/@insforge/sdk"]?.version, "1.2.2");
-  assert.equal(dashboardLock.packages?.["node_modules/@insforge/react"]?.version, "1.1.8");
-  assert.equal(dashboardLock.packages?.["node_modules/@insforge/react-router"]?.version, "1.1.7");
+  assert.equal(dashboardLock.packages?.["node_modules/@insforge/react"], undefined);
+  assert.equal(dashboardLock.packages?.["node_modules/@insforge/react-router"], undefined);
 });
 
 test("eslint uses typescript parser", async () => {
