@@ -7,7 +7,7 @@ const {
 } = require("../shared/vibeusage-function-contract.cjs");
 
 async function signInWithPassword({ baseUrl, email, password }) {
-  const client = createInsforgeClient({ baseUrl });
+  const client = await createInsforgeClient({ baseUrl });
   const { data, error } = await client.auth.signInWithPassword({ email, password });
   if (error) throw normalizeSdkError(error, "Sign-in failed");
 
@@ -121,7 +121,7 @@ module.exports = {
 };
 
 async function invokeFunction({ baseUrl, accessToken, slug, method, body, errorPrefix }) {
-  const client = createInsforgeClient({ baseUrl, accessToken });
+  const client = await createInsforgeClient({ baseUrl, accessToken });
   const { data, error } = await client.functions.invoke(slug, { method, body });
   if (error) throw normalizeSdkError(error, errorPrefix);
   return data;

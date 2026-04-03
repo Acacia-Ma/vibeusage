@@ -3,7 +3,6 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { webcrypto } = require("node:crypto");
-const { createClient } = require("@insforge/sdk");
 const { logSlowQuery } = require("../insforge-src/shared/logging");
 const {
   getUsageMaxDays,
@@ -54,6 +53,15 @@ const usageResponse = require("../insforge-src/shared/core/usage-response");
 
 if (!globalThis.crypto) {
   globalThis.crypto = webcrypto;
+}
+
+let sdkPromise = null;
+
+async function loadInsforgeSdk() {
+  if (!sdkPromise) {
+    sdkPromise = import("@insforge/sdk");
+  }
+  return sdkPromise;
 }
 
 function createPricingEdgeClient({ aliasRows = [], profileRows = [], onQuery = null } = {}) {
@@ -1894,7 +1902,8 @@ test("project usage core builds aggregate and fallback queries through shared fi
   ]);
 });
 
-test("project usage core keeps insforge database instance binding intact", () => {
+test("project usage core keeps insforge database instance binding intact", async () => {
+  const { createClient } = await loadInsforgeSdk();
   const edgeClient = createClient({
     baseUrl: "https://example.com",
     edgeFunctionToken: "token-123",
