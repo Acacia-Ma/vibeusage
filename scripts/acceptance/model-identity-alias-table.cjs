@@ -2,10 +2,10 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { createClient } = require("@insforge/sdk");
 const { DEFAULT_INSFORGE_BASE_URL } = require("../../src/shared/runtime-defaults.cjs");
 
 async function main() {
+  const { createClient } = await import("@insforge/sdk");
   const baseUrl =
     process.env.VIBEUSAGE_INSFORGE_BASE_URL ||
     process.env.VIBESCORE_INSFORGE_BASE_URL ||

@@ -1,10 +1,11 @@
-import { createClient } from "@insforge/sdk";
+import { createClient, type AuthSession } from "@insforge/sdk";
 import { getInsforgeAnonKey, getInsforgeBaseUrl } from "./config";
 import { createTimeoutFetch } from "./http-timeout";
 
 // Storage key prefix for InsForge SDK session data
 const INSFORGE_STORAGE_KEY = "vibeusage.insforge.session.v1";
 const INSFORGE_TOKEN_KEY = "insforge-auth-token";
+const INSFORGE_USER_KEY = "insforge-auth-user";
 const TOKEN_ENVELOPE_VERSION = 1;
 const FALLBACK_TOKEN_TTL_MS = 6 * 60 * 60 * 1000;
 
@@ -14,29 +15,17 @@ type StoredTokenEnvelope = {
   expiresAt: number;
 };
 
-type InsforgeSessionLike = {
-  accessToken?: string | null;
-  user?: unknown;
-} | null;
-
-type GetCurrentSessionResult = {
-  data?: {
-    session?: InsforgeSessionLike;
-  };
-};
+type InsforgeSessionLike = AuthSession | null;
 
 type InsforgeTokenManagerLike = {
-  setStorageMode?: () => void;
-  saveSession?: (session: InsforgeSessionLike) => void;
+  saveSession?: (session: AuthSession) => void;
   getSession?: () => InsforgeSessionLike;
-};
-
-type InsforgeAuthLike = {
-  getCurrentSession?: (...args: unknown[]) => Promise<GetCurrentSessionResult>;
+  getAccessToken?: () => string | null;
+  clearSession?: () => void;
 };
 
 type InsforgeClientBridgeLike = {
-  auth?: InsforgeAuthLike;
+  tokenManager?: unknown;
   database?: {
     from?: (...args: any[]) => unknown;
     rpc?: (...args: any[]) => unknown;
@@ -336,10 +325,9 @@ export function createInsforgeClient({
     baseUrl,
     anonKey: anonKey || undefined,
     edgeFunctionToken: accessToken || undefined,
-    storage: createPersistentStorage(),
     fetch: timeoutFetch,
   });
-  bindDatabaseMethods(client);
+  bindDatabaseMethods(client as unknown as InsforgeClientBridgeLike);
   return client;
 }
 
@@ -347,16 +335,17 @@ export function createInsforgeAuthClient() {
   const baseUrl = getInsforgeBaseUrl();
   if (!baseUrl) throw new Error("Missing baseUrl");
   const anonKey = getInsforgeAnonKey();
+  const timeoutFetch = createTimeoutFetch(globalThis.fetch) as unknown as typeof fetch;
   const client = createClient({
     baseUrl,
     anonKey: anonKey || undefined,
-    // Use persistent storage for auth client to survive page reloads
-    // This is critical for mobile browsers where memory is frequently cleared
-    storage: createPersistentStorage(),
+    fetch: timeoutFetch,
+    autoRefreshToken: true,
   });
-  bindDatabaseMethods(client);
-  forceStorageMode(client);
-  installSessionPersistenceBridge(client);
+  const bridgedClient = client as unknown as InsforgeClientBridgeLike;
+  bindDatabaseMethods(bridgedClient);
+  forceStorageMode(bridgedClient);
+  installSessionPersistenceBridge(bridgedClient);
   return client;
 }
 
@@ -364,43 +353,107 @@ export function persistInsforgeSession(
   client: InsforgeClientBridgeLike,
   session: InsforgeSessionLike,
 ) {
-  if (!session?.accessToken) return;
+  if (!session?.accessToken || !session.user) return;
   const tokenManager = getTokenManager(client);
   if (!tokenManager || typeof tokenManager.saveSession !== "function") return;
-  if (typeof tokenManager.setStorageMode === "function") {
-    tokenManager.setStorageMode();
-  }
   tokenManager.saveSession(session);
 }
 
-export function installSessionPersistenceBridge(client: InsforgeClientBridgeLike) {
-  const auth = client?.auth;
-  if (!auth || typeof auth.getCurrentSession !== "function") return;
+function parsePersistedUser(raw: string | null): AuthSession["user"] | null {
+  if (typeof raw !== "string" || raw.length === 0) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    if (typeof (parsed as { id?: unknown }).id !== "string") return null;
+    return parsed as AuthSession["user"];
+  } catch (_e) {
+    return null;
+  }
+}
 
-  const marker = "__vibeusage_session_bridge_installed_v1__";
+function persistSessionToStorage(
+  storage: ReturnType<typeof createPersistentStorage>,
+  session: InsforgeSessionLike,
+) {
+  if (!session?.accessToken || !session.user) {
+    storage.removeItem(INSFORGE_TOKEN_KEY);
+    storage.removeItem(INSFORGE_USER_KEY);
+    return;
+  }
+  storage.setItem(INSFORGE_TOKEN_KEY, session.accessToken);
+  storage.setItem(INSFORGE_USER_KEY, JSON.stringify(session.user));
+}
+
+function loadPersistedSession(
+  storage: ReturnType<typeof createPersistentStorage>,
+): InsforgeSessionLike {
+  const accessToken = storage.getItem(INSFORGE_TOKEN_KEY);
+  if (!accessToken) return null;
+  const user = parsePersistedUser(storage.getItem(INSFORGE_USER_KEY));
+  if (!user) {
+    storage.removeItem(INSFORGE_TOKEN_KEY);
+    storage.removeItem(INSFORGE_USER_KEY);
+    return null;
+  }
+  return { accessToken, user };
+}
+
+export function installSessionPersistenceBridge(client: InsforgeClientBridgeLike) {
+  const tokenManager = getTokenManager(client);
+  if (!tokenManager) return;
+
+  const marker = "__vibeusage_session_bridge_installed_v2__";
   const bridgeState = client as Record<string, unknown>;
   if (bridgeState[marker]) return;
 
-  const originalGetCurrentSession = auth.getCurrentSession.bind(auth);
-  auth.getCurrentSession = async (...args: unknown[]) => {
-    const result = await originalGetCurrentSession(...args);
-    persistInsforgeSession(client, result?.data?.session ?? null);
-    return result;
-  };
+  const storage = createPersistentStorage();
+  const originalSaveSession =
+    typeof tokenManager.saveSession === "function" ? tokenManager.saveSession.bind(tokenManager) : null;
+  const originalGetSession =
+    typeof tokenManager.getSession === "function" ? tokenManager.getSession.bind(tokenManager) : null;
+  const originalClearSession =
+    typeof tokenManager.clearSession === "function" ? tokenManager.clearSession.bind(tokenManager) : null;
+
+  if (originalSaveSession) {
+    tokenManager.saveSession = (session: AuthSession) => {
+      originalSaveSession(session);
+      persistSessionToStorage(storage, session);
+    };
+  }
+
+  if (originalGetSession) {
+    tokenManager.getSession = () => {
+      const inMemorySession = originalGetSession();
+      if (inMemorySession?.accessToken && inMemorySession.user) {
+        persistSessionToStorage(storage, inMemorySession);
+        return inMemorySession;
+      }
+      const persistedSession = loadPersistedSession(storage);
+      if (persistedSession && originalSaveSession) {
+        originalSaveSession(persistedSession);
+      }
+      return persistedSession;
+    };
+  }
+
+  if (originalClearSession) {
+    tokenManager.clearSession = () => {
+      originalClearSession();
+      persistSessionToStorage(storage, null);
+    };
+  }
 
   bridgeState[marker] = true;
+  tokenManager.getSession?.();
 }
 
 export function forceStorageMode(client: InsforgeClientBridgeLike) {
   try {
     const tokenManager = getTokenManager(client);
-    if (!tokenManager || typeof tokenManager.setStorageMode !== "function") {
+    if (!tokenManager || typeof tokenManager.getSession !== "function") {
       return;
     }
-    tokenManager.setStorageMode();
-    if (typeof tokenManager.getSession === "function") {
-      persistInsforgeSession(client, tokenManager.getSession());
-    }
+    tokenManager.getSession();
   } catch (_e) {
     // ignore SDK internals mismatch
   }
