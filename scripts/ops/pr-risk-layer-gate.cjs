@@ -112,6 +112,10 @@ function getCheckedLabels(section) {
     .map((match) => match[2].trim());
 }
 
+function countCheckedItems(section) {
+  return getCheckedLabels(section).length;
+}
+
 function validateRequiredSection(tree, requirement, config, errors) {
   const section = findSection(tree, requirement.heading);
   if (!section) {
@@ -123,9 +127,16 @@ function validateRequiredSection(tree, requirement, config, errors) {
     const joined = section.contentLines.join("\n");
     for (const expected of requirement.requiredStrings) {
       if (!joined.includes(expected)) {
-        errors.push(
-          `Section "${requirement.heading}" must include: ${expected}`,
-        );
+        errors.push(`Section "${requirement.heading}" must include: ${expected}`);
+      }
+    }
+  }
+
+  if (requirement.requiredChildHeadings) {
+    const childHeadings = new Set((section.children || []).map((child) => child.heading));
+    for (const expected of requirement.requiredChildHeadings) {
+      if (!childHeadings.has(expected)) {
+        errors.push(`Section "${requirement.heading}" must include subsection: ${expected}`);
       }
     }
   }
@@ -145,6 +156,27 @@ function validateRequiredSection(tree, requirement, config, errors) {
       errors.push(
         `Section "${requirement.heading}" must include at least ${requirement.minListItems} list item(s).`,
       );
+    }
+  }
+
+  if (requirement.minCheckedItems) {
+    const checkedItems = countCheckedItems(section);
+    if (checkedItems < requirement.minCheckedItems) {
+      errors.push(
+        `Section "${requirement.heading}" must include at least ${requirement.minCheckedItems} checked item(s).`,
+      );
+    }
+  }
+
+  if (requirement.requiredChildSections) {
+    for (const childRequirement of requirement.requiredChildSections) {
+      const childSection = (section.children || []).find((child) => child.heading === childRequirement.heading);
+      if (!childSection) {
+        errors.push(`Section "${requirement.heading}" must include subsection: ${childRequirement.heading}`);
+        continue;
+      }
+      const syntheticTree = { heading: section.heading, children: [childSection] };
+      validateRequiredSection(syntheticTree, childRequirement, config, errors);
     }
   }
 }
@@ -190,23 +222,87 @@ function loadBodyFromEvent(eventFile) {
   return null;
 }
 
-function resolveBody(args) {
-  if (Object.prototype.hasOwnProperty.call(args, "body")) return args.body;
-  if (args.bodyFile) return loadBodyFromFile(args.bodyFile);
+function loadEventPayload(eventFile) {
+  if (!eventFile || !fs.existsSync(eventFile)) return null;
+  return JSON.parse(fs.readFileSync(eventFile, "utf8"));
+}
 
-  const eventFile = args.eventFile || process.env.GITHUB_EVENT_PATH;
-  if (eventFile && fs.existsSync(eventFile)) {
+function getPullRequestContext({ args = {}, env = process.env, eventPayload = null } = {}) {
+  const payload = eventPayload || loadEventPayload(args.eventFile || env.GITHUB_EVENT_PATH);
+  const repo = env.GITHUB_REPOSITORY || payload?.repository?.full_name || null;
+  const prNumber = payload?.pull_request?.number || payload?.issue?.number || null;
+  return { repo, prNumber, eventPayload: payload };
+}
+
+async function loadBodyFromGitHubApi({ repo, prNumber, token, fetchImpl = global.fetch } = {}) {
+  if (!repo || !prNumber || !token || typeof fetchImpl !== "function") {
+    return null;
+  }
+
+  const response = await fetchImpl(`https://api.github.com/repos/${repo}/pulls/${prNumber}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "User-Agent": "vibeusage-pr-risk-layer-gate",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub API request failed with status ${response.status}`);
+  }
+
+  const payload = await response.json();
+  return Object.prototype.hasOwnProperty.call(payload, "body") ? (payload.body ?? "") : null;
+}
+
+async function resolveBody(args, options = {}) {
+  const env = options.env || process.env;
+  if (Object.prototype.hasOwnProperty.call(args, "body")) {
+    return args.body;
+  }
+  if (args.bodyFile) {
+    return loadBodyFromFile(args.bodyFile);
+  }
+
+  const eventFile = args.eventFile || env.GITHUB_EVENT_PATH;
+  const { repo, prNumber, eventPayload } = getPullRequestContext({ args: { eventFile }, env });
+  const diagnostics = options.diagnostics || [];
+
+  if (repo && prNumber && env.GITHUB_TOKEN) {
+    try {
+      const liveBody = await loadBodyFromGitHubApi({
+        repo,
+        prNumber,
+        token: env.GITHUB_TOKEN,
+        fetchImpl: options.fetchImpl || global.fetch,
+      });
+      if (liveBody !== null && liveBody !== undefined) {
+        diagnostics.push(`body_source=github-api repo=${repo} pr=${prNumber}`);
+        return liveBody;
+      }
+    } catch (error) {
+      diagnostics.push(`body_source=github-api-failed repo=${repo} pr=${prNumber} error=${error.message}`);
+    }
+  }
+
+  if (eventPayload) {
     const body = loadBodyFromEvent(eventFile);
-    if (body !== null && body !== undefined) return body;
+    if (body !== null && body !== undefined) {
+      diagnostics.push(`body_source=event-payload${repo && prNumber ? ` repo=${repo} pr=${prNumber}` : ""}`);
+      return body;
+    }
   }
 
   return null;
 }
 
-function main() {
+async function main() {
   const args = parseArgs(process.argv.slice(2));
   const config = args.config ? loadConfig(path.resolve(args.config)) : DEFAULT_CONFIG;
-  const body = resolveBody(args);
+  const diagnostics = [];
+  const body = await resolveBody(args, { diagnostics });
+
+  diagnostics.forEach((line) => console.log(`[pr-risk-layer] ${line}`));
 
   if (body === null || body === undefined) {
     if (args.requireBody) {
@@ -232,10 +328,16 @@ function main() {
 module.exports = {
   DEFAULT_CONFIG,
   evaluatePrBody,
+  getPullRequestContext,
   loadBodyFromEvent,
+  loadBodyFromGitHubApi,
   parseMarkdown,
+  resolveBody,
 };
 
 if (require.main === module) {
-  main();
+  main().catch((error) => {
+    console.error(`PR risk layer gate failed: ${error.message}`);
+    process.exit(1);
+  });
 }

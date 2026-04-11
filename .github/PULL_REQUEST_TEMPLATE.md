@@ -1,31 +1,52 @@
-# PR Goal (one sentence)
-
-## Scope
+# What does this PR do?
 
 -
 
-## Affected Modules / Dependency Notes
+## Related Issue
+
+Fixes #
+
+## Type of Change
+
+- [ ] Bug fix
+- [ ] Feature
+- [ ] Refactor
+- [ ] Docs
+- [ ] CI / workflow
+- [ ] Risk / contract change
+
+## Changes Made
+
+- 
+
+## Affected Modules / Contracts
 
 - **Modules touched:**
 - **Dependencies / contracts touched:**
 - **Repo sitemap evidence:** `updated` / `not required` / affected section(s)
 
-## Codex Context (required when requesting @codex review)
+## Validation
 
-- **Delta since last Codex review:** (commits or summary)
-- **Intended behavior / invariants:**
-- **Edge cases covered:**
-- **Tests run (command + result):**
-- **Known gaps / out of scope:**
+### Automated
 
-## Risk Layer Trigger (if any)
+- 
+
+### Manual / smoke
+
+- 
+
+### Uncovered scope
+
+- 
+
+## Risk Flags
 
 - [ ] Public exposure / share links / unauthenticated access
 - [ ] Auth/session/token handling
 - [ ] Cross-endpoint invariants or shared logic
 - [ ] External gateway / environment constraints
 
-## Risk Layer Addendum (fill ONLY if any trigger checked)
+## Risk Addendum (required if any risk flag is checked)
 
 ### Rules / Invariants
 
@@ -35,28 +56,24 @@
 
 -
 
-### Evidence (tests or repro)
+### Evidence
 
 -
 
-## Public Exposure Checklist (if applicable)
+## Public Exposure Addendum (required if public exposure is checked)
 
-- [ ] Public access rules defined (share token required, non-JWT handling, 401 behavior)
-- [ ] Exposed fields explicitly listed and verified
-- [ ] Avatar/image policy defined
-- [ ] Regression tests cover invalid link and auth fallback
-- [ ] Mark N/A if no public exposure
+- **Access rules:**
+- **Exposed fields:**
+- **Avatar / image policy:**
+- **Regression coverage:**
 
-## Regression Test Gate
+## Reviewer Context (optional)
 
-### Most likely regression surface
+- **Review focus:**
+- **Delta since last review:**
+- **Depends on:**
+- **Known gaps / follow-ups:**
 
--
+## Screenshots / Logs (optional)
 
-### Verification method (choose at least one)
-
-- [ ]
-
-### Uncovered scope
-
--
+- 

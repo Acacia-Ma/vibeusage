@@ -1,29 +1,53 @@
 {
   "placeholderValues": [
     "-",
+    "N/A",
     "**Modules touched:**",
     "**Dependencies / contracts touched:**",
-    "**Repo sitemap evidence:** `updated` / `not required` / affected section(s)"
+    "**Repo sitemap evidence:** `updated` / `not required` / affected section(s)",
+    "**Access rules:**",
+    "**Exposed fields:**",
+    "**Avatar / image policy:**",
+    "**Regression coverage:**"
   ],
   "requiredSections": [
     {
-      "heading": "Affected Modules / Dependency Notes",
+      "heading": "What does this PR do?",
+      "minContentLines": 1
+    },
+    {
+      "heading": "Type of Change",
+      "minCheckedItems": 1
+    },
+    {
+      "heading": "Changes Made",
+      "minListItems": 1
+    },
+    {
+      "heading": "Affected Modules / Contracts",
       "minContentLines": 3
     },
     {
-      "heading": "Codex Context (required when requesting @codex review)",
-      "requiredStrings": [
-        "**Delta since last Codex review:**",
-        "**Intended behavior / invariants:**",
-        "**Edge cases covered:**",
-        "**Tests run (command + result):**",
-        "**Known gaps / out of scope:**"
+      "heading": "Validation",
+      "requiredChildHeadings": [
+        "Automated",
+        "Manual / smoke",
+        "Uncovered scope"
+      ],
+      "requiredChildSections": [
+        { "heading": "Automated", "minContentLines": 1 },
+        { "heading": "Manual / smoke", "minContentLines": 1 },
+        { "heading": "Uncovered scope", "minContentLines": 1 }
       ]
+    },
+    {
+      "heading": "Risk Flags",
+      "minListItems": 4
     }
   ],
   "conditionalSections": [
     {
-      "triggerHeading": "Risk Layer Trigger (if any)",
+      "triggerHeading": "Risk Flags",
       "triggerLabels": [
         "Public exposure / share links / unauthenticated access",
         "Auth/session/token handling",
@@ -31,6 +55,9 @@
         "External gateway / environment constraints"
       ],
       "requiredSections": [
+        {
+          "heading": "Risk Addendum (required if any risk flag is checked)"
+        },
         {
           "heading": "Rules / Invariants",
           "minContentLines": 1
@@ -40,8 +67,26 @@
           "minListItems": 3
         },
         {
-          "heading": "Evidence (tests or repro)",
+          "heading": "Evidence",
           "minContentLines": 1
+        }
+      ]
+    },
+    {
+      "triggerHeading": "Risk Flags",
+      "triggerLabels": [
+        "Public exposure / share links / unauthenticated access"
+      ],
+      "requiredSections": [
+        {
+          "heading": "Public Exposure Addendum (required if public exposure is checked)",
+          "minContentLines": 4,
+          "requiredStrings": [
+            "**Access rules:**",
+            "**Exposed fields:**",
+            "**Avatar / image policy:**",
+            "**Regression coverage:**"
+          ]
         }
       ]
     }

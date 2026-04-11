@@ -73,9 +73,11 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 # PR 预检与风险层门禁
 
-- PR 模板必须填写 `Affected Modules / Dependency Notes` 与 `Codex Context`，跨模块变更需附 repo sitemap evidence（更新说明或受影响小节）。
-- 若 Risk Layer Trigger 勾选任一项，必须补全 Addendum（Rules/Invariants、Boundary Matrix ≥ 3、Evidence）。
-- CI 会执行 `node scripts/ops/pr-risk-layer-gate.cjs`；本地可用 `--body-file` 预检。
+- PR 模板必须填写 `Affected Modules / Contracts`、`Validation` 与 `Risk Flags`；跨模块变更需附 repo sitemap evidence（更新说明或受影响小节）。
+- 若 `Risk Flags` 勾选任一项，必须补全 `Risk Addendum`（`Rules / Invariants`、`Boundary Matrix ≥ 3`、`Evidence`）。
+- 若勾选 `Public exposure / share links / unauthenticated access`，必须补全 `Public Exposure Addendum`。
+- `Reviewer Context` 仅供 reviewer / AI 复审参考，不属于硬门禁。
+- CI 会执行 `node scripts/ops/pr-risk-layer-gate.cjs`；在 CI 中优先读取 live PR body，event payload 仅作为 fallback；本地可用 `--body-file` 预检。
 - 详细流程见 `docs/ops/pr-review-preflight.md`。
 
 # 工作流规则（Workflow）
