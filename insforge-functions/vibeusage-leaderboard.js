@@ -1706,11 +1706,12 @@ function resolveRankColumn(metric) {
 async function loadSnapshot({ serviceClient, period, metric, from, to, userId, limit, offset }) {
   const rankColumn = resolveRankColumn(metric);
   const countQuery = applyMetricFilter(
-    serviceClient.database.from("vibeusage_leaderboard_snapshots").select("user_id", { count: "exact" }).eq("period", period).eq("from_day", from).eq("to_day", to),
+    serviceClient.database.from("vibeusage_leaderboard_snapshots").select("user_id,generated_at", { count: "exact" }).eq("period", period).eq("from_day", from).eq("to_day", to),
     metric
   );
   const countRes = await countQuery.limit(1);
   if (countRes.error) return { ok: false };
+  const countRows = Array.isArray(countRes.data) ? countRes.data : [];
   const totalEntries = toSafeCount(countRes.count);
   const totalPages = totalEntries > 0 ? Math.ceil(totalEntries / Math.max(1, limit)) : 0;
   const entriesQuery = applyMetricFilter(
@@ -1737,8 +1738,19 @@ async function loadSnapshot({ serviceClient, period, metric, from, to, userId, l
     return { ...normalized, rank: resolvedRank };
   });
   const me = userId ? normalizeMetricMe(meRow, metric) : null;
-  const generatedAt = resolveGeneratedAt(entryRows, meRow);
-  if (entries.length === 0 && !meRow) return { ok: false };
+  const hasSnapshot = totalEntries > 0 || Boolean(meRow);
+  if (!hasSnapshot) return { ok: false };
+  const generatedAt = await resolveGeneratedAt({
+    serviceClient,
+    period,
+    metric,
+    from,
+    to,
+    rankColumn,
+    countRows,
+    entryRows,
+    meRow
+  });
   return {
     ok: true,
     total_entries: totalEntries,
@@ -1810,9 +1822,17 @@ async function loadActivePublicUserIds({ serviceClient, rows }) {
   if (error) return null;
   return new Set((data || []).map((row) => row?.user_id).filter(Boolean));
 }
-function resolveGeneratedAt(entryRows, meRow) {
-  const candidate = entryRows?.[0]?.generated_at || meRow?.generated_at;
-  return normalizeLeaderboardGeneratedAt2(candidate);
+async function resolveGeneratedAt({ serviceClient, period, metric, from, to, rankColumn, countRows, entryRows, meRow }) {
+  const candidate = entryRows?.[0]?.generated_at || meRow?.generated_at || countRows?.[0]?.generated_at;
+  const normalizedCandidate = normalizeLeaderboardGeneratedAt2(candidate);
+  if (normalizedCandidate) return normalizedCandidate;
+  const generatedAtQuery = applyMetricFilter(
+    serviceClient.database.from("vibeusage_leaderboard_snapshots").select("generated_at").eq("period", period).eq("from_day", from).eq("to_day", to),
+    metric
+  );
+  const { data, error } = await generatedAtQuery.order(rankColumn, { ascending: true }).order("user_id", { ascending: true }).limit(1);
+  if (error) return null;
+  return normalizeLeaderboardGeneratedAt2(data?.[0]?.generated_at);
 }
 function snapshotUnavailableResponse({ period, metric, from, to }) {
   return json2(

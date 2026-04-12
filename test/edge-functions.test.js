@@ -7951,6 +7951,7 @@ test("vibeusage-leaderboard supports offset pagination", async () => {
 
   const userId = "99999999-6666-6666-6666-666666666666";
   const userJwt = createUserJwt(userId);
+  const generatedAt = "2026-02-12T00:00:00.000Z";
 
   globalThis.createClient = createLeaderboardClientMock({
     userToken: userJwt,
@@ -7968,7 +7969,7 @@ test("vibeusage-leaderboard supports offset pagination", async () => {
         gpt_tokens: "1",
         claude_tokens: "1",
         total_tokens: "2",
-        generated_at: "2026-02-12T00:00:00.000Z",
+        generated_at: generatedAt,
       },
       {
         user_id: "00000000-0000-0000-0000-000000000011",
@@ -7982,7 +7983,7 @@ test("vibeusage-leaderboard supports offset pagination", async () => {
         gpt_tokens: "2",
         claude_tokens: "3",
         total_tokens: "5",
-        generated_at: "2026-02-12T00:00:00.000Z",
+        generated_at: generatedAt,
       },
       {
         user_id: "00000000-0000-0000-0000-000000000012",
@@ -7996,7 +7997,7 @@ test("vibeusage-leaderboard supports offset pagination", async () => {
         gpt_tokens: "4",
         claude_tokens: "1",
         total_tokens: "5",
-        generated_at: "2026-02-12T00:00:00.000Z",
+        generated_at: generatedAt,
       },
       {
         user_id: userId,
@@ -8010,7 +8011,7 @@ test("vibeusage-leaderboard supports offset pagination", async () => {
         gpt_tokens: "0",
         claude_tokens: "0",
         total_tokens: "0",
-        generated_at: "2026-02-12T00:00:00.000Z",
+        generated_at: generatedAt,
       },
     ],
     onEntriesRange(from, to) {
@@ -8033,6 +8034,7 @@ test("vibeusage-leaderboard supports offset pagination", async () => {
 
   assert.equal(body.period, "week");
   assert.equal(body.metric, "all");
+  assert.equal(body.generated_at, generatedAt);
   assert.ok(Array.isArray(body.entries));
   assert.equal(body.entries.length, 2);
   assert.equal(body.entries[0].rank, 2);
@@ -8044,6 +8046,76 @@ test("vibeusage-leaderboard supports offset pagination", async () => {
     other_tokens: "0",
     total_tokens: "0",
   });
+});
+
+test("vibeusage-leaderboard returns empty paginated snapshot pages as 200", async () => {
+  setDenoEnv({
+    INSFORGE_INTERNAL_URL: BASE_URL,
+    ANON_KEY,
+    INSFORGE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
+  });
+
+  const fn = await loadEdgeFunction("vibeusage-leaderboard");
+  const generatedAt = "2026-02-12T00:00:00.000Z";
+
+  globalThis.createClient = createLeaderboardClientMock({
+    userToken: "unused-token",
+    userId: "unused-user",
+    snapshotRows: [
+      {
+        user_id: "00000000-0000-0000-0000-000000000010",
+        rank: 1,
+        rank_gpt: 1,
+        rank_claude: 1,
+        rank_other: 1,
+        display_name: "Anonymous",
+        avatar_url: null,
+        is_public: false,
+        gpt_tokens: "1",
+        claude_tokens: "1",
+        total_tokens: "2",
+        generated_at: generatedAt,
+      },
+      {
+        user_id: "00000000-0000-0000-0000-000000000011",
+        rank: 2,
+        rank_gpt: 2,
+        rank_claude: 2,
+        rank_other: 2,
+        display_name: "Anonymous",
+        avatar_url: null,
+        is_public: false,
+        gpt_tokens: "2",
+        claude_tokens: "3",
+        total_tokens: "5",
+        generated_at: generatedAt,
+      },
+    ],
+    onEntriesRange(from, to) {
+      assert.equal(from, 4);
+      assert.equal(to, 5);
+    },
+  });
+
+  const req = new Request(
+    "http://localhost/functions/vibeusage-leaderboard?period=week&limit=2&offset=4",
+    { method: "GET" },
+  );
+
+  const res = await fn(req);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+
+  assert.equal(body.period, "week");
+  assert.equal(body.metric, "all");
+  assert.equal(body.generated_at, generatedAt);
+  assert.equal(body.page, 3);
+  assert.equal(body.limit, 2);
+  assert.equal(body.offset, 4);
+  assert.equal(body.total_entries, 2);
+  assert.equal(body.total_pages, 1);
+  assert.deepEqual(body.entries, []);
+  assert.equal(body.me, null);
 });
 
 test("vibeusage-leaderboard supports metric=Gpt", async () => {
