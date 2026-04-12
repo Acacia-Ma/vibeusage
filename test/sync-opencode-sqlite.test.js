@@ -4,7 +4,7 @@ const path = require("node:path");
 const fs = require("node:fs/promises");
 const { test } = require("node:test");
 
-test("sync passes opencode db path to parser even when message directory is empty", async () => {
+test("sync passes only opencode db path to parser without legacy message file discovery", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-sync-opencode-sqlite-"));
   const prevHome = process.env.HOME;
   const prevCodexHome = process.env.CODEX_HOME;
@@ -29,10 +29,14 @@ test("sync passes opencode db path to parser even when message directory is empt
   };
 
   let opencodeArgs = null;
+  let listedOpencodeMessageFiles = false;
   rollout.listRolloutFiles = async () => [];
   rollout.listClaudeProjectFiles = async () => [];
   rollout.listGeminiSessionFiles = async () => [];
-  rollout.listOpencodeMessageFiles = async () => [];
+  rollout.listOpencodeMessageFiles = async () => {
+    listedOpencodeMessageFiles = true;
+    return [];
+  };
   rollout.parseRolloutIncremental = async () => ({
     filesProcessed: 0,
     eventsAggregated: 0,
@@ -69,7 +73,8 @@ test("sync passes opencode db path to parser even when message directory is empt
     await cmdSync(["--auto"]);
 
     assert.ok(opencodeArgs, "expected sync to call parseOpencodeIncremental");
-    assert.deepEqual(opencodeArgs.messageFiles, []);
+    assert.equal(listedOpencodeMessageFiles, false);
+    assert.equal(Object.prototype.hasOwnProperty.call(opencodeArgs, "messageFiles"), false);
     assert.equal(opencodeArgs.opencodeDbPath, path.join(tmp, ".opencode", "opencode.db"));
     assert.equal(opencodeArgs.source, "opencode");
   } finally {

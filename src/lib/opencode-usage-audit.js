@@ -2,7 +2,7 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 
-const { listOpencodeMessageFiles, parseOpencodeIncremental } = require("./rollout");
+const { parseOpencodeIncremental } = require("./rollout");
 
 const BUCKET_SEPARATOR = "|";
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -31,7 +31,6 @@ function addTotals(target, delta) {
 }
 
 async function buildLocalHourlyTotals({ storageDir, source = "opencode" }) {
-  const messageFiles = await listOpencodeMessageFiles(storageDir);
   const opencodeDbPath = path.resolve(storageDir, "..", "opencode.db");
   const queuePath = path.join(
     os.tmpdir(),
@@ -39,7 +38,7 @@ async function buildLocalHourlyTotals({ storageDir, source = "opencode" }) {
   );
   const cursors = { version: 1, files: {}, hourly: null, opencode: null, opencodeSqlite: null };
 
-  await parseOpencodeIncremental({ messageFiles, opencodeDbPath, cursors, queuePath, source });
+  await parseOpencodeIncremental({ opencodeDbPath, cursors, queuePath, source });
   await fs.rm(queuePath, { force: true }).catch(() => {});
 
   const byHour = new Map();

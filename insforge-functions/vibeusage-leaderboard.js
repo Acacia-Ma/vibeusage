@@ -1628,99 +1628,36 @@ async function vibeusage_leaderboard_default(request) {
     anonKey: anonKey || serviceRoleKey,
     edgeFunctionToken: serviceRoleKey
   }) : null;
-  if (serviceClient) {
-    const snapshot = await loadSnapshot({
-      serviceClient,
-      period,
-      metric,
-      from,
-      to,
-      userId: viewerUserId,
-      limit,
-      offset
-    });
-    if (snapshot.ok) {
-      return json2(
-        {
-          period,
-          metric,
-          from,
-          to,
-          generated_at: snapshot.generated_at,
-          page,
-          limit,
-          offset,
-          total_entries: snapshot.total_entries,
-          total_pages: snapshot.total_pages,
-          entries: snapshot.entries,
-          me: snapshot.me
-        },
-        200
-      );
-    }
+  if (!serviceClient) {
+    return snapshotUnavailableResponse({ period, metric, from, to });
   }
-  const entriesView = metric === "all" ? `vibeusage_leaderboard_${period}_current` : `vibeusage_leaderboard_${metric}_${period}_current`;
-  const meView = metric === "all" ? `vibeusage_leaderboard_me_${period}_current` : `vibeusage_leaderboard_me_${metric}_${period}_current`;
-  const readClient = auth.ok ? auth.edgeClient : anonKey ? await createEdgeClient({
-    baseUrl,
-    anonKey,
-    edgeFunctionToken: anonKey
-  }) : null;
-  if (!readClient) return json2({ error: "Service unavailable" }, 503);
-  if (auth.ok) {
-    const singleQuery = await tryLoadSingleQuery({
-      edgeClient: auth.edgeClient,
-      entriesView,
-      limit,
-      offset
-    });
-    if (singleQuery) {
-      return json2(
-        {
-          period,
-          metric,
-          from,
-          to,
-          generated_at: (/* @__PURE__ */ new Date()).toISOString(),
-          page,
-          limit,
-          offset,
-          total_entries: null,
-          total_pages: null,
-          entries: singleQuery.entries,
-          me: singleQuery.me
-        },
-        200
-      );
-    }
+  const snapshot = await loadSnapshot({
+    serviceClient,
+    period,
+    metric,
+    from,
+    to,
+    userId: viewerUserId,
+    limit,
+    offset
+  });
+  if (!snapshot.ok) {
+    return snapshotUnavailableResponse({ period, metric, from, to });
   }
-  const { data: rawEntries, error: entriesErr } = await readClient.database.from(entriesView).select(
-    "user_id,rank,is_me,display_name,avatar_url,gpt_tokens,claude_tokens,other_tokens,total_tokens,is_public"
-  ).order("rank", { ascending: true }).range(offset, offset + limit - 1);
-  if (entriesErr) return json2({ error: entriesErr.message }, 500);
-  let rawMe = null;
-  if (viewerUserId) {
-    const meRes = await auth.edgeClient.database.from(meView).select("rank,gpt_tokens,claude_tokens,other_tokens,total_tokens").maybeSingle();
-    if (meRes.error) return json2({ error: meRes.error.message }, 500);
-    rawMe = meRes.data;
-  }
-  const publicUserSet = await loadActivePublicUserIds({ serviceClient, rows: rawEntries });
-  const entries = (rawEntries || []).slice(0, limit).map((row) => normalizeEntry(row, { userId: viewerUserId, publicUserSet }));
-  const me = viewerUserId ? normalizeMe(rawMe) : null;
   return json2(
     {
       period,
       metric,
       from,
       to,
-      generated_at: (/* @__PURE__ */ new Date()).toISOString(),
+      generated_at: snapshot.generated_at,
       page,
       limit,
       offset,
-      total_entries: null,
-      total_pages: null,
-      entries,
-      me
+      total_entries: snapshot.total_entries,
+      total_pages: snapshot.total_pages,
+      entries: snapshot.entries,
+      me: snapshot.me
     },
     200
   );
@@ -1759,27 +1696,6 @@ function applyMetricFilter(query, metric) {
   if (metric === "claude") return query.gt("claude_tokens", 0);
   if (metric === "other") return query.gt("other_tokens", 0);
   return query;
-}
-async function tryLoadSingleQuery({ edgeClient, entriesView, limit, offset }) {
-  try {
-    const startRank = offset + 1;
-    const endRank = offset + limit;
-    const { data, error } = await edgeClient.database.from(entriesView).select(
-      "rank,is_me,display_name,avatar_url,gpt_tokens,claude_tokens,other_tokens,total_tokens,is_public"
-    ).or(`and(rank.gte.${startRank},rank.lte.${endRank}),is_me.eq.true`).order("rank", { ascending: true });
-    if (error) return null;
-    const rows = Array.isArray(data) ? data : [];
-    const entries = [];
-    for (const row of rows) {
-      const rank = toPositiveInt2(row?.rank);
-      if (rank < startRank || rank > endRank) continue;
-      entries.push(normalizeEntry(row));
-    }
-    const meRow = rows.find((row) => Boolean(row?.is_me));
-    return { entries: entries.slice(0, limit), me: normalizeMe(meRow) };
-  } catch (_error) {
-    return null;
-  }
 }
 function resolveRankColumn(metric) {
   if (metric === "gpt") return "rank_gpt";
@@ -1877,20 +1793,6 @@ function normalizeEntry(row, options = {}) {
     is_public: isPublic
   };
 }
-function normalizeMe(row) {
-  const rank = toPositiveIntOrNull2(row?.rank);
-  const gptTokens = toBigInt2(row?.gpt_tokens);
-  const claudeTokens = toBigInt2(row?.claude_tokens);
-  const totalTokens = toBigInt2(row?.total_tokens);
-  const otherTokens = resolveLeaderboardOtherTokens2({ row, totalTokens, gptTokens, claudeTokens });
-  return {
-    rank,
-    gpt_tokens: gptTokens.toString(),
-    claude_tokens: claudeTokens.toString(),
-    other_tokens: otherTokens.toString(),
-    total_tokens: totalTokens.toString()
-  };
-}
 function resolveIsPublic({ rawUserId, publicUserSet }) {
   if (!(publicUserSet instanceof Set) || !rawUserId) return false;
   return publicUserSet.has(rawUserId);
@@ -1911,6 +1813,19 @@ async function loadActivePublicUserIds({ serviceClient, rows }) {
 function resolveGeneratedAt(entryRows, meRow) {
   const candidate = entryRows?.[0]?.generated_at || meRow?.generated_at;
   return normalizeLeaderboardGeneratedAt2(candidate);
+}
+function snapshotUnavailableResponse({ period, metric, from, to }) {
+  return json2(
+    {
+      error: "Leaderboard snapshot unavailable",
+      snapshot_status: "unavailable",
+      period,
+      metric,
+      from,
+      to
+    },
+    503
+  );
 }
 export {
   vibeusage_leaderboard_default as default

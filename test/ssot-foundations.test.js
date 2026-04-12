@@ -609,6 +609,20 @@ test("leaderboard profile initializes date core before leaderboard core", () => 
   );
 });
 
+test("leaderboard list read path remains snapshot-only", () => {
+  const content = read("insforge-src/functions-esm/vibeusage-leaderboard.js");
+  assert.doesNotMatch(content, /_current/);
+  assert.doesNotMatch(content, /tryLoadSingleQuery/);
+  assert.doesNotMatch(content, /generated_at:\s*new Date\(\)\.toISOString\(\)/);
+});
+
+test("opencode local accounting entrypoints remain sqlite-only", () => {
+  assert.doesNotMatch(read("src/commands/sync.js"), /listOpencodeMessageFiles/);
+  assert.doesNotMatch(read("src/commands/sync.js"), /messageFiles:\s*opencodeFiles/);
+  assert.doesNotMatch(read("src/lib/opencode-usage-audit.js"), /listOpencodeMessageFiles/);
+  assert.doesNotMatch(read("src/lib/opencode-usage-audit.js"), /messageFiles,/);
+});
+
 test("backend usage pricing semantics flow through shared cores", () => {
   const usagePricingCoreJs = read("insforge-src/shared/usage-pricing-core.js");
   const usagePricingCoreMjs = read("insforge-src/shared/usage-pricing-core.mjs");

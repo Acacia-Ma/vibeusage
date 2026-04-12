@@ -22,19 +22,42 @@ function buildMessage({ model = "gpt-4o", createdMs, completedMs, tokens }) {
   };
 }
 
+function createAuditSqliteFixture({ dbPath, messages }) {
+  const statements = [
+    "create table project (id text primary key, worktree text not null);",
+    "create table session (id text primary key, project_id text not null, time_created integer, data text);",
+    "create table message (id text primary key, session_id text not null, time_created integer, data text not null);",
+    "insert into project (id, worktree) values ('proj_1', '/tmp/example-project');",
+    "insert into session (id, project_id, time_created, data) values ('ses_1', 'proj_1', 1767003240000, '{}');",
+  ];
+  for (const [index, message] of messages.entries()) {
+    const messageId = `msg_${index + 1}`;
+    const payload = JSON.stringify({ ...message, id: messageId }).replace(/'/g, "''");
+    const timeCreated = Number(message?.time?.completed || message?.time?.created || 0);
+    statements.push(
+      `insert into message (id, session_id, time_created, data) values ('${messageId}', 'ses_1', ${timeCreated}, '${payload}');`,
+    );
+  }
+  cp.execFileSync("sqlite3", [dbPath, statements.join(" ")]);
+}
+
 test("auditOpencodeUsage reports mismatch when server totals differ", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-audit-"));
   try {
-    const messageDir = path.join(tmp, "message", "ses_1");
-    await fs.mkdir(messageDir, { recursive: true });
-    const messagePath = path.join(messageDir, "msg_1.json");
+    const storageDir = path.join(tmp, "storage");
+    await fs.mkdir(storageDir, { recursive: true });
+    const dbPath = path.join(tmp, "opencode.db");
 
-    const message = buildMessage({
-      createdMs: Date.parse("2025-12-29T10:14:00.000Z"),
-      completedMs: Date.parse("2025-12-29T10:15:00.000Z"),
-      tokens: { input: 4, output: 1, reasoning: 0, cached: 0 },
+    createAuditSqliteFixture({
+      dbPath,
+      messages: [
+        buildMessage({
+          createdMs: Date.parse("2025-12-29T10:14:00.000Z"),
+          completedMs: Date.parse("2025-12-29T10:15:00.000Z"),
+          tokens: { input: 4, output: 1, reasoning: 0, cached: 0 },
+        }),
+      ],
     });
-    await fs.writeFile(messagePath, JSON.stringify(message), "utf8");
 
     const fetchHourly = async () => ({
       day: "2025-12-29",
@@ -51,7 +74,7 @@ test("auditOpencodeUsage reports mismatch when server totals differ", async () =
     });
 
     const result = await auditOpencodeUsage({
-      storageDir: tmp,
+      storageDir,
       from: "2025-12-29",
       to: "2025-12-29",
       fetchHourly,
@@ -64,25 +87,28 @@ test("auditOpencodeUsage reports mismatch when server totals differ", async () =
   }
 });
 
-test("auditOpencodeUsage derives day range from local data", async () => {
+test("auditOpencodeUsage derives day range from local sqlite data", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-audit-"));
   try {
-    const messageDir = path.join(tmp, "message", "ses_1");
-    await fs.mkdir(messageDir, { recursive: true });
+    const storageDir = path.join(tmp, "storage");
+    await fs.mkdir(storageDir, { recursive: true });
+    const dbPath = path.join(tmp, "opencode.db");
 
-    const messageA = buildMessage({
-      createdMs: Date.parse("2025-12-30T10:14:00.000Z"),
-      completedMs: Date.parse("2025-12-30T10:15:00.000Z"),
-      tokens: { input: 4, output: 1, reasoning: 0, cached: 0 },
+    createAuditSqliteFixture({
+      dbPath,
+      messages: [
+        buildMessage({
+          createdMs: Date.parse("2025-12-30T10:14:00.000Z"),
+          completedMs: Date.parse("2025-12-30T10:15:00.000Z"),
+          tokens: { input: 4, output: 1, reasoning: 0, cached: 0 },
+        }),
+        buildMessage({
+          createdMs: Date.parse("2025-12-31T11:14:00.000Z"),
+          completedMs: Date.parse("2025-12-31T11:15:00.000Z"),
+          tokens: { input: 3, output: 2, reasoning: 1, cached: 0 },
+        }),
+      ],
     });
-    await fs.writeFile(path.join(messageDir, "msg_1.json"), JSON.stringify(messageA), "utf8");
-
-    const messageB = buildMessage({
-      createdMs: Date.parse("2025-12-31T11:14:00.000Z"),
-      completedMs: Date.parse("2025-12-31T11:15:00.000Z"),
-      tokens: { input: 3, output: 2, reasoning: 1, cached: 0 },
-    });
-    await fs.writeFile(path.join(messageDir, "msg_2.json"), JSON.stringify(messageB), "utf8");
 
     const days = [];
     const fetchHourly = async (day) => {
@@ -91,7 +117,7 @@ test("auditOpencodeUsage derives day range from local data", async () => {
     };
 
     const result = await auditOpencodeUsage({
-      storageDir: tmp,
+      storageDir,
       fetchHourly,
     });
 
@@ -153,16 +179,20 @@ test("runAuditCli honors OPENCODE_HOME when resolving storage", async () => {
 test("auditOpencodeUsage ignores missing hourly slots by default", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-audit-"));
   try {
-    const messageDir = path.join(tmp, "message", "ses_1");
-    await fs.mkdir(messageDir, { recursive: true });
-    const messagePath = path.join(messageDir, "msg_1.json");
+    const storageDir = path.join(tmp, "storage");
+    await fs.mkdir(storageDir, { recursive: true });
+    const dbPath = path.join(tmp, "opencode.db");
 
-    const message = buildMessage({
-      createdMs: Date.parse("2025-12-29T10:14:00.000Z"),
-      completedMs: Date.parse("2025-12-29T10:15:00.000Z"),
-      tokens: { input: 4, output: 1, reasoning: 0, cached: 0 },
+    createAuditSqliteFixture({
+      dbPath,
+      messages: [
+        buildMessage({
+          createdMs: Date.parse("2025-12-29T10:14:00.000Z"),
+          completedMs: Date.parse("2025-12-29T10:15:00.000Z"),
+          tokens: { input: 4, output: 1, reasoning: 0, cached: 0 },
+        }),
+      ],
     });
-    await fs.writeFile(messagePath, JSON.stringify(message), "utf8");
 
     const fetchHourly = async () => ({
       day: "2025-12-29",
@@ -180,7 +210,7 @@ test("auditOpencodeUsage ignores missing hourly slots by default", async () => {
     });
 
     const result = await auditOpencodeUsage({
-      storageDir: tmp,
+      storageDir,
       from: "2025-12-29",
       to: "2025-12-29",
       fetchHourly,
@@ -188,6 +218,36 @@ test("auditOpencodeUsage ignores missing hourly slots by default", async () => {
 
     assert.equal(result.summary.mismatched, 0);
     assert.equal(result.summary.incomplete, 1);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("auditOpencodeUsage ignores legacy storage files when sqlite db is missing", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-audit-no-sqlite-"));
+  try {
+    const storageDir = path.join(tmp, "storage");
+    const messageDir = path.join(storageDir, "message", "ses_1");
+    await fs.mkdir(messageDir, { recursive: true });
+    const messagePath = path.join(messageDir, "msg_1.json");
+
+    const message = buildMessage({
+      createdMs: Date.parse("2025-12-29T10:14:00.000Z"),
+      completedMs: Date.parse("2025-12-29T10:15:00.000Z"),
+      tokens: { input: 4, output: 1, reasoning: 0, cached: 0 },
+    });
+    await fs.writeFile(messagePath, JSON.stringify(message), "utf8");
+
+    await assert.rejects(
+      () =>
+        auditOpencodeUsage({
+          storageDir,
+          from: "2025-12-29",
+          to: "2025-12-29",
+          fetchHourly: async () => ({ day: "2025-12-29", data: [] }),
+        }),
+      /No local opencode data found/,
+    );
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }

@@ -86,7 +86,7 @@ This is useful when you want to copy an install command from the dashboard or le
 | **Every Code** | Auto-detected | `notify` hook | `~/.code/sessions/**/rollout-*.jsonl` |
 | **Claude Code** | Auto-detected | `Stop` + `SessionEnd` hooks | local hook output |
 | **Gemini CLI** | Auto-detected | `SessionEnd` hook | `~/.gemini/tmp/**/chats/session-*.json` |
-| **OpenCode** | Auto-detected | plugin + local parsing | `~/.local/share/opencode/opencode.db` (legacy message files are fallback only) |
+| **OpenCode** | Auto-detected | plugin + local parsing | `~/.local/share/opencode/opencode.db` (SQLite is the only supported local accounting source) |
 | **Hermes** | Auto-detected when installed | plugin + local parsing | `~/.vibeusage/tracker/hermes.usage.jsonl` |
 | **OpenClaw** | Auto-detected when installed | session plugin | local sanitized usage ledger |
 
@@ -273,7 +273,7 @@ npx vibeusage status
 npx vibeusage doctor
 ```
 
-If OpenCode support is incomplete, the most common issue is missing `sqlite3` on `PATH`, or a local SQLite query failure.
+VibeUsage reads OpenCode usage only from `opencode.db`, so the most common issues are missing `sqlite3` on `PATH`, a missing database file, or a local SQLite query failure.
 
 ### My OpenClaw usage is not showing up. What should I check?
 

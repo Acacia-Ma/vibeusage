@@ -82,7 +82,24 @@ export default async function (request) {
 
   if (snapshotErr)
     return json({ error: snapshotErr.message || "Failed to fetch leaderboard snapshot" }, 500);
-  if (!snapshot) return json({ error: "Not found" }, 404);
+  if (!snapshot) {
+    const { data: anySnapshot, error: anySnapshotErr } = await serviceClient.database
+      .from("vibeusage_leaderboard_snapshots")
+      .select("user_id")
+      .eq("period", period)
+      .eq("from_day", from)
+      .eq("to_day", to)
+      .limit(1)
+      .maybeSingle();
+
+    if (anySnapshotErr) {
+      return json({ error: anySnapshotErr.message || "Failed to resolve leaderboard snapshot state" }, 500);
+    }
+    if (!anySnapshot) {
+      return snapshotUnavailableResponse({ period, from, to });
+    }
+    return json({ error: "Not found" }, 404);
+  }
   if (!isSelf && snapshot.is_public !== true) return json({ error: "Not found" }, 404);
 
   return json(
@@ -129,4 +146,17 @@ function normalizeSnapshotEntry(row) {
     other_tokens: otherTokens.toString(),
     total_tokens: totalTokens.toString(),
   };
+}
+
+function snapshotUnavailableResponse({ period, from, to }) {
+  return json(
+    {
+      error: "Leaderboard snapshot unavailable",
+      snapshot_status: "unavailable",
+      period,
+      from,
+      to,
+    },
+    503,
+  );
 }
