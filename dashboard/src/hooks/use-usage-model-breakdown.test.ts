@@ -177,6 +177,7 @@ describe("useUsageModelBreakdown", () => {
           },
         ],
       },
+      fetchedAt: "2026-03-07T00:00:00.000Z",
     });
 
     let resolveBreakdown: ((value: any) => void) | null = null;
@@ -219,6 +220,8 @@ describe("useUsageModelBreakdown", () => {
     );
     expect(result.current.loading).toBe(false);
     expect(result.current.refreshing).toBe(true);
+    expect(result.current.source).toBe("edge");
+    expect(result.current.fetchedAt).toBe("2026-03-07T00:00:00.000Z");
 
     const nextBreakdown = { models: [{ label: "edge", value: "126" }] };
     await act(async () => {
@@ -264,6 +267,7 @@ describe("useUsageModelBreakdown", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.source).toBe("cache");
+    expect(result.current.fetchedAt).toBe("2026-03-07T00:00:00.000Z");
     expect(result.current.breakdown).toEqual({
       sources: [
         {

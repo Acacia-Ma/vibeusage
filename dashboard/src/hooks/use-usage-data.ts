@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isAccessTokenReady, resolveAuthAccessToken } from "../lib/auth-token";
 import {
   buildDashboardCacheKey,
@@ -39,6 +39,12 @@ export function useUsageData({
   const mockEnabled = isMockEnabled();
   const tokenReady = isAccessTokenReady(accessToken);
   const cacheAllowed = !guestAllowed;
+  const stableNow = useMemo(() => {
+    if (now instanceof Date && Number.isFinite(now.getTime())) {
+      return new Date(now.getTime());
+    }
+    return now;
+  }, [now instanceof Date && Number.isFinite(now.getTime()) ? now.getTime() : now]);
 
   const storageKey = buildDashboardCacheKey({
     scope: "usage",
@@ -151,7 +157,7 @@ export function useUsageData({
           setRolling(summaryRes?.rolling || null);
           setSource("edge");
           setLoading(false);
-          setRefreshing(false);
+          setRefreshing(includeDaily);
           setResolvedStorageKey(storageKey);
         }
         dailyRes = await dailyPromise;
@@ -173,7 +179,7 @@ export function useUsageData({
         nextDaily = fillDailyGaps(nextDaily, from, to, {
           timeZone,
           offsetMinutes: tzOffsetMinutes,
-          now,
+          now: stableNow,
         });
       }
       let nextSummary = summaryRes?.totals || dailyRes?.summary?.totals || null;
@@ -238,7 +244,7 @@ export function useUsageData({
             ? fillDailyGaps(cachedDaily, cached.from || from, cached.to || to, {
                 timeZone,
                 offsetMinutes: tzOffsetMinutes,
-                now,
+                now: stableNow,
               })
             : cachedDaily;
           setDaily(filledDaily);
@@ -272,7 +278,7 @@ export function useUsageData({
     mockEnabled,
     guestAllowed,
     cacheAllowed,
-    now,
+    stableNow,
     readCache,
     tokenReady,
     timeZone,
