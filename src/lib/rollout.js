@@ -413,8 +413,8 @@ async function parseOpencodeIncremental({
   let eventsAggregated = 0;
 
   const cb = typeof onProgress === "function" ? onProgress : null;
-  const files = Array.isArray(messageFiles) ? messageFiles : [];
-  const totalFiles = files.length;
+  const files = [];
+  const totalFiles = 0;
   const hourlyState = normalizeHourlyState(cursors?.hourly);
   const projectEnabled = typeof projectQueuePath === "string" && projectQueuePath.length > 0;
   const projectState = projectEnabled ? normalizeProjectState(cursors?.projectHourly) : null;

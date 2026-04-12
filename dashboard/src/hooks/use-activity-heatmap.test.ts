@@ -204,4 +204,39 @@ describe("useActivityHeatmap", () => {
     expect(result.current.loading).toBe(true);
     expect(result.current.heatmap).toEqual(previousHeatmap);
   });
+
+  it("uses cached heatmap only after backend failure and preserves fetchedAt", async () => {
+    dashboardCache.readDashboardCache.mockReturnValue({
+      heatmap: {
+        to: "2026-03-07",
+        week_starts_on: "sun",
+        weeks: [[{ day: "2026-03-07", value: 11, level: 1 }]],
+      },
+      daily: [{ day: "2026-03-07", total_tokens: "11" }],
+      fetchedAt: "2026-03-07T00:00:00.000Z",
+    });
+    vibeusageApi.getUsageHeatmap.mockRejectedValue(new Error("Backend unavailable"));
+
+    const { result } = renderHook(() =>
+      useActivityHeatmap({
+        baseUrl: "https://example.com",
+        accessToken: "token",
+        guestAllowed: false,
+        weeks: 1,
+        cacheKey: "user-1",
+        timeZone: "UTC",
+        tzOffsetMinutes: 0,
+        now: NOW,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.source).toBe("cache");
+    expect(result.current.fetchedAt).toBe("2026-03-07T00:00:00.000Z");
+    expect(result.current.heatmap).toEqual({
+      to: "2026-03-07",
+      week_starts_on: "sun",
+      weeks: [[{ day: "2026-03-07", value: 11, level: 1 }]],
+    });
+  });
 });

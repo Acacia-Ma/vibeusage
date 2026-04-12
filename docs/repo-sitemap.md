@@ -56,6 +56,9 @@ This document is the single source of truth for repository navigation. Use it to
   - sync pipeline: `src/commands/sync.js`, `src/lib/rollout.js`, `src/lib/hermes-usage-ledger.js`, `src/lib/opencode-sqlite.js`, `src/lib/upload.js`
   - local state/config: `src/lib/runtime-config.js`, `src/lib/tracker-paths.js`, `src/lib/fs.js`, `src/lib/hermes-config.js`
   - InsForge CLI wrappers and device-token flows: `src/lib/insforge-client.js`, `src/lib/vibeusage-api.js`
+- Sync/data-source contract:
+  - OpenCode local accounting is SQLite-only via `OPENCODE_HOME/opencode.db`; `storage/message/**` JSON files are no longer fallback truth for sync or audit.
+  - SQLite health surfaces through `src/commands/status.js`, `src/lib/diagnostics.js`, and `src/commands/doctor.js`; these paths should report reader health, not revive legacy message-file reads.
 - Hard-cut CLI integration contract:
   - `init` is the only supported command that mutates local AI CLI integration config.
   - `status`, `diagnostics`, `doctor`, and `sync` are read-only with respect to integration setup.
@@ -96,6 +99,10 @@ This document is the single source of truth for repository navigation. Use it to
   - Then read `dashboard/src/pages/DashboardPage.jsx` for summary-level fallback selection.
   - Then read `dashboard/src/ui/matrix-a/components/TopModelsPanel.jsx`, `NeuralAdaptiveFleet.jsx`, and `CostAnalysisModal.jsx` for final rendered text.
   - Browser-local cache helpers live in `dashboard/src/lib/dashboard-cache.ts` and `dashboard/src/lib/dashboard-live-snapshot.ts`.
+- Dashboard provenance contract:
+  - `edge` means successful backend truth, including immediate reuse of the last successful live snapshot while a refresh is in flight.
+  - `cache` means browser-local fallback only after the current backend refresh fails.
+  - `mock` means mock mode only; continuity helpers must not relabel cached or snapshot-backed data as mock.
 
 ### Edge Functions
 
@@ -111,6 +118,9 @@ This document is the single source of truth for repository navigation. Use it to
   - `insforge-src/shared/usage-pricing-core.mjs`
   - `insforge-src/shared/usage-metrics-core.js`
   - `insforge-src/shared/usage-metrics-core.mjs`
+- Leaderboard data-source contract:
+  - `insforge-src/functions-esm/vibeusage-leaderboard.js` and `insforge-src/functions-esm/vibeusage-leaderboard-profile.js` read only `vibeusage_leaderboard_snapshots`.
+  - Do not reintroduce `_current` fallback views or request-time synthetic `generated_at` values for leaderboard responses.
 - Usage summary and breakdown responses may expose both:
   - `model_id` as the canonical pricing and aggregation key
   - `display_model` as a response-only display field derived from `model_id` or `model`

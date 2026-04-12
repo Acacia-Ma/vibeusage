@@ -26,6 +26,7 @@ export function useUsageModelBreakdown({
   tzOffsetMinutes,
 }: any = {}) {
   const [breakdown, setBreakdown] = useState<any | null>(null);
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [source, setSource] = useState<string>("edge");
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -86,6 +87,7 @@ export function useUsageModelBreakdown({
   const applySnapshot = useCallback((snapshot: any) => {
     if (!snapshot) return;
     setBreakdown(normalizeBreakdown(snapshot.breakdown || null));
+    setFetchedAt(snapshot.fetchedAt || null);
     setSource("edge");
     setResolvedStorageKey(storageKey);
   }, [normalizeBreakdown, storageKey]);
@@ -93,6 +95,7 @@ export function useUsageModelBreakdown({
   const hasImmediateSnapshot =
     resolvedStorageKey !== storageKey && Boolean(storageKey) && Boolean(normalizedLiveSnapshot?.breakdown);
   const visibleBreakdown = hasImmediateSnapshot ? normalizedLiveSnapshot?.breakdown || null : breakdown;
+  const visibleFetchedAt = hasImmediateSnapshot ? normalizedLiveSnapshot?.fetchedAt || null : fetchedAt;
   const visibleSource = hasImmediateSnapshot ? "edge" : source;
   const visibleLoading = hasImmediateSnapshot ? false : loading;
   const visibleRefreshing = hasImmediateSnapshot ? true : refreshing;
@@ -128,14 +131,17 @@ export function useUsageModelBreakdown({
       });
       if (signal?.aborted) return;
       const normalized = normalizeBreakdown(res || null);
+      const nowIso = new Date().toISOString();
       setBreakdown(normalized);
+      setFetchedAt(nowIso);
       setSource("edge");
       setResolvedStorageKey(storageKey);
       writeDashboardLiveSnapshot("modelBreakdown", storageKey, {
         breakdown: normalized,
+        fetchedAt: nowIso,
       });
       if (normalized && cacheAllowed) {
-        writeCache({ breakdown: normalized, fetchedAt: new Date().toISOString() });
+        writeCache({ breakdown: normalized, fetchedAt: nowIso });
       } else if (!cacheAllowed) {
         clearCache();
       }
@@ -145,15 +151,18 @@ export function useUsageModelBreakdown({
         const cached = readCache();
         if (cached?.breakdown) {
           setBreakdown(normalizeBreakdown(cached.breakdown));
+          setFetchedAt(cached.fetchedAt || null);
           setSource("cache");
           setError(null);
           setResolvedStorageKey(storageKey);
         } else {
+          setFetchedAt(null);
           setSource("edge");
           const err = e as any;
           setError(err?.message || String(err));
         }
       } else {
+        setFetchedAt(null);
         setSource("edge");
         const err = e as any;
         setError(err?.message || String(err));
@@ -185,6 +194,7 @@ export function useUsageModelBreakdown({
   useEffect(() => {
     if (!tokenReady && !guestAllowed && !mockEnabled) {
       setBreakdown(null);
+      setFetchedAt(null);
       setSource("edge");
       setError(null);
       setLoading(false);
@@ -214,6 +224,7 @@ export function useUsageModelBreakdown({
   return {
     breakdown: visibleBreakdown,
     source: mockEnabled ? "mock" : visibleSource,
+    fetchedAt: visibleFetchedAt,
     loading: visibleLoading,
     refreshing: visibleRefreshing,
     error: visibleError,

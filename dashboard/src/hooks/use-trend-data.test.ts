@@ -269,6 +269,8 @@ describe("useTrendData", () => {
     );
     expect(result.current.loading).toBe(false);
     expect(result.current.refreshing).toBe(true);
+    expect(result.current.source).toBe("edge");
+    expect(result.current.fetchedAt).toBe("2026-03-07T00:00:00.000Z");
 
     await act(async () => {
       resolveDaily?.({
