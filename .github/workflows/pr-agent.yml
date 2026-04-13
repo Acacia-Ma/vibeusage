@@ -20,6 +20,8 @@ jobs:
         uses: qodo-ai/pr-agent@v0.34
         env:
           OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
+          OPENAI.API_BASE: "https://api.gptproto.com/v1"
+          config.model: "gpt-5.4"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           pr_reviewer.extra_instructions: >-
             Respond in Simplified Chinese. Prioritize correctness, regressions,
