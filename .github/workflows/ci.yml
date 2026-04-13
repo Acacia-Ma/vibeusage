@@ -36,6 +36,8 @@ jobs:
         run: npm run validate:guardrails
       - name: Validate PR risk layer
         if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm run validate:pr-risk-layer
       - name: Guardrail tests
         run: node --test test/architecture-guardrails.test.js
