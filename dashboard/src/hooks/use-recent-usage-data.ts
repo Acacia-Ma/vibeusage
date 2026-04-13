@@ -113,6 +113,7 @@ export function useRecentUsageData({
       }
     } catch (e) {
       if (signal?.aborted || (e as any)?.name === "AbortError") return;
+      immediateSnapshotVisibleRef.current = false;
       if (cacheAllowed) {
         const cached = readCache();
         if (cached?.rolling) {

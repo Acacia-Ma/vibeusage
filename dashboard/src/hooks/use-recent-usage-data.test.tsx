@@ -163,4 +163,36 @@ describe("useRecentUsageData", () => {
     );
     expect(result.current.source).toBe("edge");
   });
+
+  it("clears the immediate snapshot override after a failed refresh and reports cache provenance honestly", async () => {
+    liveSnapshots.readDashboardLiveSnapshot.mockReturnValue({
+      rolling: { last_7d: { totals: { billable_total_tokens: "84" } } },
+      fetchedAt: "2026-03-07T00:00:00.000Z",
+    });
+    dashboardCache.readDashboardCache.mockReturnValue({
+      rolling: { last_7d: { totals: { billable_total_tokens: "63" } } },
+      fetchedAt: "2026-03-06T23:00:00.000Z",
+    });
+    vibeusageApi.getUsageSummary.mockRejectedValue(new Error("backend unavailable"));
+
+    const { result } = renderHook(() =>
+      useRecentUsageData({
+        baseUrl: "https://example.com",
+        accessToken: "token",
+        cacheKey: "user-1",
+        timeZone: "UTC",
+        tzOffsetMinutes: 0,
+        now: new Date("2026-03-07T00:00:00Z"),
+      }),
+    );
+
+    await waitFor(() => expect(vibeusageApi.getUsageSummary).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.source).toBe("cache");
+    expect(result.current.error).toBeNull();
+    expect(result.current.fetchedAt).toBe("2026-03-06T23:00:00.000Z");
+    expect(result.current.rolling).toEqual({
+      last_7d: { totals: { billable_total_tokens: "63" } },
+    });
+  });
 });
