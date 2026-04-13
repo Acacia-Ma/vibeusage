@@ -1,4 +1,4 @@
-type SnapshotScope = "usage" | "trend" | "modelBreakdown";
+type SnapshotScope = "usage" | "trend" | "modelBreakdown" | "recentUsage";
 
 const snapshotScopes = new Map<SnapshotScope, Map<string, any>>();
 
@@ -23,6 +23,11 @@ export function writeDashboardLiveSnapshot(
 ) {
   if (!key) return;
   getScopeStore(scope).set(key, snapshot);
+}
+
+export function deleteDashboardLiveSnapshot(scope: SnapshotScope, key?: string | null) {
+  if (!key) return;
+  getScopeStore(scope).delete(key);
 }
 
 export function clearDashboardLiveSnapshotsForTests() {
