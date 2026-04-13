@@ -854,51 +854,152 @@ function createUserStatusClientMock(options = {}) {
   };
 }
 
-function createLeaderboardClientMock({ userToken, userDatabase, snapshotErrorMessage = "snapshot unavailable" }) {
-  const snapshotQuery = {
-    select() {
-      return this;
-    },
-    eq() {
-      return this;
-    },
-    gt() {
-      return this;
-    },
-    order() {
-      return this;
-    },
-    range: async () => ({
-      data: null,
-      error: { message: snapshotErrorMessage },
-    }),
-    maybeSingle: async () => ({
-      data: null,
-      error: { message: snapshotErrorMessage },
-    }),
-    limit: async () => ({
-      data: null,
-      count: null,
-      error: { message: snapshotErrorMessage },
-    }),
-  };
+function createLeaderboardClientMock({
+  userToken,
+  userId,
+  snapshotRows = [],
+  publicUserIds = [],
+  snapshotErrorMessage = null,
+  onEntriesRange = null,
+  onCountLimit = null,
+}) {
+  function toTokenBigInt(value) {
+    try {
+      return BigInt(value ?? 0);
+    } catch {
+      return 0n;
+    }
+  }
+
+  function resolveSnapshotRows(state) {
+    const rows = Array.isArray(snapshotRows) ? snapshotRows : [];
+    return rows.filter((row) => {
+      if (state.userId && row?.user_id !== state.userId) return false;
+      if (state.metricColumn) {
+        return toTokenBigInt(row?.[state.metricColumn]) > state.metricThreshold;
+      }
+      return true;
+    });
+  }
+
+  function buildSnapshotQuery() {
+    const state = {
+      userId: null,
+      metricColumn: null,
+      metricThreshold: 0n,
+    };
+    const query = {
+      select() {
+        return query;
+      },
+      eq(col, value) {
+        if (col === "user_id") state.userId = value;
+        return query;
+      },
+      gt(col, value) {
+        state.metricColumn = col;
+        state.metricThreshold = toTokenBigInt(value);
+        return query;
+      },
+      order() {
+        return query;
+      },
+      range: async (from, to) => {
+        if (typeof onEntriesRange === "function") onEntriesRange(from, to, state);
+        if (snapshotErrorMessage) {
+          return {
+            data: null,
+            error: { message: snapshotErrorMessage },
+          };
+        }
+        const rows = resolveSnapshotRows(state);
+        return {
+          data: rows.slice(from, to + 1),
+          error: null,
+        };
+      },
+      maybeSingle: async () => {
+        if (snapshotErrorMessage) {
+          return {
+            data: null,
+            error: { message: snapshotErrorMessage },
+          };
+        }
+        const rows = resolveSnapshotRows(state);
+        return {
+          data: rows[0] || null,
+          error: null,
+        };
+      },
+      limit: async (value) => {
+        if (typeof onCountLimit === "function") onCountLimit(value, state);
+        if (snapshotErrorMessage) {
+          return {
+            data: null,
+            count: null,
+            error: { message: snapshotErrorMessage },
+          };
+        }
+        const rows = resolveSnapshotRows(state);
+        return {
+          data: rows.slice(0, value),
+          count: rows.length,
+          error: null,
+        };
+      },
+    };
+    return query;
+  }
 
   return (args) => {
     assert.equal(args?.baseUrl, BASE_URL);
     assert.equal(args?.anonKey, ANON_KEY);
 
     if (args?.edgeFunctionToken === userToken) {
-      return { database: userDatabase };
+      return {
+        auth: {
+          getCurrentUser: async () => ({ data: { user: { id: userId } }, error: null }),
+        },
+        database: {
+          from() {
+            throw new Error("Unexpected user database access");
+          },
+        },
+      };
     }
 
-    return {
-      database: {
-        from(table) {
-          if (table === "vibeusage_leaderboard_snapshots") return snapshotQuery;
-          throw new Error(`Unexpected leaderboard service table: ${String(table)}`);
+    if (args?.edgeFunctionToken === SERVICE_ROLE_KEY) {
+      return {
+        database: {
+          from(table) {
+            if (table === "vibeusage_leaderboard_snapshots") return buildSnapshotQuery();
+            if (table === "vibeusage_public_views") {
+              return {
+                select() {
+                  const state = { ids: [] };
+                  const query = {
+                    in(_col, ids) {
+                      state.ids = Array.isArray(ids) ? ids : [];
+                      return query;
+                    },
+                    is: async () => ({
+                      data: state.ids
+                        .filter((id) => publicUserIds.includes(id))
+                        .map((user_id) => ({ user_id })),
+                      error: null,
+                    }),
+                  };
+                  return query;
+                },
+              };
+            }
+            throw new Error(`Unexpected leaderboard service table: ${String(table)}`);
+          },
         },
-      },
-    };
+      };
+    }
+
+    throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
   };
 }
 
@@ -1113,6 +1214,11 @@ test("vibeusage-ingest uses serviceRoleKey as edgeFunctionToken and ingests hour
   assert.equal(postBody[0]?.hour_start, bucket.hour_start);
   assert.equal(postBody[0]?.source, "codex");
   assert.equal(postBody[0]?.model, "unknown");
+  assert.equal(postBody[0]?.input_tokens, "1");
+  assert.equal(postBody[0]?.cached_input_tokens, "1");
+  assert.equal(postBody[0]?.output_tokens, "2");
+  assert.equal(postBody[0]?.reasoning_output_tokens, "0");
+  assert.equal(postBody[0]?.total_tokens, "4");
   assert.equal(postBody[0]?.billable_total_tokens, "3");
   assert.equal(postBody[0]?.billable_rule_version, 1);
 
@@ -1227,7 +1333,11 @@ test("vibeusage-ingest ingests project_hourly buckets and upserts project regist
   assert.equal(usageRows.length, 1);
   assert.equal(usageRows[0]?.project_ref, projectBucket.project_ref);
   assert.equal(usageRows[0]?.project_key, projectBucket.project_key);
-  assert.equal(usageRows[0]?.total_tokens, 6);
+  assert.equal(usageRows[0]?.input_tokens, "3");
+  assert.equal(usageRows[0]?.cached_input_tokens, "2");
+  assert.equal(usageRows[0]?.output_tokens, "1");
+  assert.equal(usageRows[0]?.reasoning_output_tokens, "0");
+  assert.equal(usageRows[0]?.total_tokens, "6");
   assert.equal(usageRows[0]?.billable_total_tokens, "6");
   assert.equal(usageRows[0]?.billable_rule_version, 1);
 
@@ -1248,6 +1358,109 @@ test("vibeusage-ingest ingests project_hourly buckets and upserts project regist
   assert.equal(registryRows[0]?.source, projectBucket.source);
   assert.ok(registryRows[0]?.updated_at, "updated_at missing");
   assert.ok(registryRows[0]?.last_seen_at, "last_seen_at missing");
+});
+
+test("vibeusage-ingest stringifies bigint-scale hourly token payloads", async () => {
+  const fn = await loadEdgeFunction("vibeusage-ingest");
+
+  const calls = [];
+  const fetchCalls = [];
+
+  const tokenRow = {
+    id: "token-id",
+    user_id: "33333333-3333-3333-3333-333333333333",
+    device_id: "44444444-4444-4444-4444-444444444444",
+    revoked_at: null,
+  };
+
+  function from(table) {
+    if (table === "vibeusage_tracker_device_tokens") {
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({ data: tokenRow, error: null }),
+          }),
+        }),
+        update: () => ({ eq: async () => ({ error: null }) }),
+      };
+    }
+
+    if (table === "vibeusage_tracker_devices") {
+      return {
+        update: () => ({ eq: async () => ({ error: null }) }),
+      };
+    }
+
+    throw new Error(`Unexpected table: ${table}`);
+  }
+
+  globalThis.createClient = (args) => {
+    calls.push(args);
+    if (args && args.edgeFunctionToken === SERVICE_ROLE_KEY) {
+      return { database: { from } };
+    }
+    throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
+  };
+
+  globalThis.fetch = async (url, init) => {
+    fetchCalls.push({ url, init });
+    const u = new URL(url);
+
+    if (u.pathname.endsWith("/api/database/records/vibeusage_tracker_hourly")) {
+      return new Response(JSON.stringify([{ hour_start: "2025-12-17T00:00:00.000Z" }]), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response("not found", { status: 404 });
+  };
+
+  const deviceToken = "device_token_test";
+  const bucket = {
+    hour_start: new Date("2025-12-17T00:00:00.000Z").toISOString(),
+    source: "hermes",
+    model: "gpt-5",
+    input_tokens: "2609396608",
+    cached_input_tokens: "0",
+    output_tokens: "12",
+    reasoning_output_tokens: "0",
+    total_tokens: "2609396620",
+  };
+
+  const req = new Request("http://localhost/functions/vibeusage-ingest", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${deviceToken}` },
+    body: JSON.stringify({ hourly: [bucket] }),
+  });
+
+  const res = await fn(req);
+  assert.equal(res.status, 200);
+
+  const data = await res.json();
+  assert.deepEqual(data, {
+    success: true,
+    inserted: 1,
+    skipped: 0,
+    project_inserted: 0,
+    project_skipped: 0,
+  });
+  assert.equal(fetchCalls.length, 1);
+  const postCall = fetchCalls[0];
+  const postBody = JSON.parse(postCall.init?.body || "[]");
+  assert.equal(postBody.length, 1);
+  assert.equal(postBody[0]?.source, "hermes");
+  assert.equal(postBody[0]?.model, "gpt-5");
+  assert.equal(postBody[0]?.input_tokens, "2609396608");
+  assert.equal(postBody[0]?.cached_input_tokens, "0");
+  assert.equal(postBody[0]?.output_tokens, "12");
+  assert.equal(postBody[0]?.reasoning_output_tokens, "0");
+  assert.equal(postBody[0]?.total_tokens, "2609396620");
+  assert.equal(postBody[0]?.billable_total_tokens, "2609396620");
+  assert.equal(postBody[0]?.billable_rule_version, 1);
+
+  const serviceClientCall = calls.find((c) => c && c.edgeFunctionToken === SERVICE_ROLE_KEY);
+  assert.ok(serviceClientCall, "service client not created");
 });
 
 test("vibeusage-ingest accepts wrapped payload with data.hourly", async () => {
@@ -1339,6 +1552,11 @@ test("vibeusage-ingest accepts wrapped payload with data.hourly", async () => {
   const postBody = JSON.parse(postCall.init?.body || "[]");
   assert.equal(postBody.length, 1);
   assert.equal(postBody[0]?.source, "codex");
+  assert.equal(postBody[0]?.input_tokens, "1");
+  assert.equal(postBody[0]?.cached_input_tokens, "0");
+  assert.equal(postBody[0]?.output_tokens, "2");
+  assert.equal(postBody[0]?.reasoning_output_tokens, "0");
+  assert.equal(postBody[0]?.total_tokens, "3");
 
   const serviceClientCall = calls.find((c) => c && c.edgeFunctionToken === SERVICE_ROLE_KEY);
   assert.ok(serviceClientCall, "service client not created");
@@ -1689,6 +1907,13 @@ test("vibeusage-ingest works without serviceRoleKey via anonKey records API", as
   assert.ok(String(postCall.url).includes("/api/database/records/vibeusage_tracker_hourly"));
   assert.equal(postCall.init?.method, "POST");
   assert.equal(postCall.init?.headers?.Prefer, "return=representation,resolution=merge-duplicates");
+  const postRows = JSON.parse(postCall.init?.body || "[]");
+  assert.equal(postRows.length, 1);
+  assert.equal(postRows[0]?.input_tokens, "1");
+  assert.equal(postRows[0]?.cached_input_tokens, "0");
+  assert.equal(postRows[0]?.output_tokens, "2");
+  assert.equal(postRows[0]?.reasoning_output_tokens, "0");
+  assert.equal(postRows[0]?.total_tokens, "3");
   const postUrl = new URL(postCall.url);
   assert.equal(
     postUrl.searchParams.get("on_conflict"),
@@ -7609,68 +7834,51 @@ test("vibeusage-leaderboard returns a week window and slices entries to limit", 
   setDenoEnv({
     INSFORGE_INTERNAL_URL: BASE_URL,
     ANON_KEY,
+    INSFORGE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
   });
 
   const fn = await loadEdgeFunction("vibeusage-leaderboard");
 
   const userId = "66666666-6666-6666-6666-666666666666";
   const userJwt = createUserJwt(userId);
-
-  const entriesRows = [
-    {
-      rank: 1,
-      is_me: false,
-      display_name: "Anonymous",
-      avatar_url: null,
-      gpt_tokens: "60",
-      claude_tokens: "40",
-      total_tokens: "100",
-    },
-    {
-      rank: 2,
-      is_me: true,
-      display_name: "Anonymous",
-      avatar_url: null,
-      gpt_tokens: "30",
-      claude_tokens: "20",
-      total_tokens: "50",
-    },
-  ];
-
-  const meRow = { rank: 2, gpt_tokens: "30", claude_tokens: "20", total_tokens: "50" };
+  const generatedAt = "2026-02-09T00:00:00.000Z";
 
   globalThis.createClient = createLeaderboardClientMock({
     userToken: userJwt,
-    userDatabase: {
-      from: (table) => {
-        if (table === "vibeusage_leaderboard_week_current") {
-          return {
-            select: () => ({
-              order: (col, opts) => {
-                assert.equal(col, "rank");
-                assert.equal(opts?.ascending, true);
-                return {
-                  range: async (from, to) => {
-                    assert.equal(from, 0);
-                    assert.equal(to, 0);
-                    return { data: entriesRows, error: null };
-                  },
-                };
-              },
-            }),
-          };
-        }
-
-        if (table === "vibeusage_leaderboard_me_week_current") {
-          return {
-            select: () => ({
-              maybeSingle: async () => ({ data: meRow, error: null }),
-            }),
-          };
-        }
-
-        throw new Error(`Unexpected table: ${table}`);
+    userId,
+    snapshotRows: [
+      {
+        user_id: "00000000-0000-0000-0000-000000000001",
+        rank: 1,
+        rank_gpt: 1,
+        rank_claude: 1,
+        rank_other: 1,
+        display_name: "Anonymous",
+        avatar_url: null,
+        is_public: false,
+        gpt_tokens: "60",
+        claude_tokens: "40",
+        total_tokens: "100",
+        generated_at: generatedAt,
       },
+      {
+        user_id: userId,
+        rank: 2,
+        rank_gpt: 2,
+        rank_claude: 2,
+        rank_other: 2,
+        display_name: "Private Nick",
+        avatar_url: null,
+        is_public: false,
+        gpt_tokens: "30",
+        claude_tokens: "20",
+        total_tokens: "50",
+        generated_at: generatedAt,
+      },
+    ],
+    onEntriesRange(from, to) {
+      assert.equal(from, 0);
+      assert.equal(to, 0);
     },
   });
 
@@ -7685,12 +7893,12 @@ test("vibeusage-leaderboard returns a week window and slices entries to limit", 
 
   assert.equal(body.period, "week");
   assert.equal(body.metric, "all");
-  assert.ok(typeof body.generated_at === "string" && body.generated_at.includes("T"));
+  assert.equal(body.generated_at, generatedAt);
 
   const now = new Date();
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const from = new Date(today);
-  from.setUTCDate(from.getUTCDate() - today.getUTCDay()); // Sunday start
+  from.setUTCDate(from.getUTCDate() - today.getUTCDay());
   const to = new Date(from);
   to.setUTCDate(to.getUTCDate() + 6);
 
@@ -7722,51 +7930,47 @@ test("vibeusage-leaderboard supports month period", async () => {
   setDenoEnv({
     INSFORGE_INTERNAL_URL: BASE_URL,
     ANON_KEY,
+    INSFORGE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
   });
 
   const fn = await loadEdgeFunction("vibeusage-leaderboard");
   const userId = "77777777-7777-7777-7777-777777777777";
   const userJwt = createUserJwt(userId);
-
-  const entriesRows = [
-    {
-      rank: 1,
-      is_me: false,
-      display_name: "Anonymous",
-      avatar_url: null,
-      gpt_tokens: "6",
-      claude_tokens: "4",
-      total_tokens: "10",
-    },
-  ];
-
-  const meRow = { rank: 7, gpt_tokens: "3", claude_tokens: "2", total_tokens: "5" };
+  const generatedAt = "2026-02-10T00:00:00.000Z";
 
   globalThis.createClient = createLeaderboardClientMock({
     userToken: userJwt,
-    userDatabase: {
-      from: (table) => {
-        if (table === "vibeusage_leaderboard_month_current") {
-          return {
-            select: () => ({
-              order: () => ({
-                range: async () => ({ data: entriesRows, error: null }),
-              }),
-            }),
-          };
-        }
-
-        if (table === "vibeusage_leaderboard_me_month_current") {
-          return {
-            select: () => ({
-              maybeSingle: async () => ({ data: meRow, error: null }),
-            }),
-          };
-        }
-
-        throw new Error(`Unexpected table: ${table}`);
+    userId,
+    snapshotRows: [
+      {
+        user_id: "00000000-0000-0000-0000-000000000002",
+        rank: 1,
+        rank_gpt: 1,
+        rank_claude: 1,
+        rank_other: 1,
+        display_name: "Anonymous",
+        avatar_url: null,
+        is_public: false,
+        gpt_tokens: "6",
+        claude_tokens: "4",
+        total_tokens: "10",
+        generated_at: generatedAt,
       },
-    },
+      {
+        user_id: userId,
+        rank: 7,
+        rank_gpt: 7,
+        rank_claude: 7,
+        rank_other: 7,
+        display_name: "Anonymous",
+        avatar_url: null,
+        is_public: false,
+        gpt_tokens: "3",
+        claude_tokens: "2",
+        total_tokens: "5",
+        generated_at: generatedAt,
+      },
+    ],
   });
 
   const req = new Request("http://localhost/functions/vibeusage-leaderboard?period=month&limit=1", {
@@ -7780,6 +7984,7 @@ test("vibeusage-leaderboard supports month period", async () => {
 
   assert.equal(body.period, "month");
   assert.equal(body.metric, "all");
+  assert.equal(body.generated_at, generatedAt);
   assert.equal(body.entries?.length, 1);
   assert.deepEqual(body.me, {
     rank: 7,
@@ -7802,51 +8007,46 @@ test("vibeusage-leaderboard supports total period", async () => {
   setDenoEnv({
     INSFORGE_INTERNAL_URL: BASE_URL,
     ANON_KEY,
+    INSFORGE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
   });
 
   const fn = await loadEdgeFunction("vibeusage-leaderboard");
   const userId = "77777777-7777-7777-7777-777777777778";
   const userJwt = createUserJwt(userId);
 
-  const entriesRows = [
-    {
-      rank: 1,
-      is_me: false,
-      display_name: "Anonymous",
-      avatar_url: null,
-      gpt_tokens: "600",
-      claude_tokens: "400",
-      total_tokens: "1000",
-    },
-  ];
-
-  const meRow = { rank: 399, gpt_tokens: "30", claude_tokens: "20", total_tokens: "50" };
-
   globalThis.createClient = createLeaderboardClientMock({
     userToken: userJwt,
-    userDatabase: {
-      from: (table) => {
-        if (table === "vibeusage_leaderboard_total_current") {
-          return {
-            select: () => ({
-              order: () => ({
-                range: async () => ({ data: entriesRows, error: null }),
-              }),
-            }),
-          };
-        }
-
-        if (table === "vibeusage_leaderboard_me_total_current") {
-          return {
-            select: () => ({
-              maybeSingle: async () => ({ data: meRow, error: null }),
-            }),
-          };
-        }
-
-        throw new Error(`Unexpected table: ${table}`);
+    userId,
+    snapshotRows: [
+      {
+        user_id: "00000000-0000-0000-0000-000000000003",
+        rank: 1,
+        rank_gpt: 1,
+        rank_claude: 1,
+        rank_other: 1,
+        display_name: "Anonymous",
+        avatar_url: null,
+        is_public: false,
+        gpt_tokens: "600",
+        claude_tokens: "400",
+        total_tokens: "1000",
+        generated_at: "2026-02-11T00:00:00.000Z",
       },
-    },
+      {
+        user_id: userId,
+        rank: 399,
+        rank_gpt: 399,
+        rank_claude: 399,
+        rank_other: 399,
+        display_name: "Anonymous",
+        avatar_url: null,
+        is_public: false,
+        gpt_tokens: "30",
+        claude_tokens: "20",
+        total_tokens: "50",
+        generated_at: "2026-02-11T00:00:00.000Z",
+      },
+    ],
   });
 
   const req = new Request("http://localhost/functions/vibeusage-leaderboard?period=total&limit=1", {
@@ -7868,64 +8068,79 @@ test("vibeusage-leaderboard supports offset pagination", async () => {
   setDenoEnv({
     INSFORGE_INTERNAL_URL: BASE_URL,
     ANON_KEY,
+    INSFORGE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
   });
 
   const fn = await loadEdgeFunction("vibeusage-leaderboard");
 
   const userId = "99999999-6666-6666-6666-666666666666";
   const userJwt = createUserJwt(userId);
-
-  const entriesRows = [
-    {
-      rank: 2,
-      is_me: false,
-      display_name: "Anonymous",
-      avatar_url: null,
-      gpt_tokens: "2",
-      claude_tokens: "3",
-      total_tokens: "5",
-    },
-    {
-      rank: 3,
-      is_me: false,
-      display_name: "Anonymous",
-      avatar_url: null,
-      gpt_tokens: "4",
-      claude_tokens: "1",
-      total_tokens: "5",
-    },
-  ];
-
-  const meRow = { rank: 99, gpt_tokens: "0", claude_tokens: "0", total_tokens: "0" };
+  const generatedAt = "2026-02-12T00:00:00.000Z";
 
   globalThis.createClient = createLeaderboardClientMock({
     userToken: userJwt,
-    userDatabase: {
-      from: (table) => {
-        if (table === "vibeusage_leaderboard_week_current") {
-          return {
-            select: () => ({
-              order: () => ({
-                range: async (from, to) => {
-                  assert.equal(from, 1);
-                  assert.equal(to, 2);
-                  return { data: entriesRows, error: null };
-                },
-              }),
-            }),
-          };
-        }
-
-        if (table === "vibeusage_leaderboard_me_week_current") {
-          return {
-            select: () => ({
-              maybeSingle: async () => ({ data: meRow, error: null }),
-            }),
-          };
-        }
-
-        throw new Error(`Unexpected table: ${table}`);
+    userId,
+    snapshotRows: [
+      {
+        user_id: "00000000-0000-0000-0000-000000000010",
+        rank: 1,
+        rank_gpt: 1,
+        rank_claude: 1,
+        rank_other: 1,
+        display_name: "Anonymous",
+        avatar_url: null,
+        is_public: false,
+        gpt_tokens: "1",
+        claude_tokens: "1",
+        total_tokens: "2",
+        generated_at: generatedAt,
       },
+      {
+        user_id: "00000000-0000-0000-0000-000000000011",
+        rank: 2,
+        rank_gpt: 2,
+        rank_claude: 2,
+        rank_other: 2,
+        display_name: "Anonymous",
+        avatar_url: null,
+        is_public: false,
+        gpt_tokens: "2",
+        claude_tokens: "3",
+        total_tokens: "5",
+        generated_at: generatedAt,
+      },
+      {
+        user_id: "00000000-0000-0000-0000-000000000012",
+        rank: 3,
+        rank_gpt: 3,
+        rank_claude: 3,
+        rank_other: 3,
+        display_name: "Anonymous",
+        avatar_url: null,
+        is_public: false,
+        gpt_tokens: "4",
+        claude_tokens: "1",
+        total_tokens: "5",
+        generated_at: generatedAt,
+      },
+      {
+        user_id: userId,
+        rank: 99,
+        rank_gpt: 99,
+        rank_claude: 99,
+        rank_other: 99,
+        display_name: "Anonymous",
+        avatar_url: null,
+        is_public: false,
+        gpt_tokens: "0",
+        claude_tokens: "0",
+        total_tokens: "0",
+        generated_at: generatedAt,
+      },
+    ],
+    onEntriesRange(from, to) {
+      assert.equal(from, 1);
+      assert.equal(to, 2);
     },
   });
 
@@ -7943,6 +8158,7 @@ test("vibeusage-leaderboard supports offset pagination", async () => {
 
   assert.equal(body.period, "week");
   assert.equal(body.metric, "all");
+  assert.equal(body.generated_at, generatedAt);
   assert.ok(Array.isArray(body.entries));
   assert.equal(body.entries.length, 2);
   assert.equal(body.entries[0].rank, 2);
@@ -7956,10 +8172,81 @@ test("vibeusage-leaderboard supports offset pagination", async () => {
   });
 });
 
+test("vibeusage-leaderboard returns empty paginated snapshot pages as 200", async () => {
+  setDenoEnv({
+    INSFORGE_INTERNAL_URL: BASE_URL,
+    ANON_KEY,
+    INSFORGE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
+  });
+
+  const fn = await loadEdgeFunction("vibeusage-leaderboard");
+  const generatedAt = "2026-02-12T00:00:00.000Z";
+
+  globalThis.createClient = createLeaderboardClientMock({
+    userToken: "unused-token",
+    userId: "unused-user",
+    snapshotRows: [
+      {
+        user_id: "00000000-0000-0000-0000-000000000010",
+        rank: 1,
+        rank_gpt: 1,
+        rank_claude: 1,
+        rank_other: 1,
+        display_name: "Anonymous",
+        avatar_url: null,
+        is_public: false,
+        gpt_tokens: "1",
+        claude_tokens: "1",
+        total_tokens: "2",
+        generated_at: generatedAt,
+      },
+      {
+        user_id: "00000000-0000-0000-0000-000000000011",
+        rank: 2,
+        rank_gpt: 2,
+        rank_claude: 2,
+        rank_other: 2,
+        display_name: "Anonymous",
+        avatar_url: null,
+        is_public: false,
+        gpt_tokens: "2",
+        claude_tokens: "3",
+        total_tokens: "5",
+        generated_at: generatedAt,
+      },
+    ],
+    onEntriesRange(from, to) {
+      assert.equal(from, 4);
+      assert.equal(to, 5);
+    },
+  });
+
+  const req = new Request(
+    "http://localhost/functions/vibeusage-leaderboard?period=week&limit=2&offset=4",
+    { method: "GET" },
+  );
+
+  const res = await fn(req);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+
+  assert.equal(body.period, "week");
+  assert.equal(body.metric, "all");
+  assert.equal(body.generated_at, generatedAt);
+  assert.equal(body.page, 3);
+  assert.equal(body.limit, 2);
+  assert.equal(body.offset, 4);
+  assert.equal(body.total_entries, 2);
+  assert.equal(body.total_pages, 1);
+  assert.deepEqual(body.entries, []);
+  assert.equal(body.me, null);
+});
+
 test("vibeusage-leaderboard supports metric=Gpt", async () => {
   setDenoEnv({
     INSFORGE_INTERNAL_URL: BASE_URL,
     ANON_KEY,
+    INSFORGE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
   });
 
   const fn = await loadEdgeFunction("vibeusage-leaderboard");
@@ -7967,51 +8254,43 @@ test("vibeusage-leaderboard supports metric=Gpt", async () => {
   const userId = "99999999-7777-7777-7777-777777777777";
   const userJwt = createUserJwt(userId);
 
-  const entriesRows = [
-    {
-      rank: 1,
-      is_me: false,
-      display_name: "Anonymous",
-      avatar_url: null,
-      gpt_tokens: "60",
-      claude_tokens: "0",
-      total_tokens: "60",
-    },
-  ];
-
-  const meRow = { rank: 4, gpt_tokens: "5", claude_tokens: "7", total_tokens: "12" };
-
   globalThis.createClient = createLeaderboardClientMock({
     userToken: userJwt,
-    userDatabase: {
-      from: (table) => {
-        if (table === "vibeusage_leaderboard_gpt_week_current") {
-          return {
-            select: () => ({
-              order: (col) => {
-                assert.equal(col, "rank");
-                return {
-                  range: async (from, to) => {
-                    assert.equal(from, 0);
-                    assert.equal(to, 0);
-                    return { data: entriesRows, error: null };
-                  },
-                };
-              },
-            }),
-          };
-        }
-
-        if (table === "vibeusage_leaderboard_me_gpt_week_current") {
-          return {
-            select: () => ({
-              maybeSingle: async () => ({ data: meRow, error: null }),
-            }),
-          };
-        }
-
-        throw new Error(`Unexpected table: ${table}`);
+    userId,
+    snapshotRows: [
+      {
+        user_id: "00000000-0000-0000-0000-000000000020",
+        rank: 9,
+        rank_gpt: 1,
+        rank_claude: null,
+        rank_other: null,
+        display_name: "Anonymous",
+        avatar_url: null,
+        is_public: false,
+        gpt_tokens: "60",
+        claude_tokens: "0",
+        total_tokens: "60",
+        generated_at: "2026-02-13T00:00:00.000Z",
       },
+      {
+        user_id: userId,
+        rank: 12,
+        rank_gpt: 4,
+        rank_claude: 3,
+        rank_other: null,
+        display_name: "Anonymous",
+        avatar_url: null,
+        is_public: false,
+        gpt_tokens: "5",
+        claude_tokens: "7",
+        total_tokens: "12",
+        generated_at: "2026-02-13T00:00:00.000Z",
+      },
+    ],
+    onEntriesRange(from, to, state) {
+      assert.equal(state.metricColumn, "gpt_tokens");
+      assert.equal(from, 0);
+      assert.equal(to, 0);
     },
   });
 
@@ -8045,6 +8324,7 @@ test("vibeusage-leaderboard supports metric=other", async () => {
   setDenoEnv({
     INSFORGE_INTERNAL_URL: BASE_URL,
     ANON_KEY,
+    INSFORGE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
   });
 
   const fn = await loadEdgeFunction("vibeusage-leaderboard");
@@ -8052,58 +8332,45 @@ test("vibeusage-leaderboard supports metric=other", async () => {
   const userId = "99999999-7878-7878-7878-787878787878";
   const userJwt = createUserJwt(userId);
 
-  const entriesRows = [
-    {
-      rank: 1,
-      is_me: false,
-      display_name: "Anonymous",
-      avatar_url: null,
-      gpt_tokens: "20",
-      claude_tokens: "10",
-      other_tokens: "70",
-      total_tokens: "100",
-    },
-  ];
-
-  const meRow = {
-    rank: 5,
-    gpt_tokens: "5",
-    claude_tokens: "6",
-    other_tokens: "9",
-    total_tokens: "20",
-  };
-
   globalThis.createClient = createLeaderboardClientMock({
     userToken: userJwt,
-    userDatabase: {
-      from: (table) => {
-        if (table === "vibeusage_leaderboard_other_week_current") {
-          return {
-            select: () => ({
-              order: (col) => {
-                assert.equal(col, "rank");
-                return {
-                  range: async (from, to) => {
-                    assert.equal(from, 0);
-                    assert.equal(to, 0);
-                    return { data: entriesRows, error: null };
-                  },
-                };
-              },
-            }),
-          };
-        }
-
-        if (table === "vibeusage_leaderboard_me_other_week_current") {
-          return {
-            select: () => ({
-              maybeSingle: async () => ({ data: meRow, error: null }),
-            }),
-          };
-        }
-
-        throw new Error(`Unexpected table: ${table}`);
+    userId,
+    snapshotRows: [
+      {
+        user_id: "00000000-0000-0000-0000-000000000030",
+        rank: 7,
+        rank_gpt: 9,
+        rank_claude: 8,
+        rank_other: 1,
+        display_name: "Anonymous",
+        avatar_url: null,
+        is_public: false,
+        gpt_tokens: "20",
+        claude_tokens: "10",
+        other_tokens: "70",
+        total_tokens: "100",
+        generated_at: "2026-02-14T00:00:00.000Z",
       },
+      {
+        user_id: userId,
+        rank: 10,
+        rank_gpt: 11,
+        rank_claude: 7,
+        rank_other: 5,
+        display_name: "Anonymous",
+        avatar_url: null,
+        is_public: false,
+        gpt_tokens: "5",
+        claude_tokens: "6",
+        other_tokens: "9",
+        total_tokens: "20",
+        generated_at: "2026-02-14T00:00:00.000Z",
+      },
+    ],
+    onEntriesRange(from, to, state) {
+      assert.equal(state.metricColumn, "other_tokens");
+      assert.equal(from, 0);
+      assert.equal(to, 0);
     },
   });
 
@@ -8132,6 +8399,109 @@ test("vibeusage-leaderboard supports metric=other", async () => {
     other_tokens: "9",
     total_tokens: "20",
   });
+});
+
+test("vibeusage-leaderboard returns snapshot unavailable instead of falling back to current views", async () => {
+  setDenoEnv({
+    INSFORGE_INTERNAL_URL: BASE_URL,
+    ANON_KEY,
+    INSFORGE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
+  });
+
+  const fn = await loadEdgeFunction("vibeusage-leaderboard");
+
+  globalThis.createClient = (args) => {
+    assert.equal(args?.baseUrl, BASE_URL);
+    assert.equal(args?.anonKey, ANON_KEY);
+
+    if (args?.edgeFunctionToken === SERVICE_ROLE_KEY) {
+      return {
+        database: {
+          from(table) {
+            if (table === "vibeusage_leaderboard_snapshots") {
+              return {
+                select() {
+                  const query = {
+                    eq: () => query,
+                    gt: () => query,
+                    order: () => query,
+                    range: async () => ({ data: null, error: { message: "snapshot unavailable" } }),
+                    maybeSingle: async () => ({ data: null, error: { message: "snapshot unavailable" } }),
+                    limit: async () => ({
+                      data: null,
+                      count: null,
+                      error: { message: "snapshot unavailable" },
+                    }),
+                  };
+                  return query;
+                },
+              };
+            }
+
+            if (table === "vibeusage_public_views") {
+              return {
+                select() {
+                  const query = {
+                    in: () => query,
+                    is: async () => ({ data: [], error: null }),
+                  };
+                  return query;
+                },
+              };
+            }
+
+            throw new Error(`Unexpected service table: ${String(table)}`);
+          },
+        },
+      };
+    }
+
+    if (args?.edgeFunctionToken === ANON_KEY) {
+      return {
+        database: {
+          from(table) {
+            if (table === "vibeusage_leaderboard_week_current") {
+              return {
+                select: () => ({
+                  order: () => ({
+                    range: async () => ({
+                      data: [
+                        {
+                          rank: 1,
+                          display_name: "Should not be used",
+                          avatar_url: null,
+                          gpt_tokens: "9",
+                          claude_tokens: "1",
+                          total_tokens: "10",
+                        },
+                      ],
+                      error: null,
+                    }),
+                  }),
+                }),
+              };
+            }
+            throw new Error(`Unexpected anon table: ${String(table)}`);
+          },
+        },
+      };
+    }
+
+    throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
+  };
+
+  const req = new Request("http://localhost/functions/vibeusage-leaderboard?period=week&limit=1", {
+    method: "GET",
+  });
+
+  const res = await fn(req);
+  assert.equal(res.status, 503);
+  const body = await res.json();
+  assert.equal(body.error, "Leaderboard snapshot unavailable");
+  assert.equal(body.snapshot_status, "unavailable");
+  assert.equal(body.period, "week");
+  assert.equal(body.metric, "all");
+  assert.equal(Object.prototype.hasOwnProperty.call(body, "generated_at"), false);
 });
 
 test("vibeusage-leaderboard rejects invalid metric", async () => {
@@ -8840,6 +9210,85 @@ test("vibeusage-leaderboard-profile requires active public link for non-self use
   const res = await fn(req);
   assert.equal(res.status, 404);
   assert.equal(snapshotRead, false);
+});
+
+test("vibeusage-leaderboard-profile returns snapshot unavailable when no period snapshot exists", async () => {
+  setDenoEnv({
+    INSFORGE_INTERNAL_URL: BASE_URL,
+    ANON_KEY,
+    INSFORGE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY,
+  });
+
+  const fn = await loadEdgeFunction("vibeusage-leaderboard-profile");
+
+  const userId = "999b0000-0000-0000-0000-000000000000";
+  const userJwt = createUserJwt(userId);
+  const targetUserId = "999b0000-0000-0000-0000-000000000001";
+
+  globalThis.createClient = (args) => {
+    if (args && args.edgeFunctionToken === userJwt) {
+      return {
+        auth: {
+          getCurrentUser: async () => ({ data: { user: { id: userId } }, error: null }),
+        },
+      };
+    }
+
+    if (args && args.edgeFunctionToken === SERVICE_ROLE_KEY) {
+      return {
+        database: {
+          from: (table) => {
+            if (table === "vibeusage_public_views") {
+              return {
+                select: () => {
+                  const q = {
+                    eq: () => q,
+                    is: () => q,
+                    limit: () => q,
+                    maybeSingle: async () => ({ data: { user_id: targetUserId }, error: null }),
+                  };
+                  return q;
+                },
+              };
+            }
+
+            if (table === "vibeusage_leaderboard_snapshots") {
+              return {
+                select: () => {
+                  const q = {
+                    eq: () => q,
+                    limit: () => q,
+                    maybeSingle: async () => ({ data: null, error: null }),
+                  };
+                  return q;
+                },
+              };
+            }
+
+            throw new Error(`Unexpected service table: ${String(table)}`);
+          },
+        },
+      };
+    }
+
+    throw new Error(`Unexpected createClient args: ${JSON.stringify(args)}`);
+  };
+
+  const req = new Request(
+    `http://localhost/functions/vibeusage-leaderboard-profile?user_id=${encodeURIComponent(targetUserId)}`,
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${userJwt}` },
+    },
+  );
+
+  const res = await fn(req);
+  assert.equal(res.status, 503);
+  const body = await res.json();
+  assert.equal(body.error, "Leaderboard snapshot unavailable");
+  assert.equal(body.snapshot_status, "unavailable");
+  assert.equal(body.period, "week");
+  assert.equal(Object.prototype.hasOwnProperty.call(body, "generated_at"), false);
 });
 
 test("vibeusage-leaderboard-profile hides snapshot rows marked private", async () => {

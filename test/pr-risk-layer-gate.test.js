@@ -424,7 +424,6 @@ test("resolveBody accepts GH_TOKEN when GITHUB_TOKEN is not exported", async () 
     global.fetch = originalFetch;
   }
 });
-
 test("CLI gate treats empty PR body as invalid instead of skipping", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "pr-risk-layer-empty-"));
   const eventPath = writeTempFile(

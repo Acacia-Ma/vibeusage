@@ -258,7 +258,6 @@ async function loadBodyFromGitHubApi({ repo, prNumber, token, fetchImpl = global
 function resolveGitHubToken(env = {}) {
   return env.GITHUB_TOKEN || env.GH_TOKEN || env.GITHUB_API_TOKEN || null;
 }
-
 async function resolveBody(args, options = {}) {
   const env = options.env || process.env;
   if (Object.prototype.hasOwnProperty.call(args, "body")) {

@@ -27,6 +27,7 @@ export function useActivityHeatmap({
   }, [now, weeks, weekStartsOn]);
   const [daily, setDaily] = useState<any[]>([]);
   const [heatmap, setHeatmap] = useState<any | null>(null);
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [source, setSource] = useState("edge");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,13 +79,15 @@ export function useActivityHeatmap({
         signal,
       });
       if (signal?.aborted) return;
+      const nowIso = new Date().toISOString();
       setHeatmap(res || null);
+      setFetchedAt(nowIso);
       setSource("edge");
       if (cacheAllowed) {
         writeCache({
           heatmap: res || null,
           daily: [],
-          fetchedAt: new Date().toISOString(),
+          fetchedAt: nowIso,
         });
       } else {
         clearCache();
@@ -96,14 +99,17 @@ export function useActivityHeatmap({
         if (cached?.heatmap) {
           setHeatmap(cached.heatmap);
           setDaily(cached.daily || []);
+          setFetchedAt(cached.fetchedAt || null);
           setSource("cache");
           setError(null);
         } else {
+          setFetchedAt(null);
           const err = e as any;
           setError(err?.message || String(err));
           setSource("edge");
         }
       } else {
+        setFetchedAt(null);
         const err = e as any;
         setError(err?.message || String(err));
         setSource("edge");
@@ -135,6 +141,7 @@ export function useActivityHeatmap({
       setLoading(false);
       setError(null);
       setHeatmap(null);
+      setFetchedAt(null);
       setSource("edge");
       return;
     }
@@ -159,5 +166,5 @@ export function useActivityHeatmap({
 
   const normalizedSource = mockEnabled ? "mock" : source;
 
-  return { range, daily, heatmap, source: normalizedSource, loading, error, refresh };
+  return { range, daily, heatmap, source: normalizedSource, fetchedAt, loading, error, refresh };
 }

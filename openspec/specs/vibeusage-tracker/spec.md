@@ -433,13 +433,14 @@ Model family matching:
 
 ### Requirement: Leaderboard response includes generation timestamp
 
-The leaderboard endpoint SHALL include a `generated_at` timestamp indicating when the leaderboard data was produced.
+The leaderboard endpoint SHALL include a `generated_at` timestamp from the authoritative snapshot row used to answer the request. Request handlers MUST NOT synthesize `generated_at` from request time when no snapshot row was used.
 
-#### Scenario: Response includes generated_at
+#### Scenario: Response includes snapshot generated_at
 
-- **GIVEN** a user is signed in and has a valid `user_jwt`
+- **GIVEN** a snapshot exists for `period=week` with `generated_at`
 - **WHEN** the user calls `GET /functions/vibeusage-leaderboard?period=week&metric=all`
-- **THEN** the response SHALL include `generated_at` as an ISO timestamp
+- **THEN** the response SHALL include that snapshot `generated_at`
+- **AND** the value SHALL describe snapshot materialization time, not request time
 
 ### Requirement: Leaderboard response includes `me`
 
@@ -686,7 +687,14 @@ The system SHALL keep Edge Function author sources under `insforge-src/functions
 
 ### Requirement: Dashboard retains last-known data during backend failures
 
-The dashboard MUST retain and display the most recent successful usage data when backend requests fail, and MUST indicate the data is cached/stale with a last-updated timestamp.
+The dashboard MUST treat successful backend responses as the only live usage truth. A previously resolved backend snapshot for the same request MAY be reused immediately while a new request is in flight, but cache fallback after a failed request MUST be labeled cached/stale with a last-updated timestamp.
+
+#### Scenario: Resolved backend snapshot is reused during refresh
+
+- **GIVEN** the user has previously loaded usage data successfully for the same request parameters
+- **WHEN** the dashboard starts a new refresh for those same parameters
+- **THEN** it MAY continue rendering the prior backend-derived snapshot while the refresh is in flight
+- **AND** it SHALL NOT present browser cache as the current source unless the refresh fails
 
 #### Scenario: Backend unavailable after prior success
 
@@ -694,12 +702,6 @@ The dashboard MUST retain and display the most recent successful usage data when
 - **WHEN** subsequent backend requests fail (network error or 5xx)
 - **THEN** the dashboard SHALL continue to display the last-known usage summary, daily totals, and heatmap
 - **AND** the UI SHALL label the data as cached/stale and show the last-updated timestamp
-
-#### Scenario: Backend unavailable with no cache
-
-- **GIVEN** the user has no cached usage data
-- **WHEN** backend requests fail
-- **THEN** the dashboard SHALL show the existing empty-state or error messaging (no stale data)
 
 ### Requirement: Web UI copy is managed by a registry
 
@@ -717,25 +719,20 @@ The system SHALL centralize all web UI text in a repository-hosted copy registry
 
 ### Requirement: Dashboard shows data source indicator
 
-The dashboard SHALL display a data source label (`edge|cache|mock`) for usage and activity panels so users can distinguish live data from cached or mocked data.
+The dashboard SHALL display a data source label (`edge|cache|mock`) for usage and activity panels with these semantics: `edge` means a successful backend response or a reused snapshot from a previous successful backend response for the same request; `cache` means browser-local fallback shown only after a failed backend request; `mock` means local mock data. Client-derived-only continuity state MUST NOT be labeled `edge`.
 
-#### Scenario: Mock mode is explicit
+#### Scenario: Immediate snapshot reuse remains backend-derived
 
-- **GIVEN** mock mode is enabled via `VITE_VIBEUSAGE_MOCK=1` or `?mock=1`
-- **WHEN** the dashboard renders
-- **THEN** the UI SHALL show `DATA_SOURCE: MOCK`
+- **GIVEN** the dashboard has a prior successful backend snapshot for the same request
+- **WHEN** the next refresh starts and the UI reuses that snapshot before the network response resolves
+- **THEN** the UI SHALL show `DATA_SOURCE: EDGE`
+- **AND** it SHALL preserve the snapshot's last-updated timestamp
 
 #### Scenario: Cache fallback is explicit
 
 - **GIVEN** the user is signed in and cached data is used due to a fetch failure
-- **WHEN** the dashboard renders usage or heatmap panels
+- **WHEN** the dashboard renders usage or activity panels
 - **THEN** the UI SHALL show `DATA_SOURCE: CACHE`
-
-#### Scenario: Live data is explicit
-
-- **GIVEN** the user is signed in and backend requests succeed
-- **WHEN** the dashboard renders usage or heatmap panels
-- **THEN** the UI SHALL show `DATA_SOURCE: EDGE`
 
 ### Requirement: User JWT validation resolves users reliably
 
@@ -1021,31 +1018,6 @@ When ingesting with service-role credentials, the system MUST avoid a pre-read o
 - **THEN** the server SHALL attempt an `on_conflict` insert with `ignore-duplicates`
 - **AND** fall back to the legacy path only if upsert is unsupported
 
-### Requirement: Leaderboard fallback query SHALL apply pagination at source
-
-The system SHALL apply the requested `limit` and `offset` when querying the leaderboard view in the non-snapshot fallback path, so only the requested page rows are fetched (plus `me` when needed).
-
-#### Scenario: Limit enforced at query
-
-- **WHEN** a user requests `GET /functions/vibeusage-leaderboard?period=week&metric=all&limit=20&offset=40`
-- **THEN** the backend SHALL query only the requested page rows (rank `41..60`)
-- **AND** the response payload SHALL remain unchanged
-
-### Requirement: Leaderboard fallback SHOULD use single query when possible
-
-The system SHALL attempt a single-query fallback to fetch both Top N entries and the current user's row, and SHALL fall back to the legacy double-query flow if the single query fails.
-
-#### Scenario: Single query succeeds
-
-- **WHEN** a signed-in user requests the leaderboard
-- **THEN** the backend SHALL fetch rows matching `rank between offset+1 and offset+limit OR is_me = true` in one query
-- **AND** the response payload SHALL remain unchanged
-
-#### Scenario: Single query fails
-
-- **WHEN** the single-query attempt fails
-- **THEN** the backend SHALL fall back to the legacy `entries + me` queries
-
 ### Requirement: Matrix rain rendering is GPU-budgeted
 
 The UI SHALL render the Matrix rain animation with a capped update rate and reduced internal render resolution, and SHALL pause rendering when the document is hidden, so steady-state GPU usage remains below 2% on the reference device.
@@ -1179,7 +1151,7 @@ When daily rows are already fetched (i.e., `period!=total`), the dashboard MUST 
 
 ### Requirement: OpenCode local usage parsing is SQLite-first
 
-The CLI SHALL treat `~/.local/share/opencode/opencode.db` (or `OPENCODE_HOME/opencode.db`) as the current authoritative OpenCode local usage source. Legacy message JSON files MAY still be parsed when present, but SQLite-backed usage MUST be included when the database exists.
+The CLI SHALL treat `~/.local/share/opencode/opencode.db` (or `OPENCODE_HOME/opencode.db`) as the only authoritative OpenCode local usage source for sync, audit, status, and diagnostics truth. Legacy message JSON files MUST NOT be parsed, merged, or used as fallback accounting input.
 
 #### Scenario: Sync reads OpenCode SQLite data without legacy message files
 
@@ -1189,12 +1161,12 @@ The CLI SHALL treat `~/.local/share/opencode/opencode.db` (or `OPENCODE_HOME/ope
 - **THEN** the CLI SHALL still parse OpenCode local usage from SQLite
 - **AND** it SHALL aggregate tokens using the same half-hour bucket model as other local sources
 
-#### Scenario: OpenCode project attribution uses project worktree
+#### Scenario: SQLite degradation is explicit
 
-- **GIVEN** an OpenCode SQLite message row linked through `session.project_id`
-- **WHEN** the tracker attributes project-scoped usage
-- **THEN** it SHALL resolve the project path from `project.worktree`
-- **AND** it SHALL NOT infer the project path from legacy message file locations
+- **GIVEN** `opencode.db` is missing or unreadable
+- **WHEN** a user runs `npx vibeusage sync` or an OpenCode diagnostic command
+- **THEN** the CLI SHALL report degraded or missing OpenCode SQLite support
+- **AND** it SHALL NOT substitute legacy message-file totals as OpenCode usage truth
 
 ### Requirement: Auto sync health is diagnosable
 
@@ -1340,7 +1312,7 @@ The dashboard UI SHALL default the DETAILS table date/time sorting to newest-fir
 
 ### Requirement: Leaderboard is served from precomputed snapshots
 
-The system SHALL compute leaderboard rankings from a precomputed snapshot that is refreshed asynchronously.
+The system SHALL serve leaderboard list and profile data from `public.vibeusage_leaderboard_snapshots` for the requested `period`. Read endpoints MUST NOT fall back to `_current` views or any second read store for the same leaderboard contract.
 
 #### Scenario: Leaderboard reads from latest snapshot
 
@@ -1348,6 +1320,15 @@ The system SHALL compute leaderboard rankings from a precomputed snapshot that i
 - **WHEN** a signed-in user calls `GET /functions/vibeusage-leaderboard?period=week&metric=all`
 - **THEN** the response SHALL reflect the latest snapshot totals (`gpt_tokens`, `claude_tokens`, `total_tokens`)
 - **AND** the response SHALL include the snapshot `generated_at`
+- **AND** leaderboard list and profile reads SHALL follow the same snapshot-backed freshness semantics
+
+#### Scenario: Snapshot unavailable is explicit
+
+- **GIVEN** no snapshot exists or the snapshot is stale for the requested period
+- **WHEN** a signed-in user calls `GET /functions/vibeusage-leaderboard?period=week&metric=all`
+- **THEN** the endpoint SHALL return a structured non-success response that identifies snapshot unavailability
+- **AND** it SHALL NOT fall back to `_current` views
+- **AND** it SHALL NOT synthesize a fresh `generated_at` at request time
 
 ### Requirement: Leaderboard snapshots are refreshable by authorized automation
 

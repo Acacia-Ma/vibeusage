@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isAccessTokenReady, resolveAuthAccessToken } from "../lib/auth-token";
 import {
   buildDashboardCacheKey,
@@ -6,6 +6,11 @@ import {
   readDashboardCache,
   writeDashboardCache,
 } from "../lib/dashboard-cache";
+import {
+  deleteDashboardLiveSnapshot,
+  readDashboardLiveSnapshot,
+  writeDashboardLiveSnapshot,
+} from "../lib/dashboard-live-snapshot";
 import { isMockEnabled } from "../lib/mock-data";
 import { getLocalDayKey, getTimeZoneCacheKey } from "../lib/timezone";
 import { getUsageSummary } from "../lib/vibeusage-api";
@@ -43,6 +48,8 @@ export function useRecentUsageData({
     baseUrl,
     segments: [anchorDay, getTimeZoneCacheKey({ timeZone, offsetMinutes: tzOffsetMinutes })],
   });
+  const liveSnapshot = readDashboardLiveSnapshot("recentUsage", storageKey);
+  const hasImmediateSnapshot = Boolean(liveSnapshot?.rolling);
 
   const readCache = useCallback(() => {
     return readDashboardCache(storageKey, (parsed) => Boolean(parsed?.rolling));
@@ -59,7 +66,16 @@ export function useRecentUsageData({
     clearDashboardCache(storageKey);
   }, [storageKey]);
 
-  const refresh = useCallback(async ({ signal }: any = {}) => {
+  const immediateSnapshotVisibleRef = useRef(false);
+  const deferToImmediateSnapshot = hasImmediateSnapshot && immediateSnapshotVisibleRef.current;
+  const visibleRolling = deferToImmediateSnapshot ? liveSnapshot?.rolling || null : rolling;
+  const visibleFetchedAt = deferToImmediateSnapshot ? liveSnapshot?.fetchedAt || null : fetchedAt;
+  const visibleSource = deferToImmediateSnapshot ? "edge" : source;
+  const visibleLoading = deferToImmediateSnapshot ? false : loading;
+  const visibleError = deferToImmediateSnapshot ? null : error;
+
+  const refresh = useCallback(async ({ signal, preferImmediateSnapshot = false }: any = {}) => {
+    if (!preferImmediateSnapshot) immediateSnapshotVisibleRef.current = false;
     const resolvedToken = await resolveAuthAccessToken(accessToken);
     if (!resolvedToken && !mockEnabled) return;
     if (signal?.aborted) return;
@@ -83,6 +99,12 @@ export function useRecentUsageData({
       setRolling(nextRolling);
       setFetchedAt(nowIso);
       setSource("edge");
+      immediateSnapshotVisibleRef.current = false;
+      deleteDashboardLiveSnapshot("recentUsage", storageKey);
+      writeDashboardLiveSnapshot("recentUsage", storageKey, {
+        rolling: nextRolling,
+        fetchedAt: nowIso,
+      });
 
       if (nextRolling && cacheAllowed) {
         writeCache({ rolling: nextRolling, fetchedAt: nowIso });
@@ -91,6 +113,7 @@ export function useRecentUsageData({
       }
     } catch (e) {
       if (signal?.aborted || (e as any)?.name === "AbortError") return;
+      immediateSnapshotVisibleRef.current = false;
       if (cacheAllowed) {
         const cached = readCache();
         if (cached?.rolling) {
@@ -140,8 +163,9 @@ export function useRecentUsageData({
     if (!cacheAllowed) clearCache();
     setError(null);
     setSource("edge");
+    immediateSnapshotVisibleRef.current = hasImmediateSnapshot;
     const controller = new AbortController();
-    refresh({ signal: controller.signal });
+    refresh({ signal: controller.signal, preferImmediateSnapshot: hasImmediateSnapshot });
     return () => {
       controller.abort();
     };
@@ -150,11 +174,11 @@ export function useRecentUsageData({
   const normalizedSource = mockEnabled ? "mock" : source;
 
   return {
-    rolling,
-    source: normalizedSource,
-    fetchedAt,
-    loading,
-    error,
+    rolling: visibleRolling,
+    source: mockEnabled ? "mock" : visibleSource,
+    fetchedAt: visibleFetchedAt,
+    loading: visibleLoading,
+    error: visibleError,
     refresh,
   };
 }
