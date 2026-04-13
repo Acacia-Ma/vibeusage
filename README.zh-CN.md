@@ -86,7 +86,7 @@ npx --yes vibeusage init --link-code <code>
 | **Every Code** | 自动检测 | `notify` hook | `~/.code/sessions/**/rollout-*.jsonl` |
 | **Claude Code** | 自动检测 | `Stop` + `SessionEnd` hooks | 本地 hook 输出 |
 | **Gemini CLI** | 自动检测 | `SessionEnd` hook | `~/.gemini/tmp/**/chats/session-*.json` |
-| **OpenCode** | 自动检测 | plugin + 本地解析 | `~/.local/share/opencode/opencode.db`（旧 message 文件仅作 fallback） |
+| **OpenCode** | 自动检测 | plugin + 本地解析 | `~/.local/share/opencode/opencode.db`（SQLite 是唯一受支持的本地 accounting source） |
 | **OpenClaw** | 安装后自动检测 | session plugin | 本地 sanitized usage ledger |
 
 ### OpenClaw 说明
