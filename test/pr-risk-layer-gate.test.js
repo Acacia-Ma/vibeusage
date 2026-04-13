@@ -389,6 +389,42 @@ test("resolveBody falls back to event payload when live GitHub API fetch fails",
   }
 });
 
+test("resolveBody accepts GH_TOKEN when GITHUB_TOKEN is not exported", async () => {
+  const gate = loadGateModule();
+  assert.equal(typeof gate.resolveBody, "function", "expected resolveBody export");
+
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pr-risk-layer-gh-token-"));
+  const eventPath = writeTempFile(
+    root,
+    "event.json",
+    JSON.stringify({
+      repository: { full_name: "victorGPT/vibeusage" },
+      pull_request: { number: 139, body: "stale body" },
+    }),
+  );
+
+  const originalFetch = global.fetch;
+  global.fetch = async (url, options = {}) => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ body: "live body via gh token" }),
+    url,
+    options,
+  });
+
+  try {
+    const body = await gate.resolveBody({ eventFile: eventPath }, {
+      env: {
+        GH_TOKEN: "gh-token",
+        GITHUB_REPOSITORY: "victorGPT/vibeusage",
+      },
+    });
+    assert.equal(body, "live body via gh token");
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test("CLI gate treats empty PR body as invalid instead of skipping", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "pr-risk-layer-empty-"));
   const eventPath = writeTempFile(

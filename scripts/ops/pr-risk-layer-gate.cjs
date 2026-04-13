@@ -255,6 +255,10 @@ async function loadBodyFromGitHubApi({ repo, prNumber, token, fetchImpl = global
   return Object.prototype.hasOwnProperty.call(payload, "body") ? (payload.body ?? "") : null;
 }
 
+function resolveGitHubToken(env = {}) {
+  return env.GITHUB_TOKEN || env.GH_TOKEN || env.GITHUB_API_TOKEN || null;
+}
+
 async function resolveBody(args, options = {}) {
   const env = options.env || process.env;
   if (Object.prototype.hasOwnProperty.call(args, "body")) {
@@ -267,13 +271,14 @@ async function resolveBody(args, options = {}) {
   const eventFile = args.eventFile || env.GITHUB_EVENT_PATH;
   const { repo, prNumber, eventPayload } = getPullRequestContext({ args: { eventFile }, env });
   const diagnostics = options.diagnostics || [];
+  const githubToken = resolveGitHubToken(env);
 
-  if (repo && prNumber && env.GITHUB_TOKEN) {
+  if (repo && prNumber && githubToken) {
     try {
       const liveBody = await loadBodyFromGitHubApi({
         repo,
         prNumber,
-        token: env.GITHUB_TOKEN,
+        token: githubToken,
         fetchImpl: options.fetchImpl || global.fetch,
       });
       if (liveBody !== null && liveBody !== undefined) {
