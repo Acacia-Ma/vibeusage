@@ -1,7 +1,8 @@
-# VibeUsage Design System v1 — Operations Deck
+# VibeUsage Design System v3 — Retro-Cyberpunk Operations Deck
 
-**Status**: v1 · hard cut · **no backward compat**
-**Last updated**: 2026-04-23
+**Status**: v3 · hard cut · **no backward compat**
+**Last updated**: 2026-04-25
+**Heritage**: extends v1 Operations Deck (token SSOT, CI guardrail) with retro + cyberpunk material — see PRODUCT.md three-word brand: `hacker · 复古 · cyberpunk`.
 
 ---
 
@@ -85,6 +86,7 @@ hue except the arbitrary-use `gold` accent.
 
 | Token       | Size / LineHt / Tracking / Weight / Case    | Usage                                       |
 | ----------- | ------------------------------------------- | ------------------------------------------- |
+| `display-0` | 96 / 0.95 / -0.03em / 900 / none            | **outsized hero** (dashboard total, CORE_INDEX, X-screenshot moment) |
 | `display-1` | 60 / 1.00 / -0.02em / 900 / none            | landing hero title                          |
 | `display-2` | 40 / 1.05 / -0.02em / 900 / none            | big number, screenshot title                |
 | `display-3` | 28 / 1.10 / -0.02em / 900 / none            | mid-size hero (leaderboard title, identity) |
@@ -185,6 +187,32 @@ No `glow-text-strong`. No ad-hoc `drop-shadow-[...]` / `shadow-[...]` in classNa
 Reserved for **landing page only**. Removed from dashboard routes. Always
 hidden in `screenshot-capture` mode.
 
+### v3 retro-cyberpunk fx layers
+
+Three new ambient layers, each load-bearing (carry signal, not decoration).
+All respect `prefers-reduced-motion: reduce` and `screenshot-capture` mode.
+
+| Class            | Effect                                                                | Where used                                       |
+| ---------------- | --------------------------------------------------------------------- | ------------------------------------------------ |
+| `fx-crt`         | Subtle screen-edge curvature (radial inner shadow) + phosphor warmth  | `<MatrixShell>` root, fixed full-bleed overlay   |
+| `fx-glitch`      | 2-frame RGB-shift jitter on hover or 7s-interval tick                 | `display-0` hero number, primary CTA on hover    |
+| `deco-katakana`  | Monospaced katakana band (`カタカナ ベンチマーク ...`), 1-line, low alpha | header right margin, section divider, panel chrome |
+
+`fx-crt` is **a single fixed overlay**, like `fx-scanline`. Never nested.
+
+`fx-glitch` triggers on:
+- `:hover` of an element it's attached to (manual user)
+- a 7-second `data-glitch-tick` event (rare ambient signal — only on `display-0`)
+
+`deco-katakana` uses font family `font-katakana` (defined below), is `text-ink-faint`, and never carries semantic meaning. If removed, no information is lost — purely chrome.
+
+### Font families
+
+| Family          | Stack                                                                             | Usage                                          |
+| --------------- | --------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `font-mono`     | `Geist Mono` → ui-monospace fallbacks                                             | default for everything                         |
+| `font-katakana` | `Hiragino Sans` → `Yu Gothic` → `MS Gothic` → `Geist Mono` (latin glyphs fallback) | `deco-katakana` ONLY — never body / data / label |
+
 ---
 
 ## 6. Component Contracts
@@ -192,17 +220,45 @@ hidden in `screenshot-capture` mode.
 ### `<Panel>`
 
 ```jsx
-<Panel variant="ascii" tone="default" title="..." subtitle="...">
+<Panel
+  variant="ascii"
+  weight="primary"
+  tone="default"
+  stamped
+  stampHandle="vibeuser"
+  stampPeriod="WEEK · 2025-W52"
+  title="..."
+  subtitle="..."
+>
   {children}
 </Panel>
 ```
 
-| Prop       | Values                          | Default     |
-| ---------- | ------------------------------- | ----------- |
-| `variant`  | `ascii` \| `plain` \| `bare`    | `plain`     |
-| `tone`     | `default` \| `strong`           | `default`   |
-| `title`    | string \| ReactNode             | —           |
-| `subtitle` | string \| ReactNode             | —           |
+| Prop          | Values                                       | Default      |
+| ------------- | -------------------------------------------- | ------------ |
+| `variant`     | `ascii` \| `plain` \| `bare`                 | `plain`      |
+| `weight`      | `primary` \| `secondary` \| `tertiary`       | `secondary`  |
+| `tone`        | `default` \| `strong`                        | `default`    |
+| `stamped`     | `boolean` — show corner stamps               | `false`      |
+| `stampHandle` | string — `@HANDLE` upper-left corner stamp   | —            |
+| `stampPeriod` | string — period label upper-right stamp      | —            |
+| `stampLogo`   | string — lower-right brand stamp             | `vibeusage.cc` |
+| `title`       | string \| ReactNode                          | —            |
+| `subtitle`    | string \| ReactNode                          | —            |
+
+**Weight ladder** (DESIGN.md §6 v3):
+- `primary` — double-line ASCII (`╔ ╗ ╚ ╝ ═ ║`), frame `text-ink`, `shadow-glow-sm`. Reserved for **the** hero panel of any view (one per route).
+- `secondary` — default single-line (`┌ ┐ └ ┘ ─ │`), `text-ink-muted`. The everyday panel.
+- `tertiary` — dotted (`·`), `text-ink-faint`. Stacked / supporting / footer panels.
+
+Use **at most one** `primary` per visible viewport. Two primaries cancel each other out.
+
+**Stamping** is screenshot armor. When `stamped` is on, the panel renders three corner labels so a single-panel crop is self-explanatory:
+- upper-left: `@{handle}` — owner identity
+- upper-right: `{period}` — time scope (e.g. `WEEK · 2025-W52`)
+- lower-right: `{logo}` — origin watermark, defaults to `vibeusage.cc`
+
+Stamps use `text-micro` `tracking-caps` `text-ink-muted/faint` so they read as instrumentation, not as decoration.
 
 - `ascii`: ASCII box drawing + corner-cross (signature).
 - `plain`: 1px ink-line border + surface-raised bg + backdrop blur.
@@ -380,4 +436,31 @@ Planned extensions (not in v1):
 3. If CSS-variable backed, edit `src/styles.css`.
 4. Use it.
 5. Never hard-code a new value in a component, not even once.
+
+---
+
+## 11. Keyboard Layer (v3)
+
+Hacker / cyberpunk register expects power-user keyboard control. The
+dashboard ships single-key bindings via `useGlobalKeybinds` (see
+`dashboard/src/hooks/use-global-keybinds.ts`).
+
+| Key   | Action                                              |
+| ----- | --------------------------------------------------- |
+| `?`   | Toggle keyboard cheatsheet overlay (`<KeyboardCheatsheet>`) |
+| `d`   | Switch period to DAY                                |
+| `w`   | Switch period to WEEK                               |
+| `m`   | Switch period to MONTH                              |
+| `t`   | Switch period to TOTAL                              |
+| `r`   | Refresh dashboard data                              |
+| `s`   | Trigger share-to-X screenshot flow                  |
+| `esc` | Close any open overlay                              |
+
+**Rules**:
+
+- All bindings are **single-key, no modifier**. Modified keys (`Cmd/Ctrl/Alt + X`) belong to the OS and the browser.
+- Bindings are **suppressed while a text input is focused** (input / textarea / select / contentEditable). Typing in the search bar does not trigger period switching.
+- The cheatsheet is the **only** in-app surface that documents these keys. There is no settings page for re-binding (this is a feature, not a missing piece — opinionated minimalism is part of the brand).
+- New bindings require a row in this table **and** a row in `KeyboardCheatsheet`'s `KEY_ROWS`. CI does not enforce parity yet — keep them in sync by hand.
+- `screenshot-capture` mode disables the layer (`enabled: !screenshotMode`).
 

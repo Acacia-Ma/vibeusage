@@ -83,6 +83,7 @@ shell.header.title,ui,MatrixShell,MatrixShell,header_title,"VIBE USAGE",,active
 shell.header.link_active,ui,MatrixShell,MatrixShell,header_link_active,"LINK_ACTIVE",,active
 shell.footer.help,ui,MatrixShell,MatrixShell,footer_help,"[F1] Help",,active
 shell.footer.neural_index,ui,MatrixShell,MatrixShell,footer_neural_index,"CORE_INDEX: 0.942.A1",,active
+shell.footer.observer_mascot,ui,MatrixShell,MatrixShell,footer_decoration,"< ¬‿¬ >  // observing",,active
 
 backend.meta.status_label,components,BackendStatus,BackendStatus,meta_status,"status",,active
 backend.meta.host_label,components,BackendStatus,BackendStatus,meta_host,"host",,active
@@ -102,6 +103,7 @@ boot.skip_hint,ui,BootScreen,BootScreen,skip_hint,"Click to skip",,active
 boot.skip_aria,ui,BootScreen,BootScreen,aria_label,"Skip boot screen",,active
 
 system.header.title_default,ui,SystemHeader,SystemHeader,title_default,"VIBE_OS_v9.0",,active
+system.header.katakana_deco,ui,SystemHeader,SystemHeader,decoration,"カタカナ ベンチマーク プロトコル ▰▰▰▱▱▱",,active
 
 signalbox.title_default,ui,SignalBox,SignalBox,title_default,"LINK",,active
 
@@ -185,7 +187,7 @@ dashboard.cost_breakdown.footer,ui,CostAnalysisModal,CostAnalysisModal,footer,"A
 trend.chart.unit_label,ui,TrendChart,TrendChart,unit_label,"TKNS",,active
 trend.chart.left_label,ui,TrendChart,TrendChart,left_label,"T-24H",,active
 trend.chart.right_label,ui,TrendChart,TrendChart,right_label,"Realtime_Flow",,active
-trend.chart.empty,ui,TrendChart,TrendChart,empty_state,"No trend data.",,active
+trend.chart.empty,ui,TrendChart,TrendChart,empty_state,"// trend ▒▒▒ awaiting_sync",,active
 trend.chart.peak,ui,TrendChart,TrendChart,peak_label,"Peak: {{value}} {{unit}}",,active
 
 trend.monitor.label,ui,TrendMonitor,TrendMonitor,label,"TREND",,active
@@ -224,7 +226,7 @@ trend.monitor.month.nov,ui,TrendMonitor,TrendMonitor,month_label,"NOV",,active
 trend.monitor.month.dec,ui,TrendMonitor,TrendMonitor,month_label,"DEC",,active
 
 heatmap.aria_label,ui,ActivityHeatmap,ActivityHeatmap,aria_label,"Activity heatmap",,active
-heatmap.empty,ui,ActivityHeatmap,ActivityHeatmap,empty_state,"No activity data yet.",,active
+heatmap.empty,ui,ActivityHeatmap,ActivityHeatmap,empty_state,"// activity ▒▒▒ awaiting_sync",,active
 heatmap.legend.less,ui,ActivityHeatmap,ActivityHeatmap,legend_less,"Less",,active
 heatmap.legend.more,ui,ActivityHeatmap,ActivityHeatmap,legend_more,"More",,active
 heatmap.legend.utc,ui,ActivityHeatmap,ActivityHeatmap,legend_utc,"UTC",,active
@@ -370,7 +372,7 @@ dashboard.activity.subtitle,dashboard,DashboardPage,AsciiBox,subtitle,"52W_LOCAL
 
 dashboard.daily.title,dashboard,DashboardPage,AsciiBox,title,"DETAILS",,active
 dashboard.daily.subtitle,dashboard,DashboardPage,AsciiBox,subtitle,"Sortable",,active
-dashboard.daily.empty,dashboard,DashboardPage,AsciiBox,empty_state,"No data yet. Use your AI CLI then run {{cmd}}.",,active
+dashboard.daily.empty,dashboard,DashboardPage,AsciiBox,empty_state,"// no_data ▒▒▒ run {{cmd}} to sync",,active
 
 dashboard.identity.title,dashboard,DashboardPage,IdentityCard,title,"Identity_Core",,active
 dashboard.identity.subtitle,dashboard,DashboardPage,IdentityCard,subtitle,"Authorized",,active
@@ -394,3 +396,18 @@ live_sniffer.event.sync,ui,LiveSniffer,LiveSniffer,event,"> SYNC: UPLOADING_TO_C
 live_sniffer.event.batch,ui,LiveSniffer,LiveSniffer,event,"[STATUS] BATCH_TRANSMISSION_COMPLETE",,active
 live_sniffer.event.hooking,ui,LiveSniffer,LiveSniffer,event,"> HOOKING: AI_CLI_PIPE_LINK",,active
 live_sniffer.event.capture,ui,LiveSniffer,LiveSniffer,event,"> CAPTURE: +128 NEURAL_TOKENS",,active
+
+keyboard.cheatsheet.title,ui,KeyboardCheatsheet,KeyboardCheatsheet,title,"keymap.help",,active
+keyboard.cheatsheet.dismiss_hint,ui,KeyboardCheatsheet,KeyboardCheatsheet,hint,"esc · close",,active
+keyboard.cheatsheet.aria_label,ui,KeyboardCheatsheet,KeyboardCheatsheet,aria_label,"Keyboard shortcuts",,active
+keyboard.cheatsheet.close_label,ui,KeyboardCheatsheet,KeyboardCheatsheet,close_button,"[ × ]",,active
+keyboard.cheatsheet.close_aria,ui,KeyboardCheatsheet,KeyboardCheatsheet,close_aria,"Close shortcuts",,active
+keyboard.cheatsheet.footer_note,ui,KeyboardCheatsheet,KeyboardCheatsheet,note,"// single-key bindings · ignored while typing in inputs",,active
+keyboard.cheatsheet.row.toggle,ui,KeyboardCheatsheet,KeyboardCheatsheet,row,"toggle this cheatsheet",,active
+keyboard.cheatsheet.row.day,ui,KeyboardCheatsheet,KeyboardCheatsheet,row,"switch to DAY",,active
+keyboard.cheatsheet.row.week,ui,KeyboardCheatsheet,KeyboardCheatsheet,row,"switch to WEEK",,active
+keyboard.cheatsheet.row.month,ui,KeyboardCheatsheet,KeyboardCheatsheet,row,"switch to MONTH",,active
+keyboard.cheatsheet.row.total,ui,KeyboardCheatsheet,KeyboardCheatsheet,row,"switch to TOTAL",,active
+keyboard.cheatsheet.row.refresh,ui,KeyboardCheatsheet,KeyboardCheatsheet,row,"refresh data",,active
+keyboard.cheatsheet.row.share,ui,KeyboardCheatsheet,KeyboardCheatsheet,row,"share screenshot to X",,active
+keyboard.cheatsheet.row.close,ui,KeyboardCheatsheet,KeyboardCheatsheet,row,"close overlays",,active

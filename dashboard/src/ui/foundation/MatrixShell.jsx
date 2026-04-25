@@ -26,6 +26,7 @@ export function MatrixShell({
     >
       <MatrixRain />
       <div className="fx-scanline pointer-events-none fixed inset-0 z-50"></div>
+      <div className="fx-crt pointer-events-none fixed inset-0 z-40"></div>
 
       <div
         className={`relative z-10 flex flex-col min-h-screen app-shell-content ${contentClassName}`}
@@ -71,10 +72,16 @@ export function MatrixShell({
 
         <main className="flex-1">{children}</main>
 
-        <footer className="mt-6 pt-3 border-t border-ink-faint flex justify-between text-micro text-ink-muted shrink-0">
+        <footer className="mt-6 pt-3 border-t border-ink-faint flex justify-between items-center text-micro text-ink-muted shrink-0">
           <div className="flex gap-8 items-center">
             {footerLeft || <span>{copy("shell.footer.help")}</span>}
           </div>
+          <span
+            aria-hidden="true"
+            className="hidden md:inline font-mono tracking-caps text-ink-faint select-none"
+          >
+            {copy("shell.footer.observer_mascot")}
+          </span>
           <div className="flex items-center gap-3">
             {footerRight || <span>{copy("shell.footer.neural_index")}</span>}
           </div>
