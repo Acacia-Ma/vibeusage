@@ -113,11 +113,11 @@ export function Panel({
         </div>
 
         <div className="flex flex-1">
-          <div className={`shrink-0 w-3 flex justify-center ${frameTone}`}>{ASCII.V}</div>
+          <div className="shrink-0 w-3" aria-hidden="true" />
           <div className={`flex-1 min-w-0 relative z-10 py-4 px-4 ${bodyClassName}`}>
             {children}
           </div>
-          <div className={`shrink-0 w-3 flex justify-center ${frameTone}`}>{ASCII.V}</div>
+          <div className="shrink-0 w-3" aria-hidden="true" />
         </div>
 
         <div className={`flex items-center leading-none ${frameTone}`}>
