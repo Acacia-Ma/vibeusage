@@ -56,9 +56,33 @@ function splitPrefix(token) {
   };
 }
 
+// rgba-backed v3 SSOT tokens. Guardrail check `redundant /N on rgba-backed
+// ink token` rejects `bg-ink-faint/N` etc., because the alpha is already
+// baked into the token's rgba(...) value. When the retro-fitter maps a
+// shadcn class with an opacity-slash suffix (e.g. `bg-muted/80`) to one
+// of these rgba-backed targets, drop the `/N` to stay SSOT-clean.
+const RGBA_BACKED_TARGETS = new Set([
+  "ink-faint",
+  "ink-line",
+  "ink-muted",
+  "ink-text",
+  "surface-raised",
+  "surface-strong",
+]);
+
+function isRgbaBacked(replacement) {
+  // Strip utility prefix ("bg-", "text-", "border-", ...) to compare token name.
+  const m = replacement.match(/^(?:bg|text|border|ring|fill|stroke|from|via|to|outline)-(.+)$/);
+  if (!m) return false;
+  return RGBA_BACKED_TARGETS.has(m[1]);
+}
+
 // Rewrite a single className token. Drops the token (returns null) if any
 // modifier in the chain is `dark:` (vibeusage is dark-only by register) or
-// if the core is in the opacity-strip list.
+// if the core is in the opacity-strip list. Handles the Tailwind opacity-
+// slash suffix (`bg-foo/80`, `text-foo/50`) by splitting it off the core
+// before mapping lookup, then re-attaching it iff the mapped target is
+// hex-backed (rgba targets have the alpha baked in already).
 function rewriteToken(token, mapping, opacityStrip) {
   if (!token) return token;
   const { prefix, core } = splitPrefix(token);
@@ -69,12 +93,18 @@ function rewriteToken(token, mapping, opacityStrip) {
   // false positives on, e.g., a hypothetical `mydark:` utility.
   if (/(^|:)dark:/.test(prefix)) return null;
 
-  if (opacityStrip.includes(core)) return null;
+  // Split off opacity-slash suffix (`bg-foo/80` → core=`bg-foo`, tail=`/80`).
+  const slashMatch = core.match(/^(.+?)\/(\d+)$/);
+  const baseCore = slashMatch ? slashMatch[1] : core;
+  const opacityTail = slashMatch ? "/" + slashMatch[2] : "";
 
-  if (mapping.has(core)) {
-    const replacement = mapping.get(core);
+  if (opacityStrip.includes(baseCore)) return null;
+
+  if (mapping.has(baseCore)) {
+    const replacement = mapping.get(baseCore);
     if (replacement === "") return null;
-    return prefix + replacement;
+    const tail = isRgbaBacked(replacement) ? "" : opacityTail;
+    return prefix + replacement + tail;
   }
 
   return token;
@@ -318,6 +348,26 @@ const SELF_TESTS = [
     name: "literal containing parens does not break paren scan",
     in: 'cn(format("(literal)"), "bg-primary")',
     out: 'cn(format("(literal)"), "bg-ink")',
+  },
+  {
+    name: "opacity-slash on hex-backed mapped target preserves /N",
+    in: 'className="bg-background/80"',
+    out: 'className="bg-surface/80"',
+  },
+  {
+    name: "opacity-slash on rgba-backed mapped target strips /N (guardrail)",
+    in: 'className="bg-muted/80"',
+    out: 'className="bg-ink-faint"',
+  },
+  {
+    name: "opacity-slash with variant prefix on rgba target strips /N",
+    in: 'className="hover:bg-accent/50"',
+    out: 'className="hover:bg-ink-faint"',
+  },
+  {
+    name: "opacity-slash with variant prefix on hex target keeps /N",
+    in: 'className="hover:bg-background/40"',
+    out: 'className="hover:bg-surface/40"',
   },
 ];
 
