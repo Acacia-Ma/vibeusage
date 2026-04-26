@@ -439,6 +439,34 @@ Planned extensions (not in v1):
 
 ---
 
+## 12. shadcn integration policy (v3)
+
+We are not running `npx shadcn init`. The init flow rewrites `tailwind.config`
+and `globals.css` with hsl colour variables, default radii, and SaaS-flavoured
+typography that all collide head-on with §1–§7 of this file. Keep init out.
+
+Our integration is mechanical and one-way:
+
+1. Hand-write or copy a shadcn-style component file into `dashboard/src/ui/shadcn/<name>.tsx` using the **upstream classNames as-authored** (`bg-primary`, `text-sm`, `rounded-md`, `shadow-md`, …). The retro-fitter owns translation, not the author.
+2. Run `node dashboard/scripts/shadcn-retro-fit.mjs dashboard/src/ui/shadcn/<name>.tsx`. The script remaps every Tailwind token to its SSOT equivalent via `dashboard/scripts/shadcn-mapping.json` (~50 entries: bg / text / border / shadow / typography / shape, plus `opacity-30..90` strip and `dark:` prefix strip).
+3. Run `npm run guardrail:design` and `npm run validate:ui-hardcode` to confirm the rewritten file is SSOT-clean.
+4. Use the component from anywhere in `dashboard/src/`. Re-importing a fresh upstream version requires re-running step 2; never edit the rewritten classes by hand.
+
+Rules:
+
+- **No new mapping rule lives in a component file.** If a shadcn class has no SSOT equivalent, add a row to `shadcn-mapping.json` (or a new SSOT token here in §2/§3 first), then re-run the retro-fitter.
+- **No `dark:` prefixes survive.** vibeusage is dark-only by register; the mapping strips them.
+- **No `rounded-*` survives.** `§1` mandates zero radius (the `dot` exception lives in CSS, not Tailwind).
+- **No `opacity-30..90` survives.** Use `ink-*` alpha tokens.
+- **Imports stay named.** vibeusage `tsconfig.json` does not enable `esModuleInterop`; `import * as React from "react"` fails. Use `import { forwardRef, type ComponentPropsWithoutRef, type ElementRef } from "react"`.
+- **Primitives layer is `@base-ui/react`.** Already in `dashboard/package.json`. Do not add `@radix-ui/*` — same primitives, parallel namespace, dead weight.
+
+Runtime deps owned by this policy: `class-variance-authority`, `clsx`, `tailwind-merge`. The composer lives at `dashboard/src/lib/utils.ts` (`cn(...inputs)`).
+
+Components landed under this policy: `tooltip.tsx` (initial verifier).
+
+---
+
 ## 11. Keyboard Layer (v3)
 
 Hacker / cyberpunk register expects power-user keyboard control. The
