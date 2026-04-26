@@ -23,16 +23,8 @@ declare module "*?raw" {
   export default content;
 }
 
-declare module "react" {
-  export type Dispatch<T> = (value: T) => void;
-  export type SetStateAction<T> = T | ((prev: T) => T);
-  export type DependencyList = ReadonlyArray<unknown>;
-  export function useState<T>(initial: T | (() => T)): [T, Dispatch<SetStateAction<T>>];
-  export function useEffect(effect: () => void | (() => void), deps?: DependencyList): void;
-  export function useMemo<T>(factory: () => T, deps: DependencyList): T;
-  export function useCallback<T extends (...args: any[]) => any>(
-    callback: T,
-    deps: DependencyList,
-  ): T;
-  export function useRef<T>(value: T): { current: T };
-}
+// Note: We previously hand-rolled a thin `declare module "react"` stub here
+// (useState/useEffect/useMemo/useCallback/useRef + 3 types). Module
+// augmentation in user-land overrides @types/react completely, which hid
+// forwardRef, ComponentPropsWithoutRef, ElementRef, lazy, memo, and
+// everything else from the dashboard. We rely on @types/react now.

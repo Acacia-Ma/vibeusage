@@ -7,7 +7,9 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "noEmit": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
   },
   "include": ["src", "../src/shared/*.cjs.d.ts"],
   "exclude": [

@@ -1,7 +1,7 @@
-import {
-  forwardRef,
-  type ComponentPropsWithoutRef,
-  type ElementRef,
+import { forwardRef } from "react";
+import type {
+  ComponentPropsWithoutRef,
+  ElementRef,
 } from "react";
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 

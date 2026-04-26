@@ -34,26 +34,48 @@ function loadMapping() {
   return { mapping: flat, opacityStrip: json.opacity_strip || [] };
 }
 
-// Match a className token at a word boundary inside a className string.
-// We match the *whole token* including any responsive / state prefixes,
-// e.g. md:bg-white, hover:text-gray-500, dark:bg-slate-900.
-function rewriteToken(token, mapping, opacityStrip) {
-  // Split off prefixes (anything ending with :)
-  const prefixMatch = token.match(/^((?:[a-z]+:)+)?(.+)$/);
-  if (!prefixMatch) return token;
-  const prefix = prefixMatch[1] || "";
-  const core = prefixMatch[2];
+// Split a Tailwind utility token into its modifier prefix(es) and the
+// terminal "core" utility. The split point is the *last* `:` that is not
+// inside a bracketed arbitrary-value group like `data-[state=open]:` or
+// `[&>svg]:`. A naive regex like `[a-z]+:` cannot do this — it stops at
+// `data-[`, leaves the variant unparsed, and the core utility never reaches
+// the mapping table.
+function splitPrefix(token) {
+  let depth = 0;
+  let lastColon = -1;
+  for (let i = 0; i < token.length; i++) {
+    const ch = token[i];
+    if (ch === "[") depth++;
+    else if (ch === "]") depth--;
+    else if (ch === ":" && depth === 0) lastColon = i;
+  }
+  if (lastColon === -1) return { prefix: "", core: token };
+  return {
+    prefix: token.slice(0, lastColon + 1),
+    core: token.slice(lastColon + 1),
+  };
+}
 
-  if (opacityStrip.includes(core)) return null; // drop entirely
+// Rewrite a single className token. Drops the token (returns null) if any
+// modifier in the chain is `dark:` (vibeusage is dark-only by register) or
+// if the core is in the opacity-strip list.
+function rewriteToken(token, mapping, opacityStrip) {
+  if (!token) return token;
+  const { prefix, core } = splitPrefix(token);
+
+  // Strip the whole token if any modifier in the chain is `dark:` — we are
+  // dark-only, light-mode overrides have nothing to override here.
+  // Match `dark:` at the start of the chain or after another colon to avoid
+  // false positives on, e.g., a hypothetical `mydark:` utility.
+  if (/(^|:)dark:/.test(prefix)) return null;
+
+  if (opacityStrip.includes(core)) return null;
 
   if (mapping.has(core)) {
     const replacement = mapping.get(core);
-    if (replacement === "") return null; // strip
+    if (replacement === "") return null;
     return prefix + replacement;
   }
-
-  // Drop dark: prefix entirely (vibeusage is dark-only by register).
-  if (prefix.startsWith("dark:")) return null;
 
   return token;
 }
@@ -66,7 +88,30 @@ function rewriteClassString(classStr, mapping, opacityStrip) {
     .join(" ");
 }
 
-// Match className="..." and className={`...`} and cn("...") arguments.
+// Heuristic: does this string literal look like Tailwind class soup?
+// Used to gate rewriting inside cn() / cva() / clsx() so we don't munge
+// unrelated string literals that happen to live inside those calls.
+function looksLikeTailwind(s) {
+  return /(?:^|\s)(?:[a-z][a-z0-9-]*:|\[)?(?:bg|text|border|rounded|shadow|ring|opacity|outline|font|tracking|leading|p[xytrbl]?|m[xytrbl]?|w|h|min-|max-|flex|grid|gap|space|hidden|block|inline|absolute|relative|fixed|sticky|z|cursor|select|hover|focus|active|disabled|data|aria|group|peer|dark)/.test(
+    s,
+  );
+}
+
+function rewriteAllStringLiteralsIn(src, mapping, opacityStrip) {
+  // Matches "..." or '...' literals. We rewrite a literal only if it looks
+  // like Tailwind class soup (looksLikeTailwind), so JSX/JS string literals
+  // unrelated to className are left alone.
+  return src.replace(/(["'])((?:\\.|(?!\1)[^\\])*)\1/g, (m, q, body) => {
+    if (!looksLikeTailwind(body)) return m;
+    const rewritten = rewriteClassString(body, mapping, opacityStrip);
+    return `${q}${rewritten}${q}`;
+  });
+}
+
+// Match className="..." and className={`...`} and cn(...) / cva(...) /
+// clsx(...) arguments. cn() bodies can contain *multiple* string literals
+// (and ternaries, vars, etc.) — we replace ALL string literals inside the
+// call body, not just the first one.
 function rewriteFile(content, mapping, opacityStrip) {
   let out = content;
 
@@ -76,34 +121,128 @@ function rewriteFile(content, mapping, opacityStrip) {
     return `className=${q}${rewritten}${q}`;
   });
 
-  // className={`...`} (no interpolation case)
+  // className={`...`} (no template interpolation case)
   out = out.replace(/className=\{`([^`${}]*?)`\}/g, (m, classes) => {
     const rewritten = rewriteClassString(classes, mapping, opacityStrip);
     return `className={\`${rewritten}\`}`;
   });
 
-  // cn("string-arg") and cva("string-arg") string literals.
-  // Be conservative: only string literals, leave template/var args alone.
+  // cn(...) / cva(...) / clsx(...) call bodies — rewrite every string
+  // literal inside, not just the first arg. Body matched lazily up to the
+  // closing paren; nested parens inside cn() are uncommon and out of scope.
   out = out.replace(
-    /(\b(?:cn|cva|clsx)\s*\([^)]*?)(["'])([^"'`{}]*?)\2/g,
-    (m, before, q, classes) => {
-      // skip if there are no tailwind-looking tokens
-      if (!/(?:^|\s)(?:bg|text|border|rounded|shadow|ring|opacity)-/.test(classes)) {
-        return m;
-      }
-      const rewritten = rewriteClassString(classes, mapping, opacityStrip);
-      return `${before}${q}${rewritten}${q}`;
-    },
+    /(\b(?:cn|cva|clsx)\s*\()([\s\S]*?)(\))/g,
+    (m, head, body, tail) =>
+      `${head}${rewriteAllStringLiteralsIn(body, mapping, opacityStrip)}${tail}`,
   );
 
   return out;
 }
 
+// Self-test fixtures — every entry asserts a real pattern that has shipped
+// in upstream shadcn components. Failures here block CI and signal a
+// regression in the rewriter.
+const SELF_TESTS = [
+  {
+    name: "plain className with bg-primary",
+    in: 'className="bg-primary"',
+    out: 'className="bg-ink"',
+  },
+  {
+    name: "data-[state=open] variant on bg-accent",
+    in: 'className="data-[state=open]:bg-accent"',
+    out: 'className="data-[state=open]:bg-ink-faint"',
+  },
+  {
+    name: "data-[state=closed] strips dark: chained variant",
+    in: 'className="dark:data-[state=open]:bg-slate-900"',
+    out: 'className=""',
+  },
+  {
+    name: "aria-selected variant",
+    in: 'className="aria-selected:bg-accent"',
+    out: 'className="aria-selected:bg-ink-faint"',
+  },
+  {
+    name: "peer-disabled variant on opacity-50 strips token",
+    in: 'className="peer-disabled:opacity-50"',
+    out: 'className=""',
+  },
+  {
+    name: "group-hover variant",
+    in: 'className="group-hover:text-foreground"',
+    out: 'className="group-hover:text-ink-bright"',
+  },
+  {
+    name: "[&>svg] arbitrary selector variant",
+    in: 'className="[&>svg]:text-muted-foreground"',
+    out: 'className="[&>svg]:text-ink-muted"',
+  },
+  {
+    name: "dark: prefix is dropped (mapped core)",
+    in: 'className="dark:bg-white"',
+    out: 'className=""',
+  },
+  {
+    name: "rounded-md is stripped per zero-radius rule",
+    in: 'className="rounded-md"',
+    out: 'className=""',
+  },
+  {
+    name: "responsive prefix preserved",
+    in: 'className="md:text-2xl"',
+    out: 'className="md:text-display-3"',
+  },
+  {
+    name: "stacked responsive + state preserved",
+    in: 'className="md:hover:bg-primary"',
+    out: 'className="md:hover:bg-ink"',
+  },
+  {
+    name: "multiple string literals inside cn() all rewritten",
+    in: 'cn("bg-primary text-sm", "border-border rounded-md")',
+    out: 'cn("bg-ink text-caption", "border-ink-line")',
+  },
+  {
+    name: "plain non-tailwind string literal left untouched",
+    in: 'cn("Hello world", "bg-primary")',
+    out: 'cn("Hello world", "bg-ink")',
+  },
+];
+
+function runSelfTests() {
+  const { mapping, opacityStrip } = loadMapping();
+  const failures = [];
+  for (const t of SELF_TESTS) {
+    const got = rewriteFile(t.in, mapping, opacityStrip);
+    if (got !== t.out) {
+      failures.push({ name: t.name, input: t.in, expected: t.out, got });
+    }
+  }
+  if (failures.length === 0) {
+    console.log(`self-test ok — ${SELF_TESTS.length}/${SELF_TESTS.length} passed`);
+    return 0;
+  }
+  console.error(`self-test FAILED — ${failures.length}/${SELF_TESTS.length}`);
+  for (const f of failures) {
+    console.error(`  · ${f.name}`);
+    console.error(`      in:  ${f.input}`);
+    console.error(`      out: ${f.got}`);
+    console.error(`      exp: ${f.expected}`);
+  }
+  return 1;
+}
+
 function main() {
   const args = process.argv.slice(2);
   if (args.length === 0) {
-    console.error("Usage: shadcn-retro-fit.mjs [--check] <file.tsx> [<file.tsx> ...]");
+    console.error(
+      "Usage: shadcn-retro-fit.mjs [--self-test|--check] <file.tsx> [<file.tsx> ...]",
+    );
     process.exit(2);
+  }
+  if (args[0] === "--self-test") {
+    process.exit(runSelfTests());
   }
   const check = args[0] === "--check";
   const targets = check ? args.slice(1) : args;
