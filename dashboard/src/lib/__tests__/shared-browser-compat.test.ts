@@ -32,6 +32,9 @@ afterEach(async () => {
 });
 
 describe("shared SSOT browser build", () => {
+  // Full vite build inside the test runner; bumped above the 5s default so
+  // it doesn't flake under suite-parallel load. Single-run cold time is
+  // ~6-12s on a warm CI box.
   it("does not emit CommonJS runtime markers into browser bundles", async () => {
     const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "vibeusage-dashboard-build-"));
     tempDirs.push(outDir);
@@ -51,5 +54,5 @@ describe("shared SSOT browser build", () => {
     const bundleContents = await Promise.all(jsFiles.map((file) => fs.readFile(file, "utf8")));
 
     expect(bundleContents.some((content) => content.includes("module.exports"))).toBe(false);
-  });
+  }, 30000);
 });

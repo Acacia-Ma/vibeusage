@@ -97,21 +97,113 @@ function looksLikeTailwind(s) {
   );
 }
 
-function rewriteAllStringLiteralsIn(src, mapping, opacityStrip) {
-  // Matches "..." or '...' literals. We rewrite a literal only if it looks
-  // like Tailwind class soup (looksLikeTailwind), so JSX/JS string literals
-  // unrelated to className are left alone.
-  return src.replace(/(["'])((?:\\.|(?!\1)[^\\])*)\1/g, (m, q, body) => {
-    if (!looksLikeTailwind(body)) return m;
-    const rewritten = rewriteClassString(body, mapping, opacityStrip);
-    return `${q}${rewritten}${q}`;
-  });
+// Find the end-position (index of the closing paren) of a balanced `(...)`
+// group whose body starts at `start` in `src`. String-aware so quotes and
+// template literals inside the body are respected. Returns -1 if no
+// balanced match (truncated input).
+function findBalancedClose(src, start) {
+  let depth = 1;
+  let strChar = null; // '"', "'", or '`'
+  let i = start;
+  while (i < src.length && depth > 0) {
+    const ch = src[i];
+    if (strChar) {
+      if (ch === "\\") {
+        i += 2;
+        continue;
+      }
+      if (ch === strChar) strChar = null;
+    } else if (ch === '"' || ch === "'" || ch === "`") {
+      strChar = ch;
+    } else if (ch === "(") {
+      depth++;
+    } else if (ch === ")") {
+      depth--;
+      if (depth === 0) return i;
+    }
+    i++;
+  }
+  return -1;
+}
+
+// Locate every cn / cva / clsx call body in `src` as paren-balanced, string-
+// aware regions. Lazy-regex `[\s\S]*?` would stop at the first nested `)`
+// (e.g. inside `getVariantClass(variant)`), missing string literals after
+// the nested call. Real source has nested calls; this scanner handles them.
+function findCallRegions(src, fnNames) {
+  const headRe = new RegExp(`\\b(?:${fnNames.join("|")})\\s*\\(`, "g");
+  const regions = [];
+  let m;
+  while ((m = headRe.exec(src)) !== null) {
+    const bodyStart = m.index + m[0].length;
+    const closeIdx = findBalancedClose(src, bodyStart);
+    if (closeIdx === -1) continue;
+    regions.push({ start: bodyStart, end: closeIdx });
+    // Don't skip past closeIdx — nested cn() calls still need to be found by
+    // the outer regex pass; lastIndex naturally advances. Allowing overlap
+    // is fine: a string literal landing inside several regions still maps
+    // to itself once.
+  }
+  return regions;
+}
+
+function isInsideAnyRegion(pos, regions) {
+  for (const r of regions) {
+    if (pos >= r.start && pos < r.end) return true;
+  }
+  return false;
+}
+
+// Walk `src` once, rewriting every plain-string literal ("..." or '...')
+// whose start index lies inside any cn/cva/clsx region AND whose contents
+// look like Tailwind class soup. Template literals are skipped here — they
+// commonly carry interpolation and `className={`...`}` already handles the
+// no-interp template case in rewriteFile.
+function rewriteCallBodyLiterals(src, fnNames, mapping, opacityStrip) {
+  const regions = findCallRegions(src, fnNames);
+  if (regions.length === 0) return src;
+
+  let out = "";
+  let i = 0;
+  while (i < src.length) {
+    const ch = src[i];
+    if (ch === '"' || ch === "'") {
+      // Find the matching close quote, escape-aware.
+      let j = i + 1;
+      while (j < src.length) {
+        const c = src[j];
+        if (c === "\\") {
+          j += 2;
+          continue;
+        }
+        if (c === ch) break;
+        j++;
+      }
+      if (j >= src.length) {
+        out += src.slice(i);
+        break;
+      }
+      const inner = src.slice(i + 1, j);
+      if (isInsideAnyRegion(i, regions) && looksLikeTailwind(inner)) {
+        const rewritten = rewriteClassString(inner, mapping, opacityStrip);
+        out += ch + rewritten + ch;
+      } else {
+        out += src.slice(i, j + 1);
+      }
+      i = j + 1;
+    } else {
+      out += ch;
+      i++;
+    }
+  }
+  return out;
 }
 
 // Match className="..." and className={`...`} and cn(...) / cva(...) /
 // clsx(...) arguments. cn() bodies can contain *multiple* string literals
-// (and ternaries, vars, etc.) — we replace ALL string literals inside the
-// call body, not just the first one.
+// (and ternaries, nested calls like `cn(format(x), "bg-primary")`) — we
+// rewrite ALL string literals whose position lies inside a cn/cva/clsx
+// region, regardless of how deeply nested the surrounding expression is.
 function rewriteFile(content, mapping, opacityStrip) {
   let out = content;
 
@@ -127,13 +219,12 @@ function rewriteFile(content, mapping, opacityStrip) {
     return `className={\`${rewritten}\`}`;
   });
 
-  // cn(...) / cva(...) / clsx(...) call bodies — rewrite every string
-  // literal inside, not just the first arg. Body matched lazily up to the
-  // closing paren; nested parens inside cn() are uncommon and out of scope.
-  out = out.replace(
-    /(\b(?:cn|cva|clsx)\s*\()([\s\S]*?)(\))/g,
-    (m, head, body, tail) =>
-      `${head}${rewriteAllStringLiteralsIn(body, mapping, opacityStrip)}${tail}`,
+  // cn(...) / cva(...) / clsx(...) call bodies — paren-balanced scan.
+  out = rewriteCallBodyLiterals(
+    out,
+    ["cn", "cva", "clsx"],
+    mapping,
+    opacityStrip,
   );
 
   return out;
@@ -207,6 +298,26 @@ const SELF_TESTS = [
     name: "plain non-tailwind string literal left untouched",
     in: 'cn("Hello world", "bg-primary")',
     out: 'cn("Hello world", "bg-ink")',
+  },
+  {
+    name: "nested function call inside cn — outer string literal still rewritten (Codex regression)",
+    in: 'cn(getVariantClass(variant), "bg-primary text-sm")',
+    out: 'cn(getVariantClass(variant), "bg-ink text-caption")',
+  },
+  {
+    name: "ternary with nested call inside cn — both branches and tail rewritten",
+    in: 'cn(condition ? cls(x) : "bg-accent text-foreground", "border-border")',
+    out: 'cn(condition ? cls(x) : "bg-ink-faint text-ink-bright", "border-ink-line")',
+  },
+  {
+    name: "deeply nested cva inside cn — strings at every level rewritten",
+    in: 'cn(cva({ base: "p-2 rounded-md bg-muted" })(props), "bg-primary")',
+    out: 'cn(cva({ base: "p-2 bg-ink-faint" })(props), "bg-ink")',
+  },
+  {
+    name: "literal containing parens does not break paren scan",
+    in: 'cn(format("(literal)"), "bg-primary")',
+    out: 'cn(format("(literal)"), "bg-ink")',
   },
 ];
 
