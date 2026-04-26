@@ -56,33 +56,43 @@ function splitPrefix(token) {
   };
 }
 
-// rgba-backed v3 SSOT tokens. Guardrail check `redundant /N on rgba-backed
-// ink token` rejects `bg-ink-faint/N` etc., because the alpha is already
-// baked into the token's rgba(...) value. When the retro-fitter maps a
-// shadcn class with an opacity-slash suffix (e.g. `bg-muted/80`) to one
-// of these rgba-backed targets, drop the `/N` to stay SSOT-clean.
-const RGBA_BACKED_TARGETS = new Set([
+// v3 SSOT tokens whose Tailwind alpha-slash modifier (`/N`) is forbidden by
+// the design guardrail (`redundant /N on rgba-backed ink token`). The check
+// targets only these four — alpha is already baked into their rgba(...)
+// values, and Tailwind silently drops the modifier. When the retro-fitter
+// maps a shadcn class with an opacity-slash to one of these targets, drop
+// the `/N` so we don't ship a guardrail violation.
+//
+// surface-raised / surface-strong are also rgba-backed but the guardrail
+// does NOT ban /N on them, so we preserve the user's alpha intent there
+// (Codex feedback: don't collapse valid alpha semantics).
+const GUARDRAIL_BANS_SLASH = new Set([
   "ink-faint",
   "ink-line",
   "ink-muted",
   "ink-text",
-  "surface-raised",
-  "surface-strong",
 ]);
 
-function isRgbaBacked(replacement) {
-  // Strip utility prefix ("bg-", "text-", "border-", ...) to compare token name.
-  const m = replacement.match(/^(?:bg|text|border|ring|fill|stroke|from|via|to|outline)-(.+)$/);
-  if (!m) return false;
-  return RGBA_BACKED_TARGETS.has(m[1]);
+function targetTokenName(replacement) {
+  // "bg-ink-faint" → "ink-faint". Used to compare against the ban list.
+  const m = replacement.match(
+    /^(?:bg|text|border|ring|fill|stroke|from|via|to|outline)-(.+)$/,
+  );
+  return m ? m[1] : null;
 }
 
-// Rewrite a single className token. Drops the token (returns null) if any
-// modifier in the chain is `dark:` (vibeusage is dark-only by register) or
-// if the core is in the opacity-strip list. Handles the Tailwind opacity-
-// slash suffix (`bg-foo/80`, `text-foo/50`) by splitting it off the core
-// before mapping lookup, then re-attaching it iff the mapped target is
-// hex-backed (rgba targets have the alpha baked in already).
+// Rewrite a single className token.
+// Drop the token (return null) when:
+//  - any modifier in the chain is `dark:` (vibeusage is dark-only)
+//  - the core is in the opacity-strip list
+//  - the replacement maps to "" (e.g. rounded-* per zero-radius rule)
+//
+// Tailwind alpha-slash `/N` (`/80`, `/[0.6]`, etc.) is split off only when
+// the *base* is a mappable color token — this avoids munging fractional
+// utilities like `w-1/2`, `aspect-1/2`, `divide-y/2` that share the `/`
+// syntax but mean different things. The slash tail is preserved on the
+// rewritten token unless the target is one of the four guardrail-banned
+// rgba ink tokens (in which case it must be dropped).
 function rewriteToken(token, mapping, opacityStrip) {
   if (!token) return token;
   const { prefix, core } = splitPrefix(token);
@@ -93,18 +103,28 @@ function rewriteToken(token, mapping, opacityStrip) {
   // false positives on, e.g., a hypothetical `mydark:` utility.
   if (/(^|:)dark:/.test(prefix)) return null;
 
-  // Split off opacity-slash suffix (`bg-foo/80` → core=`bg-foo`, tail=`/80`).
-  const slashMatch = core.match(/^(.+?)\/(\d+)$/);
-  const baseCore = slashMatch ? slashMatch[1] : core;
-  const opacityTail = slashMatch ? "/" + slashMatch[2] : "";
+  // Split off Tailwind opacity-slash (`/N` or `/[anything]`) — but only if
+  // the base half is a known mappable token or in the opacity-strip list.
+  // This guards against fractional width / aspect / divide utilities.
+  const slashMatch = core.match(/^(.+?)\/(\d+|\[[^\]]+\])$/);
+  let baseCore = core;
+  let opacityTail = "";
+  if (slashMatch) {
+    const candidateBase = slashMatch[1];
+    if (mapping.has(candidateBase) || opacityStrip.includes(candidateBase)) {
+      baseCore = candidateBase;
+      opacityTail = "/" + slashMatch[2];
+    }
+  }
 
   if (opacityStrip.includes(baseCore)) return null;
 
   if (mapping.has(baseCore)) {
     const replacement = mapping.get(baseCore);
     if (replacement === "") return null;
-    const tail = isRgbaBacked(replacement) ? "" : opacityTail;
-    return prefix + replacement + tail;
+    const targetName = targetTokenName(replacement);
+    const stripTail = targetName !== null && GUARDRAIL_BANS_SLASH.has(targetName);
+    return prefix + replacement + (stripTail ? "" : opacityTail);
   }
 
   return token;
@@ -355,12 +375,12 @@ const SELF_TESTS = [
     out: 'className="bg-surface/80"',
   },
   {
-    name: "opacity-slash on rgba-backed mapped target strips /N (guardrail)",
+    name: "opacity-slash on guardrail-banned rgba target strips /N",
     in: 'className="bg-muted/80"',
     out: 'className="bg-ink-faint"',
   },
   {
-    name: "opacity-slash with variant prefix on rgba target strips /N",
+    name: "opacity-slash with variant prefix on banned rgba strips /N",
     in: 'className="hover:bg-accent/50"',
     out: 'className="hover:bg-ink-faint"',
   },
@@ -368,6 +388,31 @@ const SELF_TESTS = [
     name: "opacity-slash with variant prefix on hex target keeps /N",
     in: 'className="hover:bg-background/40"',
     out: 'className="hover:bg-surface/40"',
+  },
+  {
+    name: "opacity-slash on rgba target NOT in guardrail ban list keeps /N (Codex regression)",
+    in: 'className="bg-popover/80"',
+    out: 'className="bg-surface-strong/80"',
+  },
+  {
+    name: "fractional width w-1/2 is NOT split as opacity-slash",
+    in: 'className="w-1/2"',
+    out: 'className="w-1/2"',
+  },
+  {
+    name: "aspect-3/2 (any non-mappable base before slash) is left alone",
+    in: 'className="aspect-3/2"',
+    out: 'className="aspect-3/2"',
+  },
+  {
+    name: "arbitrary-opacity bracket value preserved on hex target",
+    in: 'className="bg-background/[0.6]"',
+    out: 'className="bg-surface/[0.6]"',
+  },
+  {
+    name: "arbitrary-opacity bracket value stripped on banned rgba target",
+    in: 'className="bg-muted/[0.32]"',
+    out: 'className="bg-ink-faint"',
   },
 ];
 
