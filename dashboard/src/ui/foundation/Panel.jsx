@@ -1,15 +1,26 @@
 import React from "react";
 
-// Panel — 1px hairline card with a SEPARATE little title box pinned to the
-// top-left corner (like a tab). No header bar, no chip on a horizontal rule.
-// SSOT: DESIGN.md §6 Component Contracts.
-// variants: plain (default 1px border + raised surface), bare (no border, stacked sections)
+// Panel — SSOT: DESIGN.md §6 Component Contracts.
+// variants: ascii (signature), plain (default), bare (stacked sections)
 // tone:     default, strong (chip / modal elevation)
-// weight:   primary (hero — bumps border to ink-muted + adds shadow-glow-faint), secondary (default), tertiary (no-op, kept for API stability)
+// weight:   primary (hero, double-line ASCII), secondary (default), tertiary (faint)
 // stamped:  embeds corner labels (handle / period / logo) for self-contained screenshots
 
+const ASCII_WEIGHT = {
+  primary: { TL: "╔", TR: "╗", BL: "╚", BR: "╝", H: "═", V: "║" },
+  secondary: { TL: "┌", TR: "┐", BL: "└", BR: "┘", H: "─", V: "│" },
+  tertiary: { TL: "·", TR: "·", BL: "·", BR: "·", H: "·", V: "·" },
+};
+
+const FRAME_TONE = {
+  primary: "text-ink",
+  secondary: "text-ink-muted",
+  tertiary: "text-ink-faint",
+};
+
 const VARIANT = {
-  plain: "bg-surface-raised backdrop-blur-panel border border-ink-line",
+  ascii: "bg-surface-raised backdrop-blur-panel shadow-panel",
+  plain: "bg-surface-raised backdrop-blur-panel border border-ink-line shadow-panel",
   bare: "bg-surface-raised backdrop-blur-panel",
 };
 
@@ -64,51 +75,72 @@ export function Panel({
   bodyClassName = "",
   children,
 }) {
-  // Back-compat: legacy callers pass variant="ascii". The ASCII corner glyph
-  // mode was removed in v3 — fold it into the plain hairline variant.
-  const resolvedVariant = variant === "ascii" ? "plain" : variant;
-  const variantClass = VARIANT[resolvedVariant] ?? VARIANT.plain;
+  const variantClass = VARIANT[variant] ?? VARIANT.plain;
   const toneClass = TONE[tone] ?? TONE.default;
-  const isPrimary = weight === "primary";
-  const primaryClass = isPrimary ? "border-ink-muted shadow-glow-faint" : "";
+  const weightShadow = weight === "primary" ? "shadow-glow-sm" : "";
   const rootClass =
-    `relative flex flex-col ${variantClass} ${toneClass} ${primaryClass} ${className}`.trim();
+    `relative flex flex-col ${variantClass} ${toneClass} ${weightShadow} ${className}`.trim();
 
-  // Title chip — independent little box pinned to the top-left corner (like
-  // a tab); subtitle takes the same look pinned to the top-right.
-  const hasTitleBox = Boolean(title || subtitle);
-  const titleChipClass = isPrimary
-    ? "border-ink-muted text-ink-bright"
-    : "border-ink-line text-ink";
-  const titleStyle = isPrimary
-    ? { textShadow: "0 0 8px var(--ink-glow)" }
-    : undefined;
-  // Push the body down so it clears the absolutely-positioned title box.
-  // Inline so it wins over caller-supplied bodyClassName (e.g. "py-3").
-  const bodyStyle = hasTitleBox ? { paddingTop: 36 } : undefined;
+  const stamps = (
+    <CornerStamps
+      stamped={stamped}
+      stampHandle={stampHandle}
+      stampPeriod={stampPeriod}
+      stampLogo={stampLogo}
+    />
+  );
+
+  if (variant === "ascii") {
+    const ASCII = ASCII_WEIGHT[weight] ?? ASCII_WEIGHT.secondary;
+    const frameTone = FRAME_TONE[weight] ?? FRAME_TONE.secondary;
+    return (
+      <div className={rootClass}>
+        {stamps}
+        <div className="flex items-center leading-none">
+          <span className={`shrink-0 ${frameTone}`}>{ASCII.TL}</span>
+          {title ? (
+            <span className="mx-3 shrink-0 px-2 py-1 text-heading text-ink uppercase bg-surface-strong border border-ink-faint">
+              {title}
+            </span>
+          ) : null}
+          {subtitle ? (
+            <span className="mr-2 text-caption text-ink-text uppercase">[{subtitle}]</span>
+          ) : null}
+          <span className={`flex-1 overflow-hidden whitespace-nowrap ${frameTone}`}>
+            {ASCII.H.repeat(100)}
+          </span>
+          <span className={`shrink-0 ${frameTone}`}>{ASCII.TR}</span>
+        </div>
+
+        <div className="flex flex-1">
+          <div className="shrink-0 w-3" aria-hidden="true" />
+          <div className={`flex-1 min-w-0 relative z-10 py-4 px-4 ${bodyClassName}`}>
+            {children}
+          </div>
+          <div className="shrink-0 w-3" aria-hidden="true" />
+        </div>
+
+        <div className={`flex items-center leading-none ${frameTone}`}>
+          <span className="shrink-0">{ASCII.BL}</span>
+          <span className="flex-1 overflow-hidden whitespace-nowrap">{ASCII.H.repeat(100)}</span>
+          <span className="shrink-0">{ASCII.BR}</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={rootClass}>
-      <CornerStamps
-        stamped={stamped}
-        stampHandle={stampHandle}
-        stampPeriod={stampPeriod}
-        stampLogo={stampLogo}
-      />
-      {title ? (
-        <span
-          className={`absolute top-2.5 left-3 z-[2] inline-flex items-center gap-1 border ${titleChipClass} bg-surface-strong px-2.5 py-1 text-micro uppercase leading-none whitespace-nowrap`}
-          style={titleStyle}
-        >
-          {title}
-        </span>
+      {stamps}
+      {title || subtitle ? (
+        <div className="flex items-baseline gap-3 px-4 pt-4">
+          {title ? <span className="text-heading text-ink uppercase">{title}</span> : null}
+          {subtitle ? (
+            <span className="text-caption text-ink-text uppercase">[{subtitle}]</span>
+          ) : null}
+        </div>
       ) : null}
-      {subtitle ? (
-        <span className="absolute top-2.5 right-3 z-[2] border border-ink-line bg-surface-strong px-2.5 py-1 text-micro uppercase leading-none text-ink-text">
-          {subtitle}
-        </span>
-      ) : null}
-      <div className={`px-4 py-4 ${bodyClassName}`} style={bodyStyle}>{children}</div>
+      <div className={`px-4 py-4 ${bodyClassName}`}>{children}</div>
     </div>
   );
 }
