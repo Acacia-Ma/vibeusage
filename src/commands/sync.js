@@ -4,6 +4,7 @@ const fs = require("node:fs/promises");
 const cp = require("node:child_process");
 
 const { ensureDir, readJson, writeJson, openLock } = require("../lib/fs");
+const { scrubSourceCursors, listSupportedSources } = require("../lib/cursor-scrub");
 const {
   listRolloutFiles,
   listClaudeProjectFiles,
@@ -65,6 +66,30 @@ async function cmdSync(argv) {
 
     const config = await readJson(configPath);
     const cursors = (await readJson(cursorsPath)) || { version: 1, files: {}, updatedAt: null };
+
+    if (opts.rebuild) {
+      const scrub = scrubSourceCursors({
+        cursors,
+        sourceId: opts.rebuild,
+        home,
+        env: process.env,
+      });
+      // Persist the cleared cursors before parsing begins. If we crash mid-
+      // rebuild, the next sync resumes from a clean state for this source
+      // rather than re-accumulating onto cached totals (the original bug).
+      await writeJson(cursorsPath, cursors);
+      process.stdout.write(
+        `Rebuilding source=${scrub.sourceId}: cleared ${scrub.filesRemoved} file ` +
+          `cursors, ${scrub.bucketsRemoved} hourly buckets, ` +
+          `${scrub.projectBucketsRemoved} project buckets, ` +
+          `${scrub.groupsRemoved} groupQueued entries` +
+          (scrub.extraCursorsCleared.length
+            ? `, ${scrub.extraCursorsCleared.join("+")}`
+            : "") +
+          `.\n`,
+      );
+    }
+
     const uploadThrottle = normalizeUploadState(await readJson(uploadThrottlePath));
     let uploadThrottleState = uploadThrottle;
 
@@ -445,6 +470,7 @@ function parseArgs(argv) {
     fromRetry: false,
     fromOpenclaw: false,
     drain: false,
+    rebuild: null,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -453,7 +479,35 @@ function parseArgs(argv) {
     else if (a === "--from-retry") out.fromRetry = true;
     else if (a === "--from-openclaw") out.fromOpenclaw = true;
     else if (a === "--drain") out.drain = true;
-    else throw new Error(`Unknown option: ${a}`);
+    else if (a === "--rebuild") {
+      const v = argv[++i];
+      if (!v || v.startsWith("--")) {
+        throw new Error("--rebuild requires a source id (e.g. --rebuild claude)");
+      }
+      out.rebuild = v;
+    } else if (a.startsWith("--rebuild=")) {
+      const v = a.slice("--rebuild=".length);
+      if (!v) throw new Error("--rebuild= requires a source id");
+      out.rebuild = v;
+    } else throw new Error(`Unknown option: ${a}`);
+  }
+  if (out.rebuild) {
+    const supported = listSupportedSources();
+    if (!supported.includes(out.rebuild)) {
+      throw new Error(
+        `--rebuild: unknown source '${out.rebuild}'. Supported: ${supported.join(", ")}`,
+      );
+    }
+    // A rebuild always wants a full upload pass, otherwise the freshly-rebuilt
+    // buckets would sit in queue.jsonl behind the default 10-batch cap.
+    out.drain = true;
+    // OpenClaw is the only source whose ledger parsing is gated behind an
+    // explicit flag (see sync flow's `opts.fromOpenclaw ? parseOpenclaw... : noop`).
+    // A `--rebuild=openclaw` that doesn't also turn that flag on would scrub
+    // the OpenClaw cursors and persist the cleared state without ever re-
+    // aggregating from the ledger — leaving totals stale until a later
+    // plugin-triggered sync. Force the flag so rebuild actually rebuilds.
+    if (out.rebuild === "openclaw") out.fromOpenclaw = true;
   }
   return out;
 }
