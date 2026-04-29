@@ -179,9 +179,12 @@ function runAuditTokensAll({ opts, config }) {
       anyHardError = true;
     }
     if (result.ok && result.exceedsThreshold) anyExceeds = true;
-    // no-local-sessions is informational, not a hard error; other non-ok states
-    // (cannot-resolve-user-id, insforge-db-query-failed, etc.) count as errors.
-    if (!result.ok && result.error !== "no-local-sessions") anyHardError = true;
+    // no-local-sessions and audit-not-applicable are informational, not hard
+    // errors. The latter means the source has no independent ground-truth to
+    // compare against the DB (e.g. hermes plugin-ledger is the same data that
+    // already feeds the DB).
+    const informationalErrors = new Set(["no-local-sessions", "audit-not-applicable"]);
+    if (!result.ok && !informationalErrors.has(result.error)) anyHardError = true;
     perSource.push(result);
   }
 
@@ -207,8 +210,14 @@ function runAuditTokensAll({ opts, config }) {
           `${r.source.padEnd(12)}  ${statusText.padEnd(22)}  ${drift.padStart(10)}  ${String(r.filesScanned).padStart(6)}  ${String(r.usageLines).padStart(6)}\n`,
         );
       } else {
-        const statusText =
-          r.error === "no-local-sessions" ? "no local sessions" : `ERR ${r.error}`;
+        let statusText;
+        if (r.error === "no-local-sessions") {
+          statusText = "no local sessions";
+        } else if (r.error === "audit-not-applicable") {
+          statusText = "N/A";
+        } else {
+          statusText = `ERR ${r.error}`;
+        }
         process.stdout.write(
           `${r.source.padEnd(12)}  ${statusText.padEnd(22)}  ${"—".padStart(10)}  ${"—".padStart(6)}  ${"—".padStart(6)}\n`,
         );

@@ -24,6 +24,7 @@ const path = require("node:path");
 module.exports = {
   id: "hermes",
   displayName: "Hermes Plugin",
+  supportsAudit: false,
   sessionRoot({ home, env }) {
     const base = (env && env.VIBEUSAGE_HOME) || path.join(home, ".vibeusage");
     return path.join(base, "tracker");

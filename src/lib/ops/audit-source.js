@@ -69,6 +69,19 @@ function runSourceAudit({
       throw new Error(`strategy.${key} is required`);
     }
   }
+
+  if (strategy.supportsAudit === false) {
+    return {
+      ok: false,
+      error: "audit-not-applicable",
+      source: strategy.id,
+      message:
+        `source=${strategy.id} does not support independent ground-truth audit ` +
+        "(data comes from the same plugin-ledger pipeline that feeds the DB)",
+      rows: [],
+      maxDriftPct: 0,
+    };
+  }
   if (!Number.isFinite(days) || days <= 0) {
     throw new Error(`days must be a positive number, got ${days}`);
   }

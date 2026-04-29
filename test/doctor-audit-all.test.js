@@ -52,7 +52,15 @@ test("doctor --audit-tokens --source all --json lists every registered source", 
     );
     for (const entry of payload.sources) {
       assert.equal(entry.ok, false);
-      assert.equal(entry.error, "no-local-sessions");
+      // Hermes is special: it has no independent ground-truth, so the audit
+      // framework returns audit-not-applicable regardless of whether the ledger
+      // file exists. All other sources report no-local-sessions because the
+      // temp HOME has no session data.
+      if (entry.source === "hermes") {
+        assert.equal(entry.error, "audit-not-applicable");
+      } else {
+        assert.equal(entry.error, "no-local-sessions");
+      }
     }
   });
 });

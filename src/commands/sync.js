@@ -534,11 +534,11 @@ async function parseHermesUsageLedger({ trackerDir, cursors, queuePath }) {
       typeof event.model === "string" && event.model.trim() ? event.model.trim() : "unknown";
     const source = "hermes";
     const delta = {
-      input_tokens: Math.max(0, Number(event.input_tokens || 0)),
-      cached_input_tokens: Math.max(
+      input_tokens: Math.max(
         0,
-        Number(event.cache_read_tokens || 0) + Number(event.cache_write_tokens || 0),
+        Number(event.input_tokens || 0) + Number(event.cache_write_tokens || 0),
       ),
+      cached_input_tokens: Math.max(0, Number(event.cache_read_tokens || 0)),
       output_tokens: Math.max(0, Number(event.output_tokens || 0)),
       reasoning_output_tokens: Math.max(0, Number(event.reasoning_tokens || 0)),
       total_tokens: Math.max(0, Number(event.total_tokens || 0)),

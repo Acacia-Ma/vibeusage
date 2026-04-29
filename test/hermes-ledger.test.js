@@ -26,7 +26,7 @@ function usageLine(overrides = {}) {
     cache_read_tokens: 3,
     cache_write_tokens: 2,
     reasoning_tokens: 1,
-    total_tokens: 20,
+    total_tokens: 19,
     finish_reason: "stop",
     emitted_at: "2026-04-10T12:34:56.000Z",
     ...overrides,
@@ -70,11 +70,11 @@ test("Hermes sync parses ledger into queue and remains idempotent", async () => 
     const hermesRows = queued.filter((row) => row.source === "hermes");
     assert.equal(hermesRows.length, 1);
     assert.equal(hermesRows[0].model, "openai/gpt-5.4");
-    assert.equal(hermesRows[0].input_tokens, 15);
-    assert.equal(hermesRows[0].cached_input_tokens, 10);
+    assert.equal(hermesRows[0].input_tokens, 19);
+    assert.equal(hermesRows[0].cached_input_tokens, 6);
     assert.equal(hermesRows[0].output_tokens, 5);
     assert.equal(hermesRows[0].reasoning_output_tokens, 2);
-    assert.equal(hermesRows[0].total_tokens, 29);
+    assert.equal(hermesRows[0].total_tokens, 28);
 
     const cursors = JSON.parse(await fs.readFile(path.join(trackerDir, "cursors.json"), "utf8"));
     assert.equal(typeof cursors.hermesLedger.offset, "number");

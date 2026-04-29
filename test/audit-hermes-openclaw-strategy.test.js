@@ -30,7 +30,7 @@ test("audit-source registers hermes and openclaw strategies", () => {
   assert.ok(ids.includes("openclaw"));
 });
 
-test("hermes strategy sums upstream total_tokens and ignores non-usage rows", async () => {
+test("hermes strategy returns audit-not-applicable because it has no independent ground-truth", async () => {
   await withTempDir(async (dir) => {
     const trackerDir = path.join(dir, ".vibeusage", "tracker");
     const now = new Date();
@@ -38,6 +38,9 @@ test("hermes strategy sums upstream total_tokens and ignores non-usage rows", as
     const yIso = y.toISOString().slice(0, 10);
     const ts = (addSec) => new Date(y.getTime() + 10 * 3600 * 1000 + addSec * 1000).toISOString();
 
+    // Even with a valid ledger on disk, the hermes strategy must refuse audit
+    // because the data comes from the same plugin-ledger pipeline that feeds
+    // the DB — there is no independent ground-truth to compare against.
     const lines = [
       JSON.stringify({
         type: "usage",
@@ -50,25 +53,10 @@ test("hermes strategy sums upstream total_tokens and ignores non-usage rows", as
         reasoning_tokens: 5,
         total_tokens: 565,
       }),
-      JSON.stringify({ type: "handshake", emitted_at: ts(1) }), // ignored
-      JSON.stringify({
-        type: "usage",
-        emitted_at: ts(20),
-        model: "claude-opus-4-6",
-        input_tokens: 5,
-        output_tokens: 10,
-        cache_read_tokens: 100,
-        total_tokens: 115,
-      }),
-      JSON.stringify({
-        type: "usage",
-        emitted_at: ts(30),
-        total_tokens: 0, // zero -> skipped
-      }),
     ];
     await writeLedger(trackerDir, "hermes.usage.jsonl", lines);
 
-    const dbJson = JSON.stringify([{ day: yIso, tokens: 565 + 115 }]);
+    const dbJson = JSON.stringify([{ day: yIso, tokens: 565 }]);
 
     const strategy = getStrategy("hermes");
     const result = runSourceAudit({
@@ -80,13 +68,9 @@ test("hermes strategy sums upstream total_tokens and ignores non-usage rows", as
       env: { VIBEUSAGE_HOME: path.join(dir, ".vibeusage") },
     });
 
-    assert.equal(result.ok, true);
-    assert.equal(result.source, "hermes");
-    const row = result.rows.find((r) => r.day === yIso);
-    assert.ok(row, "day row present");
-    assert.equal(row.truth, 680);
-    assert.equal(row.db, 680);
-    assert.equal(result.exceedsThreshold, false);
+    assert.equal(result.ok, false);
+    assert.equal(result.error, "audit-not-applicable");
+    assert.ok(result.message.includes("does not support independent ground-truth audit"));
   });
 });
 
@@ -148,7 +132,7 @@ test("openclaw strategy sums totalTokens and dedupes by eventId", async () => {
   });
 });
 
-test("hermes strategy reports no-local-sessions when ledger missing", async () => {
+test("hermes strategy reports audit-not-applicable when ledger missing", async () => {
   await withTempDir(async (dir) => {
     const result = runSourceAudit({
       strategy: getStrategy("hermes"),
@@ -159,7 +143,7 @@ test("hermes strategy reports no-local-sessions when ledger missing", async () =
       env: { VIBEUSAGE_HOME: path.join(dir, "no-such") },
     });
     assert.equal(result.ok, false);
-    assert.equal(result.error, "no-local-sessions");
+    assert.equal(result.error, "audit-not-applicable");
   });
 });
 
