@@ -54,12 +54,12 @@ def post_api_request(session_id="", platform="", model="", provider="", api_mode
     record.update({
         "api_mode": str(api_mode or ""),
         "api_call_count": _safe_int(api_call_count),
-        "input_tokens": _safe_int(usage.get("input_tokens")),
-        "output_tokens": _safe_int(usage.get("output_tokens")),
-        "cache_read_tokens": _safe_int(usage.get("cache_read_tokens")),
-        "cache_write_tokens": _safe_int(usage.get("cache_write_tokens")),
-        "reasoning_tokens": _safe_int(usage.get("reasoning_tokens")),
-        "total_tokens": _safe_int(usage.get("total_tokens")),
+        "input_tokens": _safe_int(usage.get("input_tokens") or usage.get("input")),
+        "output_tokens": _safe_int(usage.get("output_tokens") or usage.get("output")),
+        "cache_read_tokens": _safe_int(usage.get("cache_read_tokens") or usage.get("cache_read")),
+        "cache_write_tokens": _safe_int(usage.get("cache_write_tokens") or usage.get("cache_write")),
+        "reasoning_tokens": _safe_int(usage.get("reasoning_tokens") or usage.get("reasoning")),
+        "total_tokens": _safe_int(usage.get("total_tokens") or usage.get("total")),
         "finish_reason": str(finish_reason or ""),
     })
     return _append_record(record)

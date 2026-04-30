@@ -554,6 +554,19 @@ async function parseHermesUsageLedger({ trackerDir, cursors, queuePath }) {
       continue;
     }
 
+    // Fallback: if all fine-grained channels are 0 but total_tokens > 0,
+    // route total into output so the event isn't silently dropped.
+    // This handles upstream plugins that only report total_tokens.
+    if (
+      delta.input_tokens === 0 &&
+      delta.cached_input_tokens === 0 &&
+      delta.output_tokens === 0 &&
+      delta.reasoning_output_tokens === 0 &&
+      delta.total_tokens > 0
+    ) {
+      delta.output_tokens = delta.total_tokens;
+    }
+
     const bucket = getHourlyBucket(hourlyState, source, model, bucketStart);
     addTotals(bucket.totals, delta);
     touchedBuckets.add(bucketKey(source, model, bucketStart));
