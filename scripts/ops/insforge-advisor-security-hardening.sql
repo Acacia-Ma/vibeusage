@@ -5,7 +5,7 @@
 -- - NFT and legacy public tables become default-deny through RLS.
 -- - Pricing/model metadata remains readable only by authenticated users.
 -- - project_admin remains a privileged DB role, but policies no longer use literal true.
--- - SECURITY DEFINER functions stay privileged where required by ingest/link/leaderboard flows.
+-- - Legacy SECURITY DEFINER functions are removed from direct anon/auth execution.
 
 begin;
 
@@ -112,14 +112,17 @@ do $$
 begin
   if to_regprocedure('public.vibeusage_device_token_allows_event_insert(uuid,uuid,uuid)') is not null then
     revoke execute on function public.vibeusage_device_token_allows_event_insert(uuid, uuid, uuid) from public;
-    grant execute on function public.vibeusage_device_token_allows_event_insert(uuid, uuid, uuid) to anon, authenticated, project_admin;
     alter function public.vibeusage_device_token_allows_event_insert(uuid, uuid, uuid) set search_path = '';
+    alter function public.vibeusage_device_token_allows_event_insert(uuid, uuid, uuid) security invoker;
+    grant execute on function public.vibeusage_device_token_allows_event_insert(uuid, uuid, uuid) to anon, authenticated, project_admin;
   end if;
 
   if to_regprocedure('public.vibeusage_leaderboard_system_earliest_day()') is not null then
     revoke execute on function public.vibeusage_leaderboard_system_earliest_day() from public;
-    grant execute on function public.vibeusage_leaderboard_system_earliest_day() to authenticated, project_admin;
+    revoke execute on function public.vibeusage_leaderboard_system_earliest_day() from anon, authenticated;
     alter function public.vibeusage_leaderboard_system_earliest_day() set search_path = '';
+    alter function public.vibeusage_leaderboard_system_earliest_day() security invoker;
+    grant execute on function public.vibeusage_leaderboard_system_earliest_day() to project_admin;
   end if;
 
   if to_regprocedure('public.vibeusage_purge_events(timestamp with time zone,boolean)') is not null then
@@ -130,20 +133,26 @@ begin
 
   if to_regprocedure('public.vibeusage_exchange_link_code(text,text,text,text,text)') is not null then
     revoke execute on function public.vibeusage_exchange_link_code(text, text, text, text, text) from public;
-    grant execute on function public.vibeusage_exchange_link_code(text, text, text, text, text) to anon, authenticated, project_admin;
+    revoke execute on function public.vibeusage_exchange_link_code(text, text, text, text, text) from anon, authenticated;
     alter function public.vibeusage_exchange_link_code(text, text, text, text, text) set search_path = '';
+    alter function public.vibeusage_exchange_link_code(text, text, text, text, text) security invoker;
+    grant execute on function public.vibeusage_exchange_link_code(text, text, text, text, text) to project_admin;
   end if;
 
   if to_regprocedure('public.vibeusage_leaderboard_period(text,text,integer)') is not null then
     revoke execute on function public.vibeusage_leaderboard_period(text, text, integer) from public;
-    grant execute on function public.vibeusage_leaderboard_period(text, text, integer) to authenticated, project_admin;
+    revoke execute on function public.vibeusage_leaderboard_period(text, text, integer) from anon, authenticated;
     alter function public.vibeusage_leaderboard_period(text, text, integer) set search_path = '';
+    alter function public.vibeusage_leaderboard_period(text, text, integer) security invoker;
+    grant execute on function public.vibeusage_leaderboard_period(text, text, integer) to project_admin;
   end if;
 
   if to_regprocedure('public.vibeusage_leaderboard_me(text,text)') is not null then
     revoke execute on function public.vibeusage_leaderboard_me(text, text) from public;
-    grant execute on function public.vibeusage_leaderboard_me(text, text) to authenticated, project_admin;
+    revoke execute on function public.vibeusage_leaderboard_me(text, text) from anon, authenticated;
     alter function public.vibeusage_leaderboard_me(text, text) set search_path = '';
+    alter function public.vibeusage_leaderboard_me(text, text) security invoker;
+    grant execute on function public.vibeusage_leaderboard_me(text, text) to project_admin;
   end if;
 end $$;
 
