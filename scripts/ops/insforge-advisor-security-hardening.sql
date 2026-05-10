@@ -147,7 +147,7 @@ begin
   if to_regprocedure('public.vibeusage_device_token_allows_event_insert(uuid,uuid,uuid)') is not null then
     revoke execute on function public.vibeusage_device_token_allows_event_insert(uuid, uuid, uuid) from public;
     alter function public.vibeusage_device_token_allows_event_insert(uuid, uuid, uuid) set search_path = '';
-    alter function public.vibeusage_device_token_allows_event_insert(uuid, uuid, uuid) security invoker;
+    alter function public.vibeusage_device_token_allows_event_insert(uuid, uuid, uuid) security definer;
     grant execute on function public.vibeusage_device_token_allows_event_insert(uuid, uuid, uuid) to anon, authenticated, project_admin;
   end if;
 

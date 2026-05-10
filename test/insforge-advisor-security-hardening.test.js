@@ -80,7 +80,9 @@ test("advisor hardening locks SECURITY DEFINER execution grants", () => {
     assert.match(sql, new RegExp(`alter function public\\.${functionName}`));
   }
   assert.match(sql, /set search_path = ''/);
-  assert.match(sql, /alter function public\.vibeusage_device_token_allows_event_insert\(uuid, uuid, uuid\) security invoker/);
+  assert.match(sql, /alter function public\.vibeusage_device_token_allows_event_insert\(uuid, uuid, uuid\) security definer/);
+  assert.doesNotMatch(sql, /revoke execute on function public\.vibeusage_device_token_allows_event_insert\(uuid, uuid, uuid\) from anon, authenticated/);
+  assert.match(sql, /grant execute on function public\.vibeusage_device_token_allows_event_insert\(uuid, uuid, uuid\) to anon, authenticated, project_admin/);
   assert.match(sql, /revoke execute on function public\.vibeusage_leaderboard_me\(text, text\) from anon, authenticated/);
   assert.match(sql, /revoke execute on function public\.vibeusage_purge_events\(timestamp with time zone, boolean\) from anon, authenticated/);
   assert.match(sql, /alter function public\.vibeusage_purge_events\(timestamp with time zone, boolean\) security invoker/);
