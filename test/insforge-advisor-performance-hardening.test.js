@@ -36,8 +36,8 @@ test("advisor performance hardening adds concurrent FK indexes", () => {
   ]) {
     assert.match(sql, new RegExp(`create index concurrently if not exists ${indexName}`));
   }
-  assert.doesNotMatch(sql, /\bbegin\b/i);
-  assert.doesNotMatch(sql, /\bcommit\b/i);
+  assert.doesNotMatch(sql, /^begin;$/im);
+  assert.doesNotMatch(sql, /^commit;$/im);
 });
 
 test("advisor performance hardening uses safe auth uid in RLS policies", () => {

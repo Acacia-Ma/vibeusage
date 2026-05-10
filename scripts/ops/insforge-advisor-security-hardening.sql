@@ -11,31 +11,34 @@ begin;
 
 create or replace function public.vibeusage_auth_uid()
 returns uuid
-language sql
+language plpgsql
 stable
 set search_path = ''
 as $function$
-  with claims as (
-    select
-      nullif(current_setting('request.jwt.claim.sub', true), '') as legacy_sub,
-      nullif(current_setting('request.jwt.claims', true), '') as claims_json
-  ),
-  subject as (
-    select coalesce(
-      legacy_sub,
-      case
-        when claims_json is null then null
-        else claims_json::jsonb ->> 'sub'
-      end
-    ) as sub
-    from claims
-  )
-  select case
-    when sub ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-      then sub::uuid
-    else null
-  end
-  from subject
+declare
+  raw_claims text;
+  subject text;
+begin
+  raw_claims := nullif(current_setting('request.jwt.claims', true), '');
+  subject := coalesce(
+    nullif(current_setting('request.jwt.claim.sub', true), ''),
+    case
+      when raw_claims is null then null
+      else raw_claims::jsonb ->> 'sub'
+    end
+  );
+
+  if subject is null then
+    return null;
+  end if;
+
+  begin
+    return subject::uuid;
+  exception
+    when invalid_text_representation then
+      return null;
+  end;
+end
 $function$;
 
 grant execute on function public.vibeusage_auth_uid() to public;
