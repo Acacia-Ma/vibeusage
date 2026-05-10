@@ -274,6 +274,9 @@ export function TrendMonitor({
   const plotRef = useRef(null);
   const axisRef = useRef(null);
   const [hover, setHover] = useState(null);
+  const hoverFrameRef = useRef(null);
+  const pendingHoverRef = useRef(null);
+  const hoverSignatureRef = useRef("");
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -299,6 +302,40 @@ export function TrendMonitor({
     return () => window.removeEventListener("resize", measure);
   }, [width]);
 
+  useEffect(() => {
+    return () => {
+      if (hoverFrameRef.current == null) return;
+      window.cancelAnimationFrame?.(hoverFrameRef.current);
+      hoverFrameRef.current = null;
+    };
+  }, []);
+
+  function scheduleHover(nextHover) {
+    pendingHoverRef.current = nextHover;
+    if (hoverFrameRef.current != null) return;
+    hoverFrameRef.current = window.requestAnimationFrame(() => {
+      hoverFrameRef.current = null;
+      const latest = pendingHoverRef.current;
+      pendingHoverRef.current = null;
+      const signature = latest
+        ? [
+            latest.index,
+            latest.value,
+            latest.label,
+            latest.x,
+            latest.y,
+            latest.rectWidth,
+            latest.axisWidthPx,
+            latest.plotWidthPx,
+            latest.missing,
+          ].join("|")
+        : "";
+      if (signature === hoverSignatureRef.current) return;
+      hoverSignatureRef.current = signature;
+      setHover(latest);
+    });
+  }
+
   function handleMove(e) {
     const el = plotRef.current;
     if (!el || seriesValues.length === 0) return;
@@ -315,7 +352,7 @@ export function TrendMonitor({
     const index = Math.round(ratio * denom);
     const meta = seriesMeta[index] || {};
     if (meta.future) {
-      setHover(null);
+      scheduleHover(null);
       return;
     }
     const rawValue = seriesValues[index];
@@ -324,7 +361,7 @@ export function TrendMonitor({
     const labelText = seriesLabels[index] || "";
     const yRatio = max > 0 ? 1 - value / max : 1;
     const yPx = (plotTop / height) * rect.height + yRatio * (plotHeight / height) * rect.height;
-    setHover({
+    scheduleHover({
       index,
       value,
       label: labelText,
@@ -338,7 +375,7 @@ export function TrendMonitor({
   }
 
   function handleLeave() {
-    setHover(null);
+    scheduleHover(null);
   }
 
   return (

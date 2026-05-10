@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import { BackendStatus } from "../components/BackendStatus.jsx";
 import { useActivityHeatmap } from "../hooks/use-activity-heatmap";
 import { useProjectUsageSummary } from "../hooks/use-project-usage-summary";
@@ -434,6 +434,11 @@ export function DashboardPage({
   const mockNow = useMemo(() => getMockNow(), []);
   const cacheKey = publicMode ? null : auth?.userId || auth?.email || null;
   const [selectedPeriod, setSelectedPeriod] = useState("week");
+  const transitionSelectedPeriod = useCallback((nextPeriod) => {
+    startTransition(() => {
+      setSelectedPeriod(nextPeriod);
+    });
+  }, []);
   const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
   const period = screenshotMode ? "total" : selectedPeriod;
   const range = useMemo(
@@ -1290,7 +1295,7 @@ export function DashboardPage({
   // route through (toggle / close); period / refresh / share are silenced so
   // they don't bleed past the overlay.
   useGlobalKeybinds({
-    onTogglePeriod: cheatsheetOpen ? undefined : setSelectedPeriod,
+    onTogglePeriod: cheatsheetOpen ? undefined : transitionSelectedPeriod,
     onRefresh: cheatsheetOpen ? undefined : refreshAll,
     onShare: cheatsheetOpen ? undefined : handleShareToX,
     onToggleCheatsheet: () => setCheatsheetOpen((o) => !o),
@@ -1365,7 +1370,7 @@ export function DashboardPage({
       screenshotTwitterButton={screenshotTwitterButton}
       screenshotTwitterHint={screenshotTwitterHint}
       periodsForDisplay={periodsForDisplay}
-      setSelectedPeriod={setSelectedPeriod}
+      setSelectedPeriod={transitionSelectedPeriod}
       metricsRows={metricsRows}
       summaryLabel={summaryLabel}
       summaryValue={summaryValue}
