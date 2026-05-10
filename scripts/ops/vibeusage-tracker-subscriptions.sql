@@ -27,6 +27,40 @@ create index if not exists vibeusage_tracker_subscriptions_user_id_idx
 create index if not exists vibeusage_tracker_subscriptions_updated_at_idx
   on public.vibeusage_tracker_subscriptions(updated_at desc);
 
+create or replace function public.vibeusage_auth_uid()
+returns uuid
+language plpgsql
+stable
+set search_path = ''
+as $function$
+declare
+  raw_claims text;
+  subject text;
+begin
+  raw_claims := nullif(current_setting('request.jwt.claims', true), '');
+  subject := coalesce(
+    nullif(current_setting('request.jwt.claim.sub', true), ''),
+    case
+      when raw_claims is null then null
+      else raw_claims::jsonb ->> 'sub'
+    end
+  );
+
+  if subject is null then
+    return null;
+  end if;
+
+  begin
+    return subject::uuid;
+  exception
+    when invalid_text_representation then
+      return null;
+  end;
+end
+$function$;
+
+grant execute on function public.vibeusage_auth_uid() to public;
+
 alter table public.vibeusage_tracker_subscriptions enable row level security;
 
 drop policy if exists project_admin_policy on public.vibeusage_tracker_subscriptions;
@@ -41,4 +75,4 @@ drop policy if exists vibeusage_tracker_subscriptions_select on public.vibeusage
 create policy vibeusage_tracker_subscriptions_select on public.vibeusage_tracker_subscriptions
   for select
   to public
-  using (auth.uid() = user_id);
+  using ((select public.vibeusage_auth_uid()) = user_id);
