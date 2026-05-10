@@ -1,5 +1,19 @@
--- Remediate InsForge Backend Advisor performance findings.
--- Keep this file outside explicit transactions: CREATE INDEX CONCURRENTLY requires it.
+-- Fix VibeUsage RLS policies for InsForge API-key requests whose JWT sub is
+-- not a UUID.
+--
+-- Root cause:
+--   auth.uid() is InsForge-managed and casts JWT sub directly to uuid. Project
+--   API-key requests can carry sub = 'project-admin-with-api-key', so any RLS
+--   policy that evaluates auth.uid() fails before other permissive policies can
+--   authorize service/device-token paths.
+--
+-- Contract:
+--   - UUID sub values still compare exactly against user_id.
+--   - Missing or non-UUID sub values return null.
+--   - Existing user policies remain default-deny for non-user service/API-key
+--     subjects instead of raising a cast error.
+
+begin;
 
 create or replace function public.vibeusage_auth_uid()
 returns uuid
@@ -32,53 +46,17 @@ $function$;
 
 grant execute on function public.vibeusage_auth_uid() to public;
 
-create index concurrently if not exists idx_vibeusage_tracker_device_tokens_device_id
-  on public.vibeusage_tracker_device_tokens(device_id);
-
-create index concurrently if not exists idx_vibeusage_tracker_events_device_id
-  on public.vibeusage_tracker_events(device_id);
-
-create index concurrently if not exists idx_vibeusage_tracker_events_device_token_id
-  on public.vibeusage_tracker_events(device_token_id);
-
-create index concurrently if not exists idx_vibeusage_user_settings_user_id
-  on public.vibeusage_user_settings(user_id);
-
-create index concurrently if not exists idx_vibeusage_tracker_hourly_device_token_id
-  on public.vibeusage_tracker_hourly(device_token_id);
-
-create index concurrently if not exists idx_vibeusage_tracker_ingest_batches_device_token_id
-  on public.vibeusage_tracker_ingest_batches(device_token_id);
-
-create index concurrently if not exists idx_vibeusage_user_entitlements_user_id
-  on public.vibeusage_user_entitlements(user_id);
-
-create index concurrently if not exists idx_vibeusage_link_codes_user_id
-  on public.vibeusage_link_codes(user_id);
-
-create index concurrently if not exists idx_vibeusage_public_views_user_id
-  on public.vibeusage_public_views(user_id);
-
-create index concurrently if not exists idx_vibeusage_projects_device_id
-  on public.vibeusage_projects(device_id);
-
-create index concurrently if not exists idx_vibeusage_projects_device_token_id
-  on public.vibeusage_projects(device_token_id);
-
-create index concurrently if not exists idx_vibeusage_project_usage_hourly_device_id
-  on public.vibeusage_project_usage_hourly(device_id);
-
-create index concurrently if not exists idx_vibeusage_project_usage_hourly_device_token_id
-  on public.vibeusage_project_usage_hourly(device_token_id);
-
-create index concurrently if not exists idx_vibeusage_tracker_subscriptions_device_id
-  on public.vibeusage_tracker_subscriptions(device_id);
-
-create index concurrently if not exists idx_vibeusage_tracker_subscriptions_device_token_id
-  on public.vibeusage_tracker_subscriptions(device_token_id);
-
 alter policy vibeusage_link_codes_insert_self on public.vibeusage_link_codes
   with check ((select public.vibeusage_auth_uid()) = user_id);
+
+alter policy vibeusage_model_aliases_select on public.vibeusage_model_aliases
+  using ((select public.vibeusage_auth_uid()) is not null);
+
+alter policy vibeusage_pricing_model_aliases_select on public.vibeusage_pricing_model_aliases
+  using ((select public.vibeusage_auth_uid()) is not null);
+
+alter policy vibeusage_pricing_profiles_select on public.vibeusage_pricing_profiles
+  using ((select public.vibeusage_auth_uid()) is not null);
 
 alter policy vibeusage_project_usage_hourly_select on public.vibeusage_project_usage_hourly
   using ((select public.vibeusage_auth_uid()) = user_id);
@@ -98,11 +76,11 @@ alter policy vibeusage_public_views_update on public.vibeusage_public_views
 
 alter policy vibeusage_tracker_device_tokens_insert on public.vibeusage_tracker_device_tokens
   with check (
-    (select public.vibeusage_auth_uid()) = user_id
+    ((select public.vibeusage_auth_uid()) = user_id)
     and exists (
       select 1
       from public.vibeusage_tracker_devices d
-      where d.id = device_id
+      where d.id = vibeusage_tracker_device_tokens.device_id
         and d.user_id = (select public.vibeusage_auth_uid())
     )
   );
@@ -145,3 +123,5 @@ alter policy vibeusage_user_settings_select on public.vibeusage_user_settings
 alter policy vibeusage_user_settings_update on public.vibeusage_user_settings
   using ((select public.vibeusage_auth_uid()) = user_id)
   with check ((select public.vibeusage_auth_uid()) = user_id);
+
+commit;

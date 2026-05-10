@@ -40,7 +40,7 @@ test("advisor performance hardening adds concurrent FK indexes", () => {
   assert.doesNotMatch(sql, /\bcommit\b/i);
 });
 
-test("advisor performance hardening wraps auth.uid in RLS policies", () => {
+test("advisor performance hardening uses safe auth uid in RLS policies", () => {
   const sql = readSql();
   for (const policyName of [
     "vibeusage_link_codes_insert_self",
@@ -54,7 +54,8 @@ test("advisor performance hardening wraps auth.uid in RLS policies", () => {
   ]) {
     assert.match(sql, new RegExp(`alter policy ${policyName}`));
   }
-  assert.match(sql, /\(select auth\.uid\(\)\) = user_id/);
-  assert.doesNotMatch(sql, /auth\.uid\(\) = user_id/);
-  assert.match(sql, /d\.user_id = \(select auth\.uid\(\)\)/);
+  assert.match(sql, /create or replace function public\.vibeusage_auth_uid\(\)/);
+  assert.match(sql, /\(select public\.vibeusage_auth_uid\(\)\) = user_id/);
+  assert.doesNotMatch(sql, /\(select auth\.uid\(\)\) = user_id/);
+  assert.match(sql, /d\.user_id = \(select public\.vibeusage_auth_uid\(\)\)/);
 });

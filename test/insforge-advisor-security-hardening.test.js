@@ -42,7 +42,12 @@ test("advisor hardening removes anonymous metadata reads", () => {
     assert.match(sql, new RegExp(`create policy ${policyName}`));
   }
   assert.doesNotMatch(sql, /for select\s+to public\s+using\s*\(true\)/i);
-  assert.match(sql, /to authenticated\s+using \(\(select auth\.uid\(\)\) is not null\)/i);
+  assert.match(sql, /create or replace function public\.vibeusage_auth_uid\(\)/);
+  assert.match(
+    sql,
+    /to authenticated\s+using \(\(select public\.vibeusage_auth_uid\(\)\) is not null\)/i,
+  );
+  assert.doesNotMatch(sql, /\(select auth\.uid\(\)\) is not null/i);
 });
 
 test("advisor hardening keeps project_admin explicit instead of literal true", () => {

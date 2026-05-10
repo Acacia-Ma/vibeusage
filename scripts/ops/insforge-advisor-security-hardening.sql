@@ -9,6 +9,37 @@
 
 begin;
 
+create or replace function public.vibeusage_auth_uid()
+returns uuid
+language sql
+stable
+set search_path = ''
+as $function$
+  with claims as (
+    select
+      nullif(current_setting('request.jwt.claim.sub', true), '') as legacy_sub,
+      nullif(current_setting('request.jwt.claims', true), '') as claims_json
+  ),
+  subject as (
+    select coalesce(
+      legacy_sub,
+      case
+        when claims_json is null then null
+        else claims_json::jsonb ->> 'sub'
+      end
+    ) as sub
+    from claims
+  )
+  select case
+    when sub ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      then sub::uuid
+    else null
+  end
+  from subject
+$function$;
+
+grant execute on function public.vibeusage_auth_uid() to public;
+
 do $$
 declare
   table_name text;
@@ -37,7 +68,7 @@ begin
     create policy vibeusage_model_aliases_select on public.vibeusage_model_aliases
       for select
       to authenticated
-      using ((select auth.uid()) is not null);
+      using ((select public.vibeusage_auth_uid()) is not null);
   end if;
 
   if to_regclass('public.vibeusage_pricing_model_aliases') is not null then
@@ -45,7 +76,7 @@ begin
     create policy vibeusage_pricing_model_aliases_select on public.vibeusage_pricing_model_aliases
       for select
       to authenticated
-      using ((select auth.uid()) is not null);
+      using ((select public.vibeusage_auth_uid()) is not null);
   end if;
 
   if to_regclass('public.vibeusage_pricing_profiles') is not null then
@@ -53,7 +84,7 @@ begin
     create policy vibeusage_pricing_profiles_select on public.vibeusage_pricing_profiles
       for select
       to authenticated
-      using ((select auth.uid()) is not null);
+      using ((select public.vibeusage_auth_uid()) is not null);
   end if;
 end $$;
 

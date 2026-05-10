@@ -27,6 +27,37 @@ create index if not exists vibeusage_tracker_subscriptions_user_id_idx
 create index if not exists vibeusage_tracker_subscriptions_updated_at_idx
   on public.vibeusage_tracker_subscriptions(updated_at desc);
 
+create or replace function public.vibeusage_auth_uid()
+returns uuid
+language sql
+stable
+set search_path = ''
+as $function$
+  with claims as (
+    select
+      nullif(current_setting('request.jwt.claim.sub', true), '') as legacy_sub,
+      nullif(current_setting('request.jwt.claims', true), '') as claims_json
+  ),
+  subject as (
+    select coalesce(
+      legacy_sub,
+      case
+        when claims_json is null then null
+        else claims_json::jsonb ->> 'sub'
+      end
+    ) as sub
+    from claims
+  )
+  select case
+    when sub ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      then sub::uuid
+    else null
+  end
+  from subject
+$function$;
+
+grant execute on function public.vibeusage_auth_uid() to public;
+
 alter table public.vibeusage_tracker_subscriptions enable row level security;
 
 drop policy if exists project_admin_policy on public.vibeusage_tracker_subscriptions;
@@ -41,4 +72,4 @@ drop policy if exists vibeusage_tracker_subscriptions_select on public.vibeusage
 create policy vibeusage_tracker_subscriptions_select on public.vibeusage_tracker_subscriptions
   for select
   to public
-  using (auth.uid() = user_id);
+  using ((select public.vibeusage_auth_uid()) = user_id);
