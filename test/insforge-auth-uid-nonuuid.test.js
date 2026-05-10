@@ -11,6 +11,7 @@ test("auth uid nonuuid fix installs safe helper and rewires RLS policies", () =>
   assert.match(sql, /project-admin-with-api-key/);
   assert.match(sql, /when sub ~\*/);
   assert.match(sql, /alter policy vibeusage_tracker_device_tokens_select/);
+  assert.match(sql, /alter policy vibeusage_model_aliases_select on public\.vibeusage_model_aliases\s+using \(current_user = 'authenticated'\)/);
   assert.match(sql, /\(select public\.vibeusage_auth_uid\(\)\) = user_id/);
   assert.doesNotMatch(sql, /\(select auth\.uid\(\)\) = user_id/);
 });

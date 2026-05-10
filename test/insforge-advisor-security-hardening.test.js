@@ -43,11 +43,9 @@ test("advisor hardening removes anonymous metadata reads", () => {
   }
   assert.doesNotMatch(sql, /for select\s+to public\s+using\s*\(true\)/i);
   assert.match(sql, /create or replace function public\.vibeusage_auth_uid\(\)/);
-  assert.match(
-    sql,
-    /to authenticated\s+using \(\(select public\.vibeusage_auth_uid\(\)\) is not null\)/i,
-  );
+  assert.match(sql, /to authenticated\s+using \(current_user = 'authenticated'\)/i);
   assert.doesNotMatch(sql, /\(select auth\.uid\(\)\) is not null/i);
+  assert.doesNotMatch(sql, /vibeusage_model_aliases_select[\s\S]*public\.vibeusage_auth_uid\(\)/i);
 });
 
 test("advisor hardening keeps project_admin explicit instead of literal true", () => {
@@ -84,6 +82,8 @@ test("advisor hardening locks SECURITY DEFINER execution grants", () => {
   assert.match(sql, /set search_path = ''/);
   assert.match(sql, /alter function public\.vibeusage_device_token_allows_event_insert\(uuid, uuid, uuid\) security invoker/);
   assert.match(sql, /revoke execute on function public\.vibeusage_leaderboard_me\(text, text\) from anon, authenticated/);
+  assert.match(sql, /revoke execute on function public\.vibeusage_purge_events\(timestamp with time zone, boolean\) from anon, authenticated/);
+  assert.match(sql, /alter function public\.vibeusage_purge_events\(timestamp with time zone, boolean\) security invoker/);
   assert.match(sql, /grant execute on function public\.vibeusage_purge_events\(timestamp with time zone, boolean\) to project_admin/);
   assert.doesNotMatch(sql, /grant execute on function public\.vibeusage_leaderboard_me\(text, text\) to authenticated/);
 });

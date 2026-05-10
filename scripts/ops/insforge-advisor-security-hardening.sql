@@ -68,7 +68,7 @@ begin
     create policy vibeusage_model_aliases_select on public.vibeusage_model_aliases
       for select
       to authenticated
-      using ((select public.vibeusage_auth_uid()) is not null);
+      using (current_user = 'authenticated');
   end if;
 
   if to_regclass('public.vibeusage_pricing_model_aliases') is not null then
@@ -76,7 +76,7 @@ begin
     create policy vibeusage_pricing_model_aliases_select on public.vibeusage_pricing_model_aliases
       for select
       to authenticated
-      using ((select public.vibeusage_auth_uid()) is not null);
+      using (current_user = 'authenticated');
   end if;
 
   if to_regclass('public.vibeusage_pricing_profiles') is not null then
@@ -84,7 +84,7 @@ begin
     create policy vibeusage_pricing_profiles_select on public.vibeusage_pricing_profiles
       for select
       to authenticated
-      using ((select public.vibeusage_auth_uid()) is not null);
+      using (current_user = 'authenticated');
   end if;
 end $$;
 
@@ -158,8 +158,10 @@ begin
 
   if to_regprocedure('public.vibeusage_purge_events(timestamp with time zone,boolean)') is not null then
     revoke execute on function public.vibeusage_purge_events(timestamp with time zone, boolean) from public;
+    revoke execute on function public.vibeusage_purge_events(timestamp with time zone, boolean) from anon, authenticated;
     grant execute on function public.vibeusage_purge_events(timestamp with time zone, boolean) to project_admin;
     alter function public.vibeusage_purge_events(timestamp with time zone, boolean) set search_path = '';
+    alter function public.vibeusage_purge_events(timestamp with time zone, boolean) security invoker;
   end if;
 
   if to_regprocedure('public.vibeusage_exchange_link_code(text,text,text,text,text)') is not null then

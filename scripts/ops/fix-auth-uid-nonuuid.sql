@@ -50,13 +50,13 @@ alter policy vibeusage_link_codes_insert_self on public.vibeusage_link_codes
   with check ((select public.vibeusage_auth_uid()) = user_id);
 
 alter policy vibeusage_model_aliases_select on public.vibeusage_model_aliases
-  using ((select public.vibeusage_auth_uid()) is not null);
+  using (current_user = 'authenticated');
 
 alter policy vibeusage_pricing_model_aliases_select on public.vibeusage_pricing_model_aliases
-  using ((select public.vibeusage_auth_uid()) is not null);
+  using (current_user = 'authenticated');
 
 alter policy vibeusage_pricing_profiles_select on public.vibeusage_pricing_profiles
-  using ((select public.vibeusage_auth_uid()) is not null);
+  using (current_user = 'authenticated');
 
 alter policy vibeusage_project_usage_hourly_select on public.vibeusage_project_usage_hourly
   using ((select public.vibeusage_auth_uid()) = user_id);
