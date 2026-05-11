@@ -84,7 +84,7 @@ function isExplicitPermanentRefreshFailure(error: any) {
 function isGenericAuthRefreshFailure(error: any) {
   if (!error) return false;
   const status = getErrorStatus(error);
-  if (status === 401 || status === 403) return true;
+  if (status === 400 || status === 401 || status === 403) return true;
   return /unauthorized|forbidden/.test(getErrorText(error));
 }
 
