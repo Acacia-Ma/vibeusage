@@ -161,6 +161,7 @@ test("App clears stale InsForge storage after hosted auth resolves signed out", 
   const src = read("dashboard/src/App.jsx");
   assert.match(src, /if \(!insforgeLoaded\) return;/);
   assert.match(src, /if \(hasInsforgeSession\) return;/);
+  assert.match(src, /if \(sessionSoftExpired\) return;/);
   assert.match(src, /clearInsforgePersistentStorage\(\)/);
   assert.match(src, /clearAuthStorage\(\)/);
   assert.match(src, /clearSessionExpired\(\)/);

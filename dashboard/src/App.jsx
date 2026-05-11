@@ -334,11 +334,12 @@ export default function App() {
   useEffect(() => {
     if (!insforgeLoaded) return;
     if (hasInsforgeSession) return;
+    if (sessionSoftExpired) return;
     clearInsforgePersistentStorage();
     clearAuthStorage();
     clearSessionExpired();
     clearSessionSoftExpired();
-  }, [hasInsforgeSession, insforgeLoaded]);
+  }, [hasInsforgeSession, insforgeLoaded, sessionSoftExpired]);
 
   const signOut = useMemo(() => {
     return async () => {

@@ -1,4 +1,5 @@
 import { createInsforgeAuthClient } from "./insforge-client";
+import { markSessionSoftExpired } from "./auth-storage";
 import { isLikelyExpiredAccessToken } from "./auth-token";
 
 export const insforgeAuthClient = createInsforgeAuthClient();
@@ -142,6 +143,7 @@ export async function getCurrentInsforgeSession() {
         }
         return await hydrateCurrentUser(refreshedSession);
       }
+      markSessionSoftExpired(snapshot.accessToken);
       return null;
     }
 

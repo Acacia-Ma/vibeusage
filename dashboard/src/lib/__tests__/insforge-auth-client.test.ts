@@ -21,6 +21,10 @@ const authMocks = vi.hoisted(() => ({
   getProfile: vi.fn(),
 }));
 
+const authStorageMocks = vi.hoisted(() => ({
+  markSessionSoftExpired: vi.fn(),
+}));
+
 const authClient = vi.hoisted(() => ({
   tokenManager: {
     getSession: tokenManagerMocks.getSession,
@@ -38,6 +42,8 @@ const authClient = vi.hoisted(() => ({
 vi.mock("../insforge-client", () => ({
   createInsforgeAuthClient: vi.fn(() => authClient),
 }));
+
+vi.mock("../auth-storage", () => authStorageMocks);
 
 function createJwt({
   sub = "u1",
@@ -87,6 +93,7 @@ describe("getCurrentInsforgeSession", () => {
     authMocks.getCurrentUser.mockReset();
     authMocks.refreshSession.mockReset();
     authMocks.getProfile.mockReset();
+    authStorageMocks.markSessionSoftExpired.mockReset();
   });
 
   it("dedupes concurrent user hydration across callers", async () => {
@@ -175,6 +182,26 @@ describe("getCurrentInsforgeSession", () => {
     });
 
     expect(authMocks.refreshSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks expired restored sessions as soft-expired when refresh fails", async () => {
+    const expiredToken = createJwt({ sub: "u6", expiresInMs: -5 * 60 * 1000 });
+    tokenManagerState.session = {
+      accessToken: expiredToken,
+      user: { id: "u6" },
+    };
+    authMocks.refreshSession.mockResolvedValueOnce({
+      data: null,
+      error: { message: "refresh failed" },
+    });
+
+    const mod = await import("../insforge-auth-client");
+
+    await expect(mod.getCurrentInsforgeSession()).resolves.toBeNull();
+
+    expect(authMocks.refreshSession).toHaveBeenCalledTimes(1);
+    expect(authStorageMocks.markSessionSoftExpired).toHaveBeenCalledWith(expiredToken);
+    expect(tokenManagerMocks.clearSession).not.toHaveBeenCalled();
   });
 
   it("publishes token-manager changes through the session store", async () => {
