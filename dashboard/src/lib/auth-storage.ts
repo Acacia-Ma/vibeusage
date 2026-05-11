@@ -179,6 +179,14 @@ export function shouldClearSessionSoftExpiredForToken(accessToken: any) {
   return state.tokenFingerprint !== nextFingerprint;
 }
 
+export function isSessionSoftExpiredForToken(accessToken: any) {
+  const state = loadSessionSoftExpiredState();
+  if (!state) return false;
+  const nextFingerprint = buildTokenFingerprint(accessToken);
+  if (!nextFingerprint || !state.tokenFingerprint) return false;
+  return state.tokenFingerprint === nextFingerprint;
+}
+
 export function subscribeAuthStorage(handler: any) {
   if (typeof window === "undefined" || !window.addEventListener) {
     return () => {};

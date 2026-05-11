@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   clearSessionSoftExpired,
+  isSessionSoftExpiredForToken,
   loadSessionSoftExpired,
   loadSessionSoftExpiredState,
   markSessionSoftExpired,
@@ -71,6 +72,7 @@ describe("session soft expiry storage", () => {
     markSessionSoftExpired(token);
 
     expect(shouldClearSessionSoftExpiredForToken(token)).toBe(false);
+    expect(isSessionSoftExpiredForToken(token)).toBe(true);
   });
 
   it("clears soft expiry only when a different token arrives", () => {
@@ -88,6 +90,7 @@ describe("session soft expiry storage", () => {
     markSessionSoftExpired(firstToken);
 
     expect(shouldClearSessionSoftExpiredForToken(secondToken)).toBe(true);
+    expect(isSessionSoftExpiredForToken(secondToken)).toBe(false);
   });
 
   it("keeps legacy soft-expired markers clearable after a new token appears", () => {

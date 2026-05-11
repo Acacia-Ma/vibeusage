@@ -1,5 +1,9 @@
 import { createInsforgeAuthClient } from "./insforge-client";
-import { clearSessionSoftExpired, markSessionSoftExpired } from "./auth-storage";
+import {
+  clearSessionSoftExpired,
+  isSessionSoftExpiredForToken,
+  markSessionSoftExpired,
+} from "./auth-storage";
 import { isLikelyExpiredAccessToken } from "./auth-token";
 
 export const insforgeAuthClient = createInsforgeAuthClient();
@@ -62,7 +66,12 @@ function getErrorText(error: any) {
     .toLowerCase();
 }
 
-function isPermanentRefreshFailure(error: any) {
+function getErrorStatus(error: any) {
+  const status = error?.statusCode ?? error?.status ?? error?.cause?.statusCode ?? error?.cause?.status;
+  return typeof status === "number" && Number.isFinite(status) ? status : null;
+}
+
+function isExplicitPermanentRefreshFailure(error: any) {
   if (!error) return false;
   const code = typeof error?.code === "string" ? error.code : null;
   if (code === "REFRESH_SESSION_EMPTY" || code === "REFRESH_SESSION_UNSUPPORTED") {
@@ -70,6 +79,13 @@ function isPermanentRefreshFailure(error: any) {
   }
   const text = getErrorText(error);
   return /invalid[_ -]?grant|invalid[_ -]?token|refresh[_ -]?token|revoked/.test(text);
+}
+
+function isGenericAuthRefreshFailure(error: any) {
+  if (!error) return false;
+  const status = getErrorStatus(error);
+  if (status === 401 || status === 403) return true;
+  return /unauthorized|forbidden/.test(getErrorText(error));
 }
 
 function ensureSessionStoreInstalled() {
@@ -167,7 +183,11 @@ export async function getCurrentInsforgeSession() {
         }
         return await hydrateCurrentUser(refreshedSession);
       }
-      if (isPermanentRefreshFailure(refreshError)) {
+      const shouldClearSoftExpired =
+        isExplicitPermanentRefreshFailure(refreshError) ||
+        (isGenericAuthRefreshFailure(refreshError) &&
+          isSessionSoftExpiredForToken(snapshot.accessToken));
+      if (shouldClearSoftExpired) {
         clearSessionSoftExpired();
       } else {
         markSessionSoftExpired(snapshot.accessToken);

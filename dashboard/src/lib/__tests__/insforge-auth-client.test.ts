@@ -23,6 +23,7 @@ const authMocks = vi.hoisted(() => ({
 
 const authStorageMocks = vi.hoisted(() => ({
   clearSessionSoftExpired: vi.fn(),
+  isSessionSoftExpiredForToken: vi.fn(() => false),
   markSessionSoftExpired: vi.fn(),
 }));
 
@@ -96,6 +97,8 @@ describe("getCurrentInsforgeSession", () => {
     authMocks.getProfile.mockReset();
     (authClient.auth as any).refreshSession = authMocks.refreshSession;
     authStorageMocks.clearSessionSoftExpired.mockReset();
+    authStorageMocks.isSessionSoftExpiredForToken.mockReset();
+    authStorageMocks.isSessionSoftExpiredForToken.mockReturnValue(false);
     authStorageMocks.markSessionSoftExpired.mockReset();
   });
 
@@ -234,6 +237,31 @@ describe("getCurrentInsforgeSession", () => {
       expect(authStorageMocks.clearSessionSoftExpired).not.toHaveBeenCalled();
       expect(authStorageMocks.markSessionSoftExpired).toHaveBeenCalledWith(expiredToken);
     }
+  });
+
+  it("clears soft-expired state after a generic auth failure repeats for the same token", async () => {
+    const expiredToken = createJwt({ sub: "u11", expiresInMs: -5 * 60 * 1000 });
+    tokenManagerState.session = {
+      accessToken: expiredToken,
+      user: { id: "u11" },
+    };
+    authStorageMocks.isSessionSoftExpiredForToken.mockReturnValueOnce(true);
+    authMocks.refreshSession.mockResolvedValueOnce({
+      data: null,
+      error: {
+        statusCode: 401,
+        message: "Unauthorized",
+      },
+    });
+
+    const mod = await import("../insforge-auth-client");
+
+    await expect(mod.getCurrentInsforgeSession()).resolves.toBeNull();
+
+    expect(authStorageMocks.isSessionSoftExpiredForToken).toHaveBeenCalledWith(expiredToken);
+    expect(authStorageMocks.clearSessionSoftExpired).toHaveBeenCalledTimes(1);
+    expect(authStorageMocks.markSessionSoftExpired).not.toHaveBeenCalled();
+    expect(tokenManagerMocks.clearSession).not.toHaveBeenCalled();
   });
 
   it("clears soft-expired state when refresh fails with a permanent auth error", async () => {
