@@ -1,5 +1,5 @@
 import { createInsforgeAuthClient } from "./insforge-client";
-import { markSessionSoftExpired } from "./auth-storage";
+import { clearSessionSoftExpired, markSessionSoftExpired } from "./auth-storage";
 import { isLikelyExpiredAccessToken } from "./auth-token";
 
 export const insforgeAuthClient = createInsforgeAuthClient();
@@ -172,7 +172,9 @@ export async function getCurrentInsforgeSession() {
         }
         return await hydrateCurrentUser(refreshedSession);
       }
-      if (!isPermanentRefreshFailure(refreshError)) {
+      if (isPermanentRefreshFailure(refreshError)) {
+        clearSessionSoftExpired();
+      } else {
         markSessionSoftExpired(snapshot.accessToken);
       }
       return null;
@@ -199,7 +201,14 @@ async function refreshInsforgeSessionOutcome() {
   refreshSessionInFlight = (async () => {
     const refreshSession = (insforgeAuthClient as any)?.auth?.refreshSession;
     if (typeof refreshSession !== "function") {
-      return { session: null, error: null };
+      return {
+        session: null,
+        error: {
+          statusCode: 400,
+          code: "REFRESH_SESSION_UNSUPPORTED",
+          message: "refreshSession is not available",
+        },
+      };
     }
     const result = await refreshSession.call((insforgeAuthClient as any).auth);
     const snapshot = buildSessionFromTokenManager();

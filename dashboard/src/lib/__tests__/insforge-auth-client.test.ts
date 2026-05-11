@@ -22,6 +22,7 @@ const authMocks = vi.hoisted(() => ({
 }));
 
 const authStorageMocks = vi.hoisted(() => ({
+  clearSessionSoftExpired: vi.fn(),
   markSessionSoftExpired: vi.fn(),
 }));
 
@@ -93,6 +94,8 @@ describe("getCurrentInsforgeSession", () => {
     authMocks.getCurrentUser.mockReset();
     authMocks.refreshSession.mockReset();
     authMocks.getProfile.mockReset();
+    (authClient.auth as any).refreshSession = authMocks.refreshSession;
+    authStorageMocks.clearSessionSoftExpired.mockReset();
     authStorageMocks.markSessionSoftExpired.mockReset();
   });
 
@@ -204,7 +207,7 @@ describe("getCurrentInsforgeSession", () => {
     expect(tokenManagerMocks.clearSession).not.toHaveBeenCalled();
   });
 
-  it("does not mark soft-expired when refresh fails with a permanent auth error", async () => {
+  it("clears soft-expired state when refresh fails with a permanent auth error", async () => {
     tokenManagerState.session = {
       accessToken: createJwt({ sub: "u7", expiresInMs: -5 * 60 * 1000 }),
       user: { id: "u7" },
@@ -223,6 +226,24 @@ describe("getCurrentInsforgeSession", () => {
     await expect(mod.getCurrentInsforgeSession()).resolves.toBeNull();
 
     expect(authMocks.refreshSession).toHaveBeenCalledTimes(1);
+    expect(authStorageMocks.clearSessionSoftExpired).toHaveBeenCalledTimes(1);
+    expect(authStorageMocks.markSessionSoftExpired).not.toHaveBeenCalled();
+    expect(tokenManagerMocks.clearSession).not.toHaveBeenCalled();
+  });
+
+  it("clears soft-expired state when refresh is unsupported", async () => {
+    tokenManagerState.session = {
+      accessToken: createJwt({ sub: "u8", expiresInMs: -5 * 60 * 1000 }),
+      user: { id: "u8" },
+    };
+    (authClient.auth as any).refreshSession = undefined;
+
+    const mod = await import("../insforge-auth-client");
+
+    await expect(mod.getCurrentInsforgeSession()).resolves.toBeNull();
+
+    expect(authMocks.refreshSession).not.toHaveBeenCalled();
+    expect(authStorageMocks.clearSessionSoftExpired).toHaveBeenCalledTimes(1);
     expect(authStorageMocks.markSessionSoftExpired).not.toHaveBeenCalled();
     expect(tokenManagerMocks.clearSession).not.toHaveBeenCalled();
   });
