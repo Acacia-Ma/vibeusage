@@ -216,9 +216,20 @@ async function refreshInsforgeSessionOutcome() {
       return { session: snapshot, error: null };
     }
     const normalized = normalizeSessionResult(result);
+    const resultError = result?.error ?? null;
+    if (!resultError && !hasUsableAccessToken(normalized)) {
+      return {
+        session: null,
+        error: {
+          statusCode: 400,
+          code: "REFRESH_SESSION_EMPTY",
+          message: "refreshSession returned no usable session",
+        },
+      };
+    }
     return {
       session: hasUsableAccessToken(normalized) ? normalized : null,
-      error: result?.error ?? null,
+      error: resultError,
     };
   })()
     .catch((error) => ({ session: null, error }))

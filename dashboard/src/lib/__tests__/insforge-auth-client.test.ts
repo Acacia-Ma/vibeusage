@@ -248,6 +248,26 @@ describe("getCurrentInsforgeSession", () => {
     expect(tokenManagerMocks.clearSession).not.toHaveBeenCalled();
   });
 
+  it("clears soft-expired state when refresh returns no session and no error", async () => {
+    tokenManagerState.session = {
+      accessToken: createJwt({ sub: "u9", expiresInMs: -5 * 60 * 1000 }),
+      user: { id: "u9" },
+    };
+    authMocks.refreshSession.mockResolvedValueOnce({
+      data: null,
+      error: null,
+    });
+
+    const mod = await import("../insforge-auth-client");
+
+    await expect(mod.getCurrentInsforgeSession()).resolves.toBeNull();
+
+    expect(authMocks.refreshSession).toHaveBeenCalledTimes(1);
+    expect(authStorageMocks.clearSessionSoftExpired).toHaveBeenCalledTimes(1);
+    expect(authStorageMocks.markSessionSoftExpired).not.toHaveBeenCalled();
+    expect(tokenManagerMocks.clearSession).not.toHaveBeenCalled();
+  });
+
   it("publishes token-manager changes through the session store", async () => {
     const mod = await import("../insforge-auth-client");
     const snapshots: any[] = [];
