@@ -207,6 +207,35 @@ describe("getCurrentInsforgeSession", () => {
     expect(tokenManagerMocks.clearSession).not.toHaveBeenCalled();
   });
 
+  it("keeps soft-expired retry state for generic 400 and 403 refresh errors", async () => {
+    const expiredToken = createJwt({ sub: "u10", expiresInMs: -5 * 60 * 1000 });
+    for (const statusCode of [400, 403]) {
+      vi.resetModules();
+      tokenManagerState.session = {
+        accessToken: expiredToken,
+        user: { id: "u10" },
+      };
+      delete (authClient.tokenManager as Record<string, unknown>).__vibeusage_auth_session_store_v1__;
+      authMocks.refreshSession.mockReset();
+      authMocks.refreshSession.mockResolvedValueOnce({
+        data: null,
+        error: {
+          statusCode,
+          message: "temporary auth gateway failure",
+        },
+      });
+      authStorageMocks.clearSessionSoftExpired.mockReset();
+      authStorageMocks.markSessionSoftExpired.mockReset();
+
+      const mod = await import("../insforge-auth-client");
+
+      await expect(mod.getCurrentInsforgeSession()).resolves.toBeNull();
+
+      expect(authStorageMocks.clearSessionSoftExpired).not.toHaveBeenCalled();
+      expect(authStorageMocks.markSessionSoftExpired).toHaveBeenCalledWith(expiredToken);
+    }
+  });
+
   it("clears soft-expired state when refresh fails with a permanent auth error", async () => {
     tokenManagerState.session = {
       accessToken: createJwt({ sub: "u7", expiresInMs: -5 * 60 * 1000 }),

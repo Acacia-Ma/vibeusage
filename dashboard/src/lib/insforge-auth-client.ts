@@ -69,10 +69,14 @@ function getErrorText(error: any) {
 
 function isPermanentRefreshFailure(error: any) {
   if (!error) return false;
+  const code = typeof error?.code === "string" ? error.code : null;
+  if (code === "REFRESH_SESSION_EMPTY" || code === "REFRESH_SESSION_UNSUPPORTED") {
+    return true;
+  }
   const status = getErrorStatus(error);
-  if (status === 400 || status === 401 || status === 403) return true;
+  if (status === 401) return true;
   const text = getErrorText(error);
-  return /invalid[_ -]?grant|invalid[_ -]?token|refresh[_ -]?token|required|revoked|unauthorized|forbidden/.test(
+  return /invalid[_ -]?grant|invalid[_ -]?token|refresh[_ -]?token|revoked|unauthorized|forbidden/.test(
     text,
   );
 }
