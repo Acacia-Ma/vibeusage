@@ -206,6 +206,7 @@ export default function App() {
       return;
     }
     if (!sessionSoftExpired) return;
+    if (insforgeSession?.accessToken) return;
     // Avoid getting stuck on dashboard without a usable session token.
     clearSessionSoftExpired();
   }, [insforgeLoaded, insforgeSession, sessionSoftExpired]);

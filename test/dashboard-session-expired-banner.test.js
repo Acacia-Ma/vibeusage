@@ -338,3 +338,9 @@ test("App clears soft-expired state after a different token or successful same-t
   assert.match(src, /shouldClearSessionSoftExpiredForToken\(nextToken\)/);
   assert.match(src, /await probeBackend\(\{ baseUrl, accessToken: nextToken \}\)/);
 });
+
+test("App preserves soft-expired state when an expired restored token can still retry", () => {
+  const src = read("dashboard/src/App.jsx");
+  assert.match(src, /if \(insforgeSession\?\.accessToken\) return;/);
+  assert.match(src, /if \(sessionSoftExpired\) return;/);
+});
