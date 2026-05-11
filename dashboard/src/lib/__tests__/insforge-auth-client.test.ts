@@ -184,7 +184,7 @@ describe("getCurrentInsforgeSession", () => {
     expect(authMocks.refreshSession).toHaveBeenCalledTimes(1);
   });
 
-  it("marks expired restored sessions as soft-expired when refresh fails", async () => {
+  it("marks expired restored sessions as soft-expired when refresh fails transiently", async () => {
     const expiredToken = createJwt({ sub: "u6", expiresInMs: -5 * 60 * 1000 });
     tokenManagerState.session = {
       accessToken: expiredToken,
@@ -201,6 +201,29 @@ describe("getCurrentInsforgeSession", () => {
 
     expect(authMocks.refreshSession).toHaveBeenCalledTimes(1);
     expect(authStorageMocks.markSessionSoftExpired).toHaveBeenCalledWith(expiredToken);
+    expect(tokenManagerMocks.clearSession).not.toHaveBeenCalled();
+  });
+
+  it("does not mark soft-expired when refresh fails with a permanent auth error", async () => {
+    tokenManagerState.session = {
+      accessToken: createJwt({ sub: "u7", expiresInMs: -5 * 60 * 1000 }),
+      user: { id: "u7" },
+    };
+    authMocks.refreshSession.mockResolvedValueOnce({
+      data: null,
+      error: {
+        statusCode: 401,
+        error: "INVALID_TOKEN",
+        message: "Refresh token revoked",
+      },
+    });
+
+    const mod = await import("../insforge-auth-client");
+
+    await expect(mod.getCurrentInsforgeSession()).resolves.toBeNull();
+
+    expect(authMocks.refreshSession).toHaveBeenCalledTimes(1);
+    expect(authStorageMocks.markSessionSoftExpired).not.toHaveBeenCalled();
     expect(tokenManagerMocks.clearSession).not.toHaveBeenCalled();
   });
 
