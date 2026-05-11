@@ -21,6 +21,12 @@ const authMocks = vi.hoisted(() => ({
   getProfile: vi.fn(),
 }));
 
+const authStorageMocks = vi.hoisted(() => ({
+  clearSessionSoftExpired: vi.fn(),
+  isSessionSoftExpiredForToken: vi.fn(() => false),
+  markSessionSoftExpired: vi.fn(),
+}));
+
 const authClient = vi.hoisted(() => ({
   tokenManager: {
     getSession: tokenManagerMocks.getSession,
@@ -38,6 +44,8 @@ const authClient = vi.hoisted(() => ({
 vi.mock("../insforge-client", () => ({
   createInsforgeAuthClient: vi.fn(() => authClient),
 }));
+
+vi.mock("../auth-storage", () => authStorageMocks);
 
 function createJwt({
   sub = "u1",
@@ -87,6 +95,11 @@ describe("getCurrentInsforgeSession", () => {
     authMocks.getCurrentUser.mockReset();
     authMocks.refreshSession.mockReset();
     authMocks.getProfile.mockReset();
+    (authClient.auth as any).refreshSession = authMocks.refreshSession;
+    authStorageMocks.clearSessionSoftExpired.mockReset();
+    authStorageMocks.isSessionSoftExpiredForToken.mockReset();
+    authStorageMocks.isSessionSoftExpiredForToken.mockReturnValue(false);
+    authStorageMocks.markSessionSoftExpired.mockReset();
   });
 
   it("dedupes concurrent user hydration across callers", async () => {
@@ -175,6 +188,171 @@ describe("getCurrentInsforgeSession", () => {
     });
 
     expect(authMocks.refreshSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks expired restored sessions as soft-expired when refresh fails transiently", async () => {
+    const expiredToken = createJwt({ sub: "u6", expiresInMs: -5 * 60 * 1000 });
+    tokenManagerState.session = {
+      accessToken: expiredToken,
+      user: { id: "u6" },
+    };
+    authMocks.refreshSession.mockResolvedValueOnce({
+      data: null,
+      error: { message: "refresh failed" },
+    });
+
+    const mod = await import("../insforge-auth-client");
+
+    await expect(mod.getCurrentInsforgeSession()).resolves.toBeNull();
+
+    expect(authMocks.refreshSession).toHaveBeenCalledTimes(1);
+    expect(authStorageMocks.markSessionSoftExpired).toHaveBeenCalledWith(expiredToken);
+    expect(tokenManagerMocks.clearSession).not.toHaveBeenCalled();
+  });
+
+  it("keeps soft-expired retry state for generic 400, 401, and 403 refresh errors", async () => {
+    const expiredToken = createJwt({ sub: "u10", expiresInMs: -5 * 60 * 1000 });
+    for (const statusCode of [400, 401, 403]) {
+      vi.resetModules();
+      tokenManagerState.session = {
+        accessToken: expiredToken,
+        user: { id: "u10" },
+      };
+      delete (authClient.tokenManager as Record<string, unknown>).__vibeusage_auth_session_store_v1__;
+      authMocks.refreshSession.mockReset();
+      authMocks.refreshSession.mockResolvedValueOnce({
+        data: null,
+        error: {
+          statusCode,
+          message: "temporary auth gateway failure",
+        },
+      });
+      authStorageMocks.clearSessionSoftExpired.mockReset();
+      authStorageMocks.markSessionSoftExpired.mockReset();
+
+      const mod = await import("../insforge-auth-client");
+
+      await expect(mod.getCurrentInsforgeSession()).resolves.toBeNull();
+
+      expect(authStorageMocks.clearSessionSoftExpired).not.toHaveBeenCalled();
+      expect(authStorageMocks.markSessionSoftExpired).toHaveBeenCalledWith(expiredToken);
+    }
+  });
+
+  it("keeps soft-expired retry state for temporary refresh token service errors", async () => {
+    const expiredToken = createJwt({ sub: "u12", expiresInMs: -5 * 60 * 1000 });
+    tokenManagerState.session = {
+      accessToken: expiredToken,
+      user: { id: "u12" },
+    };
+    authMocks.refreshSession.mockResolvedValueOnce({
+      data: null,
+      error: {
+        message: "temporary refresh token service outage",
+      },
+    });
+
+    const mod = await import("../insforge-auth-client");
+
+    await expect(mod.getCurrentInsforgeSession()).resolves.toBeNull();
+
+    expect(authStorageMocks.clearSessionSoftExpired).not.toHaveBeenCalled();
+    expect(authStorageMocks.markSessionSoftExpired).toHaveBeenCalledWith(expiredToken);
+    expect(tokenManagerMocks.clearSession).not.toHaveBeenCalled();
+  });
+
+  it("clears soft-expired state after generic auth failures repeat for the same token", async () => {
+    const expiredToken = createJwt({ sub: "u11", expiresInMs: -5 * 60 * 1000 });
+    for (const statusCode of [400, 401, 403]) {
+      vi.resetModules();
+      tokenManagerState.session = {
+        accessToken: expiredToken,
+        user: { id: "u11" },
+      };
+      delete (authClient.tokenManager as Record<string, unknown>).__vibeusage_auth_session_store_v1__;
+      authMocks.refreshSession.mockReset();
+      authMocks.refreshSession.mockResolvedValueOnce({
+        data: null,
+        error: {
+          statusCode,
+          message: statusCode === 400 ? "bad request" : "Unauthorized",
+        },
+      });
+      authStorageMocks.isSessionSoftExpiredForToken.mockReset();
+      authStorageMocks.isSessionSoftExpiredForToken.mockReturnValueOnce(true);
+      authStorageMocks.clearSessionSoftExpired.mockReset();
+      authStorageMocks.markSessionSoftExpired.mockReset();
+
+      const mod = await import("../insforge-auth-client");
+
+      await expect(mod.getCurrentInsforgeSession()).resolves.toBeNull();
+
+      expect(authStorageMocks.isSessionSoftExpiredForToken).toHaveBeenCalledWith(expiredToken);
+      expect(authStorageMocks.clearSessionSoftExpired).toHaveBeenCalledTimes(1);
+      expect(authStorageMocks.markSessionSoftExpired).not.toHaveBeenCalled();
+      expect(tokenManagerMocks.clearSession).not.toHaveBeenCalled();
+    }
+  });
+
+  it("clears soft-expired state when refresh fails with a permanent auth error", async () => {
+    tokenManagerState.session = {
+      accessToken: createJwt({ sub: "u7", expiresInMs: -5 * 60 * 1000 }),
+      user: { id: "u7" },
+    };
+    authMocks.refreshSession.mockResolvedValueOnce({
+      data: null,
+      error: {
+        statusCode: 401,
+        error: "INVALID_TOKEN",
+        message: "Refresh token revoked",
+      },
+    });
+
+    const mod = await import("../insforge-auth-client");
+
+    await expect(mod.getCurrentInsforgeSession()).resolves.toBeNull();
+
+    expect(authMocks.refreshSession).toHaveBeenCalledTimes(1);
+    expect(authStorageMocks.clearSessionSoftExpired).toHaveBeenCalledTimes(1);
+    expect(authStorageMocks.markSessionSoftExpired).not.toHaveBeenCalled();
+    expect(tokenManagerMocks.clearSession).not.toHaveBeenCalled();
+  });
+
+  it("clears soft-expired state when refresh is unsupported", async () => {
+    tokenManagerState.session = {
+      accessToken: createJwt({ sub: "u8", expiresInMs: -5 * 60 * 1000 }),
+      user: { id: "u8" },
+    };
+    (authClient.auth as any).refreshSession = undefined;
+
+    const mod = await import("../insforge-auth-client");
+
+    await expect(mod.getCurrentInsforgeSession()).resolves.toBeNull();
+
+    expect(authMocks.refreshSession).not.toHaveBeenCalled();
+    expect(authStorageMocks.clearSessionSoftExpired).toHaveBeenCalledTimes(1);
+    expect(authStorageMocks.markSessionSoftExpired).not.toHaveBeenCalled();
+    expect(tokenManagerMocks.clearSession).not.toHaveBeenCalled();
+  });
+
+  it("clears soft-expired state when refresh returns no session and no error", async () => {
+    tokenManagerState.session = {
+      accessToken: createJwt({ sub: "u9", expiresInMs: -5 * 60 * 1000 }),
+      user: { id: "u9" },
+    };
+    authMocks.refreshSession.mockResolvedValueOnce({
+      data: null,
+      error: null,
+    });
+
+    const mod = await import("../insforge-auth-client");
+
+    await expect(mod.getCurrentInsforgeSession()).resolves.toBeNull();
+
+    expect(authMocks.refreshSession).toHaveBeenCalledTimes(1);
+    expect(authStorageMocks.clearSessionSoftExpired).toHaveBeenCalledTimes(1);
+    expect(authStorageMocks.markSessionSoftExpired).not.toHaveBeenCalled();
+    expect(tokenManagerMocks.clearSession).not.toHaveBeenCalled();
   });
 
   it("publishes token-manager changes through the session store", async () => {

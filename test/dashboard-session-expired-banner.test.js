@@ -161,6 +161,7 @@ test("App clears stale InsForge storage after hosted auth resolves signed out", 
   const src = read("dashboard/src/App.jsx");
   assert.match(src, /if \(!insforgeLoaded\) return;/);
   assert.match(src, /if \(hasInsforgeSession\) return;/);
+  assert.match(src, /if \(sessionSoftExpired\) return;/);
   assert.match(src, /clearInsforgePersistentStorage\(\)/);
   assert.match(src, /clearAuthStorage\(\)/);
   assert.match(src, /clearSessionExpired\(\)/);
@@ -336,4 +337,10 @@ test("App clears soft-expired state after a different token or successful same-t
   const src = read("dashboard/src/App.jsx");
   assert.match(src, /shouldClearSessionSoftExpiredForToken\(nextToken\)/);
   assert.match(src, /await probeBackend\(\{ baseUrl, accessToken: nextToken \}\)/);
+});
+
+test("App preserves soft-expired state when an expired restored token can still retry", () => {
+  const src = read("dashboard/src/App.jsx");
+  assert.match(src, /if \(insforgeSession\?\.accessToken\) return;/);
+  assert.match(src, /if \(sessionSoftExpired\) return;/);
 });

@@ -206,6 +206,7 @@ export default function App() {
       return;
     }
     if (!sessionSoftExpired) return;
+    if (insforgeSession?.accessToken) return;
     // Avoid getting stuck on dashboard without a usable session token.
     clearSessionSoftExpired();
   }, [insforgeLoaded, insforgeSession, sessionSoftExpired]);
@@ -334,11 +335,12 @@ export default function App() {
   useEffect(() => {
     if (!insforgeLoaded) return;
     if (hasInsforgeSession) return;
+    if (sessionSoftExpired) return;
     clearInsforgePersistentStorage();
     clearAuthStorage();
     clearSessionExpired();
     clearSessionSoftExpired();
-  }, [hasInsforgeSession, insforgeLoaded]);
+  }, [hasInsforgeSession, insforgeLoaded, sessionSoftExpired]);
 
   const signOut = useMemo(() => {
     return async () => {

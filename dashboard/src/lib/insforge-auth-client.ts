@@ -1,10 +1,15 @@
 import { createInsforgeAuthClient } from "./insforge-client";
+import {
+  clearSessionSoftExpired,
+  isSessionSoftExpiredForToken,
+  markSessionSoftExpired,
+} from "./auth-storage";
 import { isLikelyExpiredAccessToken } from "./auth-token";
 
 export const insforgeAuthClient = createInsforgeAuthClient();
 
 let currentSessionInFlight: Promise<any> | null = null;
-let refreshSessionInFlight: Promise<any> | null = null;
+let refreshSessionInFlight: Promise<{ session: any; error: any }> | null = null;
 let currentSessionSnapshot: any = undefined;
 const sessionListeners = new Set<() => void>();
 
@@ -45,6 +50,42 @@ function buildSessionFromTokenManager() {
 function hasUsableAccessToken(session: any) {
   const accessToken = session?.accessToken ?? null;
   return Boolean(accessToken && !isLikelyExpiredAccessToken(accessToken));
+}
+
+function getErrorText(error: any) {
+  return [
+    error?.error,
+    error?.code,
+    error?.message,
+    error?.cause?.error,
+    error?.cause?.code,
+    error?.cause?.message,
+  ]
+    .filter((value) => typeof value === "string" && value.trim())
+    .join(" ")
+    .toLowerCase();
+}
+
+function getErrorStatus(error: any) {
+  const status = error?.statusCode ?? error?.status ?? error?.cause?.statusCode ?? error?.cause?.status;
+  return typeof status === "number" && Number.isFinite(status) ? status : null;
+}
+
+function isExplicitPermanentRefreshFailure(error: any) {
+  if (!error) return false;
+  const code = typeof error?.code === "string" ? error.code : null;
+  if (code === "REFRESH_SESSION_EMPTY" || code === "REFRESH_SESSION_UNSUPPORTED") {
+    return true;
+  }
+  const text = getErrorText(error);
+  return /invalid[_ -]?grant|invalid[_ -]?token|revoked/.test(text);
+}
+
+function isGenericAuthRefreshFailure(error: any) {
+  if (!error) return false;
+  const status = getErrorStatus(error);
+  if (status === 400 || status === 401 || status === 403) return true;
+  return /unauthorized|forbidden/.test(getErrorText(error));
 }
 
 function ensureSessionStoreInstalled() {
@@ -135,12 +176,21 @@ export async function getCurrentInsforgeSession() {
     }
 
     if (snapshot?.accessToken && isLikelyExpiredAccessToken(snapshot.accessToken)) {
-      const refreshedSession = await refreshInsforgeSession();
+      const { session: refreshedSession, error: refreshError } = await refreshInsforgeSessionOutcome();
       if (hasUsableAccessToken(refreshedSession)) {
         if (refreshedSession?.user) {
           return refreshedSession;
         }
         return await hydrateCurrentUser(refreshedSession);
+      }
+      const shouldClearSoftExpired =
+        isExplicitPermanentRefreshFailure(refreshError) ||
+        (isGenericAuthRefreshFailure(refreshError) &&
+          isSessionSoftExpiredForToken(snapshot.accessToken));
+      if (shouldClearSoftExpired) {
+        clearSessionSoftExpired();
+      } else {
+        markSessionSoftExpired(snapshot.accessToken);
       }
       return null;
     }
@@ -156,22 +206,48 @@ export async function getCurrentInsforgeSession() {
 }
 
 export async function refreshInsforgeSession() {
+  const { session } = await refreshInsforgeSessionOutcome();
+  return session;
+}
+
+async function refreshInsforgeSessionOutcome() {
   ensureSessionStoreInstalled();
   if (refreshSessionInFlight) return refreshSessionInFlight;
   refreshSessionInFlight = (async () => {
     const refreshSession = (insforgeAuthClient as any)?.auth?.refreshSession;
     if (typeof refreshSession !== "function") {
-      return null;
+      return {
+        session: null,
+        error: {
+          statusCode: 400,
+          code: "REFRESH_SESSION_UNSUPPORTED",
+          message: "refreshSession is not available",
+        },
+      };
     }
     const result = await refreshSession.call((insforgeAuthClient as any).auth);
     const snapshot = buildSessionFromTokenManager();
     if (hasUsableAccessToken(snapshot)) {
-      return snapshot;
+      return { session: snapshot, error: null };
     }
     const normalized = normalizeSessionResult(result);
-    return hasUsableAccessToken(normalized) ? normalized : null;
+    const resultError = result?.error ?? null;
+    if (!resultError && !hasUsableAccessToken(normalized)) {
+      return {
+        session: null,
+        error: {
+          statusCode: 400,
+          code: "REFRESH_SESSION_EMPTY",
+          message: "refreshSession returned no usable session",
+        },
+      };
+    }
+    return {
+      session: hasUsableAccessToken(normalized) ? normalized : null,
+      error: resultError,
+    };
   })()
-    .catch(() => null)
+    .catch((error) => ({ session: null, error }))
     .finally(() => {
       emitSessionSnapshot();
       refreshSessionInFlight = null;
