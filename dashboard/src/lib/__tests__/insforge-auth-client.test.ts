@@ -207,9 +207,9 @@ describe("getCurrentInsforgeSession", () => {
     expect(tokenManagerMocks.clearSession).not.toHaveBeenCalled();
   });
 
-  it("keeps soft-expired retry state for generic 400 and 403 refresh errors", async () => {
+  it("keeps soft-expired retry state for generic 400, 401, and 403 refresh errors", async () => {
     const expiredToken = createJwt({ sub: "u10", expiresInMs: -5 * 60 * 1000 });
-    for (const statusCode of [400, 403]) {
+    for (const statusCode of [400, 401, 403]) {
       vi.resetModules();
       tokenManagerState.session = {
         accessToken: expiredToken,

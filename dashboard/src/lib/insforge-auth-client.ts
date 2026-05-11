@@ -48,11 +48,6 @@ function hasUsableAccessToken(session: any) {
   return Boolean(accessToken && !isLikelyExpiredAccessToken(accessToken));
 }
 
-function getErrorStatus(error: any) {
-  const status = error?.statusCode ?? error?.status ?? error?.cause?.statusCode ?? error?.cause?.status;
-  return typeof status === "number" && Number.isFinite(status) ? status : null;
-}
-
 function getErrorText(error: any) {
   return [
     error?.error,
@@ -73,12 +68,8 @@ function isPermanentRefreshFailure(error: any) {
   if (code === "REFRESH_SESSION_EMPTY" || code === "REFRESH_SESSION_UNSUPPORTED") {
     return true;
   }
-  const status = getErrorStatus(error);
-  if (status === 401) return true;
   const text = getErrorText(error);
-  return /invalid[_ -]?grant|invalid[_ -]?token|refresh[_ -]?token|revoked|unauthorized|forbidden/.test(
-    text,
-  );
+  return /invalid[_ -]?grant|invalid[_ -]?token|refresh[_ -]?token|revoked/.test(text);
 }
 
 function ensureSessionStoreInstalled() {
