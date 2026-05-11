@@ -239,6 +239,28 @@ describe("getCurrentInsforgeSession", () => {
     }
   });
 
+  it("keeps soft-expired retry state for temporary refresh token service errors", async () => {
+    const expiredToken = createJwt({ sub: "u12", expiresInMs: -5 * 60 * 1000 });
+    tokenManagerState.session = {
+      accessToken: expiredToken,
+      user: { id: "u12" },
+    };
+    authMocks.refreshSession.mockResolvedValueOnce({
+      data: null,
+      error: {
+        message: "temporary refresh token service outage",
+      },
+    });
+
+    const mod = await import("../insforge-auth-client");
+
+    await expect(mod.getCurrentInsforgeSession()).resolves.toBeNull();
+
+    expect(authStorageMocks.clearSessionSoftExpired).not.toHaveBeenCalled();
+    expect(authStorageMocks.markSessionSoftExpired).toHaveBeenCalledWith(expiredToken);
+    expect(tokenManagerMocks.clearSession).not.toHaveBeenCalled();
+  });
+
   it("clears soft-expired state after a generic auth failure repeats for the same token", async () => {
     const expiredToken = createJwt({ sub: "u11", expiresInMs: -5 * 60 * 1000 });
     tokenManagerState.session = {

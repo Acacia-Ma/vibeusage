@@ -78,7 +78,7 @@ function isExplicitPermanentRefreshFailure(error: any) {
     return true;
   }
   const text = getErrorText(error);
-  return /invalid[_ -]?grant|invalid[_ -]?token|refresh[_ -]?token|revoked/.test(text);
+  return /invalid[_ -]?grant|invalid[_ -]?token|revoked/.test(text);
 }
 
 function isGenericAuthRefreshFailure(error: any) {
